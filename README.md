@@ -10,9 +10,12 @@ collections of objects that need stable, safe references but have no clear
 ownership otherwise, such as game entities or graph nodes. Please refer to the
 [**the documentation**](https://docs.rs/slotmap) for more information.
 
-To start using `slotmap` add the following to your `Cargo.toml` dependencies:
+To start using `slotmap` add the following to your `Cargo.toml`:
 
-    slotmap = "0.1"
+```toml
+[dependencies]
+slotmap = "0.1"
+```
 
 # Example
 
@@ -29,7 +32,7 @@ assert_eq!(sm[bar], "bar");
 
 sm.remove(bar);
 let reused = sm.insert("reuse");      // Space from bar reused.
-assert_eq!(sm.contains(bar), false);  // After deletion a key stays invalid, 
+assert_eq!(sm.contains(bar), false);  // After deletion a key stays invalid,
                                       // even if we reuse its space.
 ```
 

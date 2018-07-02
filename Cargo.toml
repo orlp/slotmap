@@ -1,0 +1,10 @@
+[package]
+name = "slotmap"
+version = "0.1.0"
+authors = ["Orson Peters <orsonpeters@gmail.com>"]
+description = "Slotmap data structure"
+license = "zlib"
+homepage = "https://github.com/orlp/slotmap"
+repository = "https://github.com/orlp/slotmap"
+
+[dependencies]

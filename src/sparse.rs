@@ -317,7 +317,10 @@ impl<T> SparseSlotMap<T> {
     /// Returns a reference to the value corresponding to the key without
     /// version or bounds checking.
     ///
-    /// This is safe if `contains(key)` is true, but not recommended.
+    /// # Safety
+    ///
+    /// This should only be used if `contains(key)` is true. Otherwise it is
+    /// potentially unsafe.
     ///
     /// # Examples
     ///
@@ -356,7 +359,10 @@ impl<T> SparseSlotMap<T> {
     /// Returns a mutable reference to the value corresponding to the key
     /// without version or bounds checking.
     ///
-    /// This is safe if `contains(key)` is true, but not recommended.
+    /// # Safety
+    ///
+    /// This should only be used if `contains(key)` is true. Otherwise it is
+    /// potentially unsafe.
     ///
     /// # Examples
     ///

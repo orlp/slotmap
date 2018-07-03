@@ -6,5 +6,6 @@ description = "Slotmap data structure"
 license = "Zlib"
 homepage = "https://github.com/orlp/slotmap"
 repository = "https://github.com/orlp/slotmap"
+readme = "README.md"
 
 [dependencies]

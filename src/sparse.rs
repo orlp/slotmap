@@ -1,7 +1,6 @@
 //! Contains the sparse slot map implementation.
 use std;
 use std::iter::FusedIterator;
-use std::mem::ManuallyDrop;
 use std::ops::{Index, IndexMut};
 
 use super::Key;
@@ -31,8 +30,8 @@ impl<T> SparseSlotMap<T> {
     /// # use slotmap::*;
     /// let mut sm: SparseSlotMap<i32> = SparseSlotMap::new();
     /// ```
-    pub fn new() -> SparseSlotMap<T> {
-        SparseSlotMap::<T>::with_capacity(0)
+    pub fn new() -> Self {
+        Self::with_capacity(0)
     }
 
     /// Creates an empty `SparseSlotMap` with the given capacity.
@@ -152,12 +151,8 @@ impl<T> SparseSlotMap<T> {
         let idx = self.free_head;
         let slot = unsafe {
             if idx >= self.slots.len() {
-                self.slots.push(Slot {
-                    value: std::mem::uninitialized(),
-                    version: 0,
-                    next_free: 0,
-                });
-                self.free_head += 1;
+                self.slots.push(Slot::new());
+                self.free_head = self.slots.len();
                 self.slots.get_unchecked_mut(idx)
             } else {
                 let slot = self.slots.get_unchecked_mut(idx);
@@ -168,12 +163,12 @@ impl<T> SparseSlotMap<T> {
 
         let key = Key {
             idx: idx as u32,
-            version: slot.version + 1,
+            version: slot.occupied_version(),
         };
 
-        // Get value to insert and increment version to mark the slot occupied.
-        slot.value = ManuallyDrop::new(f(key));
-        slot.version += 1;
+        unsafe {
+            slot.store_value(f(key));
+        }
         self.num_elems = new_num_elems;
         key
     }
@@ -191,7 +186,7 @@ impl<T> SparseSlotMap<T> {
     /// assert_eq!(sm.contains(key), false);
     /// ```
     pub fn contains(&self, key: Key) -> bool {
-        return self.slots[key.idx as usize].version == key.version;
+        return self.slots[key.idx as usize].has_version(key.version);
     }
 
     /// Removes a key from the slot map, returning the value at the key if the
@@ -208,17 +203,14 @@ impl<T> SparseSlotMap<T> {
     /// ```
     pub fn remove(&mut self, key: Key) -> Option<T> {
         let slot = &mut self.slots[key.idx as usize];
-        if slot.version != key.version {
+        if !slot.has_version(key.version) {
             return None;
         }
 
         slot.next_free = self.free_head as u32;
-        slot.version = slot.version.wrapping_add(1);
         self.free_head = key.idx as usize;
         self.num_elems -= 1;
-        Some(std::mem::replace(&mut *slot.value, unsafe {
-            std::mem::uninitialized()
-        }))
+        Some(unsafe { slot.remove_value() })
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -234,11 +226,7 @@ impl<T> SparseSlotMap<T> {
     /// assert_eq!(sm.get(key), None);
     pub fn get(&self, key: Key) -> Option<&T> {
         let slot = &self.slots[key.idx as usize];
-        if slot.version == key.version {
-            Some(&slot.value)
-        } else {
-            None
-        }
+        slot.get_versioned(key.version)
     }
 
     /// Returns a reference to the value corresponding to the key without
@@ -259,7 +247,7 @@ impl<T> SparseSlotMap<T> {
     /// sm.remove(key);
     /// // sm.get_unchecked(key) is now dangerous!
     pub unsafe fn get_unchecked(&self, key: Key) -> &T {
-        &self.slots.get_unchecked(key.idx as usize).value
+        self.slots.get_unchecked(key.idx as usize).get_unchecked()
     }
 
     /// Returns a mutable reference to the value corresponding to the key.
@@ -276,11 +264,7 @@ impl<T> SparseSlotMap<T> {
     /// assert_eq!(sm[key], 6.5);
     pub fn get_mut(&mut self, key: Key) -> Option<&mut T> {
         let slot = &mut self.slots[key.idx as usize];
-        if slot.version == key.version {
-            Some(&mut slot.value)
-        } else {
-            None
-        }
+        slot.get_versioned_mut(key.version)
     }
 
     /// Returns a mutable reference to the value corresponding to the key
@@ -302,7 +286,9 @@ impl<T> SparseSlotMap<T> {
     /// sm.remove(key);
     /// // sm.get_unchecked_mut(key) is now dangerous!
     pub unsafe fn get_unchecked_mut(&mut self, key: Key) -> &mut T {
-        &mut self.slots.get_unchecked_mut(key.idx as usize).value
+        self.slots
+            .get_unchecked_mut(key.idx as usize)
+            .get_unchecked_mut()
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The
@@ -411,12 +397,12 @@ impl<'a, T> Iterator for Iter<'a, T> {
         while let Some(slot) = self.slots.next() {
             let key = Key {
                 idx: self.cur as u32,
-                version: slot.version,
+                version: slot.occupied_version(),
             };
             self.cur += 1;
 
-            if slot.occupied() {
-                return Some((key, &slot.value));
+            if let Some(value) = slot.value() {
+                return Some((key, value));
             }
         }
 
@@ -431,12 +417,12 @@ impl<'a, T> Iterator for IterMut<'a, T> {
         while let Some(slot) = self.slots.next() {
             let key = Key {
                 idx: self.cur as u32,
-                version: slot.version,
+                version: slot.occupied_version(),
             };
             self.cur += 1;
 
-            if slot.occupied() {
-                return Some((key, &mut slot.value));
+            if let Some(value) = slot.value_mut() {
+                return Some((key, value));
             }
         }
 
@@ -536,5 +522,81 @@ where
             num_elems: num_elems as u32,
             free_head: next_free,
         })
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    // #[cfg(feature = "serde")]
+    // use serde_json;
+
+    // use quickcheck;
+
+    quickcheck! {
+        fn equiv_hashmap(operations: Vec<(u8, u32)>) -> bool {
+            let mut hm = HashMap::new();
+            let mut hm_keys = Vec::new();
+            let mut unique_key = 0u32;
+            let mut sm = SparseSlotMap::new();
+            let mut sm_keys = Vec::new();
+
+            for (op, val) in operations {
+                match op % 3 {
+                    // Insert.
+                    0 => {
+                        hm.insert(unique_key, val);
+                        hm_keys.push(unique_key);
+                        unique_key += 1;
+
+                        sm_keys.push(sm.insert(val));
+                    }
+
+                    // Delete.
+                    1 => {
+                        if hm_keys.len() == 0 { continue; }
+
+                        let idx = val as usize % hm_keys.len();
+                        if hm.remove(&hm_keys[idx]) != sm.remove(sm_keys[idx]) {
+                            return false;
+                        }
+                    }
+
+                    // Access.
+                    2 => {
+                        if hm_keys.len() == 0 { continue; }
+                        let idx = val as usize % hm_keys.len();
+                        let (hm_key, sm_key) = (&hm_keys[idx], sm_keys[idx]);
+
+                        if hm.contains_key(hm_key) != sm.contains(sm_key) ||
+                           hm.get(hm_key) != sm.get(sm_key) {
+                            return false;
+                        }
+                    }
+
+                    _ => unreachable!(),
+                }
+            }
+
+            let mut smv: Vec<_> = sm.values().collect();
+            let mut hmv: Vec<_> = hm.values().collect();
+            smv.sort();
+            hmv.sort();
+            return smv == hmv;
+        }
+    }
+
+    #[test]
+    fn slotmap() {
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn slotmap_serde() {
+        // let invalid = serde_json::from_str::<Key>(&r#"{"idx":0,"version":0}"#);
+        // assert!(invalid.is_err(), "decoded key with even version");
     }
 }

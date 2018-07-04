@@ -12,3 +12,9 @@ categories = ["data-structures", "memory-management", "caching"]
 
 [dependencies]
 serde = { version = "1.0", optional = true, features = ["derive"] }
+
+[dev-dependencies]
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+quickcheck = "0.6"

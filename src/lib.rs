@@ -5,9 +5,10 @@
 //!
 //! This library provides two containers with persistent unique keys to access
 //! stored values, [`SparseSlotMap`] and [`DenseSlotMap`]. Upon insertion a key
-//! is returned that can be used to later access or remove the values. Great for
-//! storing collections of objects that need stable, safe references but have no
-//! clear ownership otherwise, such as game entities or graph nodes.
+//! is returned that can be used to later access or remove the values.
+//! Insertion, deletion and access all take O(1) time with low overhead. Great
+//! for storing collections of objects that need stable, safe references but
+//! have no clear ownership otherwise, such as game entities or graph nodes.
 //!
 //! The difference between a [`BTreeMap`] or [`HashMap`] and a slot map is
 //! that the slot map generates and returns the key when inserting a value. A
@@ -44,6 +45,15 @@
 //! store the [`Key`] inside your value and use the fast value iteration of
 //! [`DenseSlotMap`].
 //!
+//! # Serialization through [`serde`]
+//!
+//! Both [`Key`] and the slot maps have full (de)seralization support through
+//! the [`serde`] library. A key remains valid for a slot map even after one or
+//! both have been serialized and deserialized! This makes storing or
+//! transferring complicated referential structures and graphs a breeze. Care has
+//! been taken such that deserializing keys and slot maps from untrusted sources
+//! is safe.
+//!
 //! # Implementation
 //!
 //! Insertion, access and deletion is all O(1) with low overhead by storing the
@@ -65,15 +75,21 @@
 //! [`Key`]: struct.Key.html
 //! [`SparseSlotMap`]: sparse/struct.SparseSlotMap.html
 //! [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
+//! [`serde`]: https://github.com/serde-rs/serde
 
 #[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
 
-#[cfg(feature = "serde")]
-use serde::{de, Deserialize, Deserializer};
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
+
+#[cfg(test)]
+extern crate serde_json;
 
 mod slot;
+use slot::OccupiedVersion;
 
 pub mod sparse;
 pub use sparse::SparseSlotMap;
@@ -89,25 +105,10 @@ pub use sparse::SparseSlotMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key {
     idx: u32,
-
-    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_key_version"))]
-    version: u32,
+    version: OccupiedVersion,
 }
 
-#[cfg(feature = "serde")]
-fn deserialize_key_version<'de, D>(deserializer: D) -> Result<u32, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    // Never allow a key with even version.
-    let version: u32 = Deserialize::deserialize(deserializer)?;
-    if version % 2 == 0 {
-        return Err(de::Error::custom(&"an even version in Key"));
-    }
-    Ok(version)
-}
-
-// TODO: DenseSlotMap, serde
+// TODO: DenseSlotMap
 
 ///// A dense slotmap, for faster iteration but slower individual access compared
 ///// to [SparseSlotMap](struct.SparseSlotMap.html).
@@ -118,8 +119,22 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "serde")]
+    use super::*;
+
+    #[cfg(feature = "serde")]
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn key_serde() {
+        // Check round-trip through serde.
+        let mut sm = SparseSlotMap::new();
+        let k = sm.insert(42);
+        let ser = serde_json::to_string(&k).unwrap();
+        let de: Key = serde_json::from_str(&ser).unwrap();
+        assert_eq!(k, de);
+
+        // Even if a malicious entity sends up even (unoccupied) versions in the
+        // key, we make the version point to the occupied version.
+        let malicious = serde_json::from_str::<Key>(&r#"{"idx":0,"version":4}"#).unwrap();
+        assert_eq!(u32::from(malicious.version), 5);
     }
 }

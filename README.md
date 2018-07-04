@@ -18,6 +18,7 @@ A short example:
 
 ```rust
 use slotmap::SparseSlotMap;
+
 let mut sm = SparseSlotMap::new();
 let foo = sm.insert("foo");
 let bar = sm.insert("bar");

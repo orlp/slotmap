@@ -29,20 +29,20 @@
 //! let reused = sm.insert("reuse");  // Space from bar reused.
 //! assert_eq!(sm.contains(bar), false);  // After deletion a key stays invalid.
 //! ```
-//! 
+//!
 //! # Choosing sparse or dense
 //!
-//! The overhead on access with a [`sparse::Key`] in a [`SparseSlotMap`]
-//! compared to storing your elements in a [`Vec`] is a mere equality check.
-//! However, as there can be 'holes' in the underlying representation of a
-//! [`SparseSlotMap`] iteration can be inefficient when many slots are
-//! unoccupied. If you often require fast iteration over all values, we also
-//! provide a [`DenseSlotMap`]. It trades access performance for fast iteration
-//! over values by storing the actual values contiguously and using an extra
-//! array access to translate a key into a value index. Iteration over keys or
-//! key-value pairs is the same speed for both containers. If you must have fast
-//! key or key-value iteration store the [`dense::Key`] of itself inside your
-//! value and use the fast value iteration of [`DenseSlotMap`].
+//! The overhead on access with a [`Key`] in a [`SparseSlotMap`] compared to
+//! storing your elements in a [`Vec`] is a mere equality check.  However, as
+//! there can be 'holes' in the underlying representation of a [`SparseSlotMap`]
+//! iteration can be inefficient when many slots are unoccupied. If you often
+//! require fast iteration over all values, we also provide a [`DenseSlotMap`].
+//! It trades access performance for fast iteration over values by storing the
+//! actual values contiguously and using an extra array access to translate a
+//! key into a value index. Iteration over keys or key-value pairs is the same
+//! speed for both containers. If you must have fast key or key-value iteration
+//! store the [`Key`] inside your value and use the fast value iteration of
+//! [`DenseSlotMap`].
 //!
 //! # Implementation
 //!
@@ -62,13 +62,52 @@
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 //! [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
 //! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-//! [`sparse::Key`]: sparse/struct.Key.html
-//! [`dense::Key`]: dense/struct.Key.html
+//! [`Key`]: struct.Key.html
 //! [`SparseSlotMap`]: sparse/struct.SparseSlotMap.html
 //! [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
 
+#[cfg(feature = "serde")]
+#[macro_use]
+extern crate serde;
+
+#[cfg(feature = "serde")]
+use serde::{de, Deserialize, Deserializer};
+
+mod slot;
+
 pub mod sparse;
 pub use sparse::SparseSlotMap;
+
+/// Key used to access stored values in a slot map.
+///
+/// Do not use a key from one slot map in another. The behavior is safe but
+/// non-sensical (and might panic in case of out-of-bounds). Keys implement
+/// `Ord` so they can be used in e.g.
+/// [`BTreeMap`](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html)
+/// but their order is arbitrary.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Key {
+    idx: u32,
+
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_key_version"))]
+    version: u32,
+}
+
+#[cfg(feature = "serde")]
+fn deserialize_key_version<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Never allow a key with even version.
+    let version: u32 = Deserialize::deserialize(deserializer)?;
+    if version % 2 == 0 {
+        return Err(de::Error::custom(&"an even version in Key"));
+    }
+    Ok(version)
+}
+
+// TODO: DenseSlotMap, serde
 
 ///// A dense slotmap, for faster iteration but slower individual access compared
 ///// to [SparseSlotMap](struct.SparseSlotMap.html).

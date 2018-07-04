@@ -1,22 +1,14 @@
 //! Contains the sparse slot map implementation.
 use std;
-use std::fmt;
 use std::iter::FusedIterator;
 use std::mem::ManuallyDrop;
 use std::ops::{Index, IndexMut};
 
-/// Key used to access stored values in a slot map.
-///
-/// Do not use a key from one slot map in another. The behavior is safe but
-/// non-sensical (and might panic in case of out-of-bounds). Keys implement
-/// `Ord` so they can be used in e.g.
-/// [`BTreeMap`](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html)
-/// but their order is arbitrary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Key {
-    idx: u32,
-    version: u32,
-}
+use super::Key;
+use slot::Slot;
+
+#[cfg(feature = "serde")]
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 /// Slot map, storage with stable unique keys.
 ///
@@ -24,73 +16,8 @@ pub struct Key {
 #[derive(Debug, Clone)]
 pub struct SparseSlotMap<T> {
     slots: Vec<Slot<T>>,
-    first_free: usize,
+    free_head: usize,
     num_elems: u32,
-}
-
-struct Slot<T> {
-    value: ManuallyDrop<T>,
-
-    // Even = vacant, odd = occupied.
-    version: u32,
-
-    // This could be in an union with value, but that requires unstable unions
-    // without copy. This isn't available in stable Rust yet.
-    next_free: u32,
-}
-
-impl<T> Slot<T> {
-    fn occupied(&self) -> bool {
-        self.version % 2 > 0
-    }
-}
-
-impl<T> Drop for Slot<T> {
-    fn drop(&mut self) {
-        if self.occupied() {
-            unsafe {
-                ManuallyDrop::drop(&mut self.value);
-            }
-        }
-    }
-}
-
-impl<T> Clone for Slot<T>
-where
-    T: Clone,
-{
-    fn clone(&self) -> Slot<T> {
-        Slot::<T> {
-            value: if self.occupied() {
-                self.value.clone()
-            } else {
-                unsafe { std::mem::uninitialized() }
-            },
-            version: self.version,
-            next_free: self.next_free,
-        }
-    }
-}
-
-impl<T> fmt::Debug for Slot<T>
-where
-    T: fmt::Debug,
-{
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        if self.occupied() {
-            write!(
-                fmt,
-                "SparseSlotMap {{ version: {}, value: {:?} }}",
-                self.version, self.value
-            )
-        } else {
-            write!(
-                fmt,
-                "SparseSlotMap {{ version: {}, next_free: {:?} }}",
-                self.version, self.next_free
-            )
-        }
-    }
 }
 
 impl<T> SparseSlotMap<T> {
@@ -122,7 +49,7 @@ impl<T> SparseSlotMap<T> {
     pub fn with_capacity(capacity: usize) -> SparseSlotMap<T> {
         SparseSlotMap {
             slots: Vec::with_capacity(capacity),
-            first_free: 0,
+            free_head: 0,
             num_elems: 0,
         }
     }
@@ -179,7 +106,7 @@ impl<T> SparseSlotMap<T> {
     }
 
     /// Inserts a value into the slot map. Returns a unique
-    /// [`Key`](struct.Key.html) that can be used to access this value.
+    /// [`Key`](../struct.Key.html) that can be used to access this value.
     ///
     /// # Panics
     ///
@@ -222,7 +149,7 @@ impl<T> SparseSlotMap<T> {
             .expect("SparseSlotMap number of elements overflow");
 
         // Get an unoccupied slot.
-        let idx = self.first_free;
+        let idx = self.free_head;
         let slot = unsafe {
             if idx >= self.slots.len() {
                 self.slots.push(Slot {
@@ -230,11 +157,11 @@ impl<T> SparseSlotMap<T> {
                     version: 0,
                     next_free: 0,
                 });
-                self.first_free += 1;
+                self.free_head += 1;
                 self.slots.get_unchecked_mut(idx)
             } else {
                 let slot = self.slots.get_unchecked_mut(idx);
-                self.first_free = slot.next_free as usize;
+                self.free_head = slot.next_free as usize;
                 slot
             }
         };
@@ -285,9 +212,9 @@ impl<T> SparseSlotMap<T> {
             return None;
         }
 
-        slot.next_free = self.first_free as u32;
+        slot.next_free = self.free_head as u32;
         slot.version = slot.version.wrapping_add(1);
-        self.first_free = key.idx as usize;
+        self.free_head = key.idx as usize;
         self.num_elems -= 1;
         Some(std::mem::replace(&mut *slot.value, unsafe {
             std::mem::uninitialized()
@@ -558,3 +485,56 @@ impl<'a, T> FusedIterator for IterMut<'a, T> {}
 impl<'a, T> FusedIterator for Keys<'a, T> {}
 impl<'a, T> FusedIterator for Values<'a, T> {}
 impl<'a, T> FusedIterator for ValuesMut<'a, T> {}
+
+#[cfg(feature = "serde")]
+impl<T> Serialize for SparseSlotMap<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.slots.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T> Deserialize<'de> for SparseSlotMap<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut slots: Vec<Slot<T>> = Deserialize::deserialize(deserializer)?;
+        if slots.len() >= 1 << 32 {
+            return Err(de::Error::custom(&"too many slots"));
+        }
+
+        // We have our slots, rebuild freelist. Find first free slot.
+        let first_free = slots
+            .iter()
+            .position(|s| s.occupied())
+            .unwrap_or(slots.len());
+
+        let mut next_free = first_free;
+        let mut num_elems = first_free;
+        for i in first_free..slots.len() {
+            let slot = &mut slots[i];
+            if slot.occupied() {
+                num_elems += 1;
+            } else {
+                slot.next_free = next_free as u32;
+                next_free = i;
+            }
+        }
+
+        Ok(SparseSlotMap {
+            slots,
+            num_elems: num_elems as u32,
+            free_head: next_free,
+        })
+    }
+}

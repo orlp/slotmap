@@ -531,13 +531,11 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    // #[cfg(feature = "serde")]
-    // use serde_json;
-
-    // use quickcheck;
+    #[cfg(feature = "serde")]
+    use serde_json;
 
     quickcheck! {
-        fn equiv_hashmap(operations: Vec<(u8, u32)>) -> bool {
+        fn qc_slotmap_equiv_hashmap(operations: Vec<(u8, u32)>) -> bool {
             let mut hm = HashMap::new();
             let mut hm_keys = Vec::new();
             let mut unique_key = 0u32;
@@ -589,14 +587,28 @@ mod tests {
         }
     }
 
-    #[test]
-    fn slotmap() {
-    }
-
     #[cfg(feature = "serde")]
     #[test]
     fn slotmap_serde() {
-        // let invalid = serde_json::from_str::<Key>(&r#"{"idx":0,"version":0}"#);
-        // assert!(invalid.is_err(), "decoded key with even version");
+        let mut sm = SparseSlotMap::new();
+        // Self-referential structure.
+        let first = sm.insert_with_key(|k| (k, 23i32));
+        let second = sm.insert((first, 42));
+
+         // Make some empty slots.
+        let empties = vec![sm.insert((first, 0)), sm.insert((first, 0))];
+        empties.iter().for_each(|k| { sm.remove(*k); });
+
+        let third = sm.insert((second, 0));
+        sm[first].0 = third;
+
+        let ser = serde_json::to_string(&sm).unwrap();
+        let de: SparseSlotMap<(Key, i32)> = serde_json::from_str(&ser).unwrap();
+
+        let mut smkv: Vec<_> = sm.iter().collect();
+        let mut dekv: Vec<_> = de.iter().collect();
+        smkv.sort();
+        dekv.sort();
+        assert_eq!(smkv, dekv);
     }
 }

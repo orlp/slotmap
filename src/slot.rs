@@ -56,18 +56,24 @@ impl<T> Slot<T> {
         }
     }
 
+    // Is this slot occupied?
     pub fn occupied(&self) -> bool {
         self.version % 2 > 0
     }
 
+    // Get an OccupiedVersion for this slot. If the slot is currently unoccupied
+    // it will return the version it would have when it gets occupied.
     pub fn occupied_version(&self) -> OccupiedVersion {
         self.version.into()
     }
 
+    // Checks the slot's version for equality. If this returns true you also
+    // know the slot is occupied.
     pub fn has_version(&self, version: OccupiedVersion) -> bool {
         self.version == u32::from(version)
     }
 
+    // Get the slot's value, if occupied.
     pub fn value(&self) -> Option<&T> {
         to_option(self.occupied(), &self.value)
     }
@@ -77,6 +83,7 @@ impl<T> Slot<T> {
         to_option(occupied, &mut self.value)
     }
 
+    // Get the slot's value, if occupied and the correct version is given.
     pub fn get_versioned(&self, version: OccupiedVersion) -> Option<&T> {
         let correct_version = self.has_version(version);
         to_option(correct_version, &self.value)
@@ -87,6 +94,7 @@ impl<T> Slot<T> {
         to_option(correct_version, &mut self.value)
     }
 
+    // Get the slot's value without any safety checks.
     pub unsafe fn get_unchecked(&self) -> &T {
         &self.value
     }
@@ -94,11 +102,13 @@ impl<T> Slot<T> {
         &mut self.value
     }
 
+    // Store a new value. Must be unoccupied before storing.
     pub unsafe fn store_value(&mut self, value: T) {
         self.version |= 1;
         self.value = ManuallyDrop::new(value);
     }
 
+    // Remove a stored value. Must be occupied before removing.
     pub unsafe fn remove_value(&mut self) -> T {
         self.version = self.version.wrapping_add(1);
         std::mem::replace(&mut *self.value, std::mem::uninitialized())
@@ -251,8 +261,5 @@ mod tests {
         assert_eq!(de.value, slot.value);
         assert_eq!(de.version, slot.version);
         assert_eq!(de.next_free, 0); // next_free should not survive serialization.
-
-        // let invalid = serde_json::from_str::<Key>(&r#"{"idx":0,"version":0}"#);
-        // assert!(invalid.is_err(), "decoded key with even version");
     }
 }

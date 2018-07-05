@@ -29,7 +29,7 @@
 //!
 //! sm.remove(bar);
 //! let reused = sm.insert("reuse");  // Space from bar reused.
-//! assert_eq!(sm.contains(bar), false);  // After deletion a key stays invalid.
+//! assert_eq!(sm.contains_key(bar), false);  // After deletion a key stays invalid.
 //! ```
 //!
 //! # Why not [`slab`]?
@@ -39,7 +39,7 @@
 //! storage inside the slotmap is re-used for new elements. Additionally, at the
 //! time of writing [`slab`] does not support serialization.
 //!
-//! # Choosing [`SlotMap`] or [`DenseSlotMap`]
+//! # Choosing `SlotMap` or `DenseSlotMap`
 //!
 //! The overhead on access with a [`Key`] in a [`SlotMap`] compared to
 //! storing your elements in a [`Vec`] is a mere equality check.  However, as

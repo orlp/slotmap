@@ -3,7 +3,7 @@
 # slotmap
 
 A Rust library providing two containers with persistent unique keys to access
-stored values, `SparseSlotMap` and `DenseSlotMap`. Upon insertion a key is
+stored values, `SlotMap` and `DenseSlotMap`. Upon insertion a key is
 returned that can be used to later access or remove the values. Insertion,
 deletion and access all take O(1) time with low overhead. Great for storing
 collections of objects that need stable, safe references but have no clear
@@ -22,9 +22,9 @@ slotmap = "0.1"
 A short example:
 
 ```rust
-use slotmap::SparseSlotMap;
+use slotmap::SlotMap;
 
-let mut sm = SparseSlotMap::new();
+let mut sm = SlotMap::new();
 let foo = sm.insert("foo");
 let bar = sm.insert("bar");
 assert_eq!(sm[foo], "foo");

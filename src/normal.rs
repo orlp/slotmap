@@ -260,7 +260,7 @@ impl<T> SlotMap<T> {
     /// assert_eq!(sm.contains(key), false);
     /// ```
     pub fn contains(&self, key: Key) -> bool {
-        return self.slots[key.idx as usize].version == key.version;
+        self.slots[key.idx as usize].version == key.version
     }
 
     /// Removes a key from the slot map, returning the value at the key if the
@@ -516,7 +516,7 @@ impl<'a, T> Iterator for Keys<'a, T> {
     type Item = Key;
 
     fn next(&mut self) -> Option<Key> {
-        while let Some((key, _)) = self.inner.next() {
+        if let Some((key, _)) = self.inner.next() {
             return Some(key);
         }
 
@@ -528,7 +528,7 @@ impl<'a, T> Iterator for Values<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        while let Some((_, value)) = self.inner.next() {
+        if let Some((_, value)) = self.inner.next() {
             return Some(value);
         }
 
@@ -540,7 +540,7 @@ impl<'a, T> Iterator for ValuesMut<'a, T> {
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<&'a mut T> {
-        while let Some((_, value)) = self.inner.next() {
+        if let Some((_, value)) = self.inner.next() {
             return Some(value);
         }
 
@@ -631,8 +631,7 @@ mod serialize {
 
             let mut next_free = first_free;
             let mut num_elems = first_free;
-            for i in first_free..slots.len() {
-                let slot = &mut slots[i];
+            for (i, slot) in slots.iter_mut().enumerate().skip(first_free) {
                 if slot.occupied() {
                     num_elems += 1;
                 } else {
@@ -753,7 +752,7 @@ mod tests {
             let mut hmv: Vec<_> = hm.values().collect();
             smv.sort();
             hmv.sort();
-            return smv == hmv;
+            smv == hmv
         }
     }
 

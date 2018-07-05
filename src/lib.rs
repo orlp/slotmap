@@ -100,8 +100,8 @@ extern crate serde_json;
 pub(crate) mod slot;
 use slot::OccupiedVersion;
 
-mod sparse;
-pub use sparse::*;
+pub(crate) mod normal;
+pub use normal::*;
 
 /// Key used to access stored values in a slot map.
 ///

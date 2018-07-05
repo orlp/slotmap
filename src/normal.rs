@@ -9,9 +9,10 @@ use super::Key;
 
 // Little helper function to turn (bool, T) into Option<T>.
 fn to_option<T>(b: bool, some: T) -> Option<T> {
-    match b {
-        true => Some(some),
-        false => None,
+    if b {
+        Some(some)
+    } else {
+        None
     }
 }
 
@@ -169,6 +170,22 @@ impl<T> SlotMap<T> {
     pub fn reserve(&mut self, additional: usize) {
         let needed = self.len() + additional - self.slots.len();
         self.slots.reserve(needed.max(0));
+    }
+
+    /// Returns if the slot map is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let key = sm.insert("dummy");
+    /// assert_eq!(sm.is_empty(), false);
+    /// sm.remove(key);
+    /// assert_eq!(sm.is_empty(), true);
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.num_elems == 0
     }
 
     /// Inserts a value into the slot map. Returns a unique
@@ -627,7 +644,7 @@ mod serialize {
             let first_free = slots
                 .iter()
                 .position(|s| s.occupied())
-                .unwrap_or(slots.len());
+                .unwrap_or_else(|| slots.len());
 
             let mut next_free = first_free;
             let mut num_elems = first_free;

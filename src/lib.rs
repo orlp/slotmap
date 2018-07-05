@@ -90,15 +90,15 @@
 #[macro_use]
 extern crate serde;
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Deserializer};
-
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
 
 #[cfg(test)]
 extern crate serde_json;
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Deserializer};
 
 pub(crate) mod normal;
 pub use normal::*;

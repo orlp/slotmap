@@ -14,25 +14,6 @@ fn to_option<T>(b: bool, some: T) -> Option<T> {
 }
 
 
-// Ensures that version is always odd, so it always refers to an occupied slot
-// if it exists, and never to an unoccupied slot.
-#[cfg_attr(feature = "serde", derive(Serialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct OccupiedVersion(u32);
-
-impl From<u32> for OccupiedVersion {
-    fn from(version: u32) -> Self {
-        OccupiedVersion(version | 1)
-    }
-}
-
-impl From<OccupiedVersion> for u32 {
-    fn from(version: OccupiedVersion) -> u32 {
-        version.0
-    }
-}
-
-
 // A slot, which represents storage for a value and a current version.
 // Can be occupied or vacant
 pub struct Slot<T> {
@@ -63,14 +44,14 @@ impl<T> Slot<T> {
 
     // Get an OccupiedVersion for this slot. If the slot is currently unoccupied
     // it will return the version it would have when it gets occupied.
-    pub fn occupied_version(&self) -> OccupiedVersion {
-        self.version.into()
+    pub fn occupied_version(&self) -> u32 {
+        self.version | 1
     }
 
     // Checks the slot's version for equality. If this returns true you also
     // know the slot is occupied.
-    pub fn has_version(&self, version: OccupiedVersion) -> bool {
-        self.version == u32::from(version)
+    pub fn has_version(&self, version: u32) -> bool {
+        self.version == version
     }
 
     // Get the slot's value, if occupied.
@@ -84,12 +65,12 @@ impl<T> Slot<T> {
     }
 
     // Get the slot's value, if occupied and the correct version is given.
-    pub fn get_versioned(&self, version: OccupiedVersion) -> Option<&T> {
+    pub fn get_versioned(&self, version: u32) -> Option<&T> {
         let correct_version = self.has_version(version);
         to_option(correct_version, &self.value)
     }
 
-    pub fn get_versioned_mut(&mut self, version: OccupiedVersion) -> Option<&mut T> {
+    pub fn get_versioned_mut(&mut self, version: u32) -> Option<&mut T> {
         let correct_version = self.has_version(version);
         to_option(correct_version, &mut self.value)
     }
@@ -159,17 +140,6 @@ where
 
 // Serialization.
 #[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for OccupiedVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let version: u32 = Deserialize::deserialize(deserializer)?;
-        Ok(version.into())
-    }
-}
-
-#[cfg(feature = "serde")]
 #[derive(Serialize, Deserialize)]
 struct SafeSlot<T> {
     value: Option<T>,
@@ -234,18 +204,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[cfg(feature = "serde")]
     use serde_json;
-
-    #[test]
-    fn occupied_version() {
-        let ov: OccupiedVersion = 2.into();
-        let v: u32 = ov.into();
-
-        assert_eq!(v, 3);
-    }
 
     #[cfg(feature = "serde")]
     #[test]

@@ -1,4 +1,4 @@
-//! Contains the sparse slot map implementation.
+//! Contains the slot map implementation.
 use std;
 use std::iter::FusedIterator;
 use std::ops::{Index, IndexMut};
@@ -13,14 +13,14 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 ///
 /// See [crate documentation](../index.html) for more details.
 #[derive(Debug, Clone)]
-pub struct SparseSlotMap<T> {
+pub struct SlotMap<T> {
     slots: Vec<Slot<T>>,
     free_head: usize,
     num_elems: u32,
 }
 
-impl<T> SparseSlotMap<T> {
-    /// Construct a new, empty `SparseSlotMap`.
+impl<T> SlotMap<T> {
+    /// Construct a new, empty `SlotMap`.
     ///
     /// The slot map will not allocate until values are inserted.
     ///
@@ -28,13 +28,13 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm: SparseSlotMap<i32> = SparseSlotMap::new();
+    /// let mut sm: SlotMap<i32> = SlotMap::new();
     /// ```
     pub fn new() -> Self {
         Self::with_capacity(0)
     }
 
-    /// Creates an empty `SparseSlotMap` with the given capacity.
+    /// Creates an empty `SlotMap` with the given capacity.
     ///
     /// The slot map will not reallocate until it holds at least `capacity`
     /// elements. If `capacity` is 0, the slot map will not allocate.
@@ -43,10 +43,10 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm: SparseSlotMap<i32> = SparseSlotMap::with_capacity(10);
+    /// let mut sm: SlotMap<i32> = SlotMap::with_capacity(10);
     /// ```
-    pub fn with_capacity(capacity: usize) -> SparseSlotMap<T> {
-        SparseSlotMap {
+    pub fn with_capacity(capacity: usize) -> SlotMap<T> {
+        SlotMap {
             slots: Vec::with_capacity(capacity),
             free_head: 0,
             num_elems: 0,
@@ -59,7 +59,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::with_capacity(10);
+    /// let mut sm = SlotMap::with_capacity(10);
     /// sm.insert("len() counts actual elements, not capacity");
     /// let key = sm.insert("removed elements don't count either");
     /// sm.remove(key);
@@ -69,14 +69,14 @@ impl<T> SparseSlotMap<T> {
         self.num_elems as usize
     }
 
-    /// Returns the number of elements the `SparseSlotMap` can hold without
+    /// Returns the number of elements the `SlotMap` can hold without
     /// reallocating.
     ///
     /// # Examples
     ///
     /// ```
     /// # use slotmap::*;
-    /// let sm: SparseSlotMap<f64> = SparseSlotMap::with_capacity(10);
+    /// let sm: SlotMap<f64> = SlotMap::with_capacity(10);
     /// assert_eq!(sm.capacity(), 10);
     /// ```
     pub fn capacity(&self) -> usize {
@@ -84,7 +84,7 @@ impl<T> SparseSlotMap<T> {
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted
-    /// in the `SparseSlotMap`. The collection may reserve more space to
+    /// in the `SlotMap`. The collection may reserve more space to
     /// avoid frequent reallocations.
     ///
     /// # Panics
@@ -95,7 +95,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::new();
+    /// let mut sm = SlotMap::new();
     /// sm.insert("foo");
     /// sm.reserve(32);
     /// assert!(sm.capacity() >= 33);
@@ -115,7 +115,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::new();
+    /// let mut sm = SlotMap::new();
     /// let key = sm.insert(42);
     /// assert_eq!(sm[key], 42);
     /// ```
@@ -135,7 +135,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::new();
+    /// let mut sm = SlotMap::new();
     /// let key = sm.insert_with_key(|k| (k, 20));
     /// assert_eq!(sm[key], (key, 20));
     /// ```
@@ -145,7 +145,7 @@ impl<T> SparseSlotMap<T> {
     {
         let new_num_elems = self.num_elems
             .checked_add(1)
-            .expect("SparseSlotMap number of elements overflow");
+            .expect("SlotMap number of elements overflow");
 
         // Get an unoccupied slot.
         let idx = self.free_head;
@@ -179,7 +179,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::new();
+    /// let mut sm = SlotMap::new();
     /// let key = sm.insert(42);
     /// assert_eq!(sm.contains(key), true);
     /// sm.remove(key);
@@ -196,7 +196,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::new();
+    /// let mut sm = SlotMap::new();
     /// let key = sm.insert(42);
     /// assert_eq!(sm.remove(key), Some(42));
     /// assert_eq!(sm.remove(key), None);
@@ -219,7 +219,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::new();
+    /// let mut sm = SlotMap::new();
     /// let key = sm.insert("bar");
     /// assert_eq!(sm.get(key), Some(&"bar"));
     /// sm.remove(key);
@@ -241,7 +241,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::new();
+    /// let mut sm = SlotMap::new();
     /// let key = sm.insert("bar");
     /// assert_eq!(unsafe { sm.get_unchecked(key) }, &"bar");
     /// sm.remove(key);
@@ -256,7 +256,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::new();
+    /// let mut sm = SlotMap::new();
     /// let key = sm.insert(3.5);
     /// if let Some(x) = sm.get_mut(key) {
     ///     *x += 3.0;
@@ -279,7 +279,7 @@ impl<T> SparseSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SparseSlotMap::new();
+    /// let mut sm = SlotMap::new();
     /// let key = sm.insert("foo");
     /// unsafe { *sm.get_unchecked_mut(key) = "bar" };
     /// assert_eq!(sm[key], "bar");
@@ -331,60 +331,60 @@ impl<T> SparseSlotMap<T> {
     }
 }
 
-impl<T> Default for SparseSlotMap<T> {
+impl<T> Default for SlotMap<T> {
     fn default() -> Self {
-        SparseSlotMap::new()
+        SlotMap::new()
     }
 }
 
-impl<T> Index<Key> for SparseSlotMap<T> {
+impl<T> Index<Key> for SlotMap<T> {
     type Output = T;
 
     fn index(&self, key: Key) -> &T {
         match self.get(key) {
             Some(r) => r,
-            None => panic!("removed SparseSlotMap key used"),
+            None => panic!("removed SlotMap key used"),
         }
     }
 }
 
-impl<T> IndexMut<Key> for SparseSlotMap<T> {
+impl<T> IndexMut<Key> for SlotMap<T> {
     fn index_mut(&mut self, key: Key) -> &mut T {
         match self.get_mut(key) {
             Some(r) => r,
-            None => panic!("removed SparseSlotMap key used"),
+            None => panic!("removed SlotMap key used"),
         }
     }
 }
 
 // Iterators.
-/// An iterator over the `(key, value)` pairs in a `SparseSlotMap`.
+/// An iterator over the `(key, value)` pairs in a `SlotMap`.
 #[derive(Debug)]
 pub struct Iter<'a, T: 'a> {
     slots: std::slice::Iter<'a, Slot<T>>,
     cur: usize,
 }
 
-/// A mutable iterator over the `(key, value)` pairs in a `SparseSlotMap`.
+/// A mutable iterator over the `(key, value)` pairs in a `SlotMap`.
 #[derive(Debug)]
 pub struct IterMut<'a, T: 'a> {
     slots: std::slice::IterMut<'a, Slot<T>>,
     cur: usize,
 }
 
-/// An iterator over the keys in a `SparseSlotMap`.
+/// An iterator over the keys in a `SlotMap`.
 #[derive(Debug)]
 pub struct Keys<'a, T: 'a> {
     inner: Iter<'a, T>,
 }
 
-/// An iterator over the values in a `SparseSlotMap`.
+/// An iterator over the values in a `SlotMap`.
 #[derive(Debug)]
 pub struct Values<'a, T: 'a> {
     inner: Iter<'a, T>,
 }
 
-/// A mutable iterator over the values in a `SparseSlotMap`.
+/// A mutable iterator over the values in a `SlotMap`.
 #[derive(Debug)]
 pub struct ValuesMut<'a, T: 'a> {
     inner: IterMut<'a, T>,
@@ -473,7 +473,7 @@ impl<'a, T> FusedIterator for Values<'a, T> {}
 impl<'a, T> FusedIterator for ValuesMut<'a, T> {}
 
 #[cfg(feature = "serde")]
-impl<T> Serialize for SparseSlotMap<T>
+impl<T> Serialize for SlotMap<T>
 where
     T: Serialize,
 {
@@ -486,7 +486,7 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<'de, T> Deserialize<'de> for SparseSlotMap<T>
+impl<'de, T> Deserialize<'de> for SlotMap<T>
 where
     T: Deserialize<'de>,
 {
@@ -517,7 +517,7 @@ where
             }
         }
 
-        Ok(SparseSlotMap {
+        Ok(SlotMap {
             slots,
             num_elems: num_elems as u32,
             free_head: next_free,
@@ -539,7 +539,7 @@ mod tests {
             let mut hm = HashMap::new();
             let mut hm_keys = Vec::new();
             let mut unique_key = 0u32;
-            let mut sm = SparseSlotMap::new();
+            let mut sm = SlotMap::new();
             let mut sm_keys = Vec::new();
 
             for (op, val) in operations {
@@ -590,7 +590,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn slotmap_serde() {
-        let mut sm = SparseSlotMap::new();
+        let mut sm = SlotMap::new();
         // Self-referential structure.
         let first = sm.insert_with_key(|k| (k, 23i32));
         let second = sm.insert((first, 42));
@@ -603,7 +603,7 @@ mod tests {
         sm[first].0 = third;
 
         let ser = serde_json::to_string(&sm).unwrap();
-        let de: SparseSlotMap<(Key, i32)> = serde_json::from_str(&ser).unwrap();
+        let de: SlotMap<(Key, i32)> = serde_json::from_str(&ser).unwrap();
 
         let mut smkv: Vec<_> = sm.iter().collect();
         let mut dekv: Vec<_> = de.iter().collect();

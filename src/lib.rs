@@ -1,10 +1,11 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
+#![doc(html_root_url = "https://docs.rs/slotmap/0.1.0")]
 #![crate_name = "slotmap"]
 
 //! # slotmap
 //!
 //! This library provides two containers with persistent unique keys to access
-//! stored values, [`SparseSlotMap`] and [`DenseSlotMap`]. Upon insertion a key
+//! stored values, [`SlotMap`] and [`DenseSlotMap`]. Upon insertion a key
 //! is returned that can be used to later access or remove the values.
 //! Insertion, deletion and access all take O(1) time with low overhead. Great
 //! for storing collections of objects that need stable, safe references but
@@ -20,8 +21,8 @@
 //!
 //! ```
 //! # use slotmap::*;
-//! let mut sm = SparseSlotMap::new();
-//! let foo = sm.insert("foo");
+//! let mut sm = SlotMap::new();
+//! let foo = sm.insert("foo");  // Key generated on insert.
 //! let bar = sm.insert("bar");
 //! assert_eq!(sm[foo], "foo");
 //! assert_eq!(sm[bar], "bar");
@@ -31,11 +32,18 @@
 //! assert_eq!(sm.contains(bar), false);  // After deletion a key stays invalid.
 //! ```
 //!
-//! # Choosing sparse or dense
+//! # Why not [`slab`]?
 //!
-//! The overhead on access with a [`Key`] in a [`SparseSlotMap`] compared to
+//! Unlike [`slab`], the keys returned by the slots maps are versioned. This
+//! means that once a key is removed, it stays removed, even if the physical
+//! storage inside the slotmap is re-used for new elements. Additionally, at the
+//! time of writing [`slab`] does not support serialization.
+//!
+//! # Choosing [`SlotMap`] or [`DenseSlotMap`]
+//!
+//! The overhead on access with a [`Key`] in a [`SlotMap`] compared to
 //! storing your elements in a [`Vec`] is a mere equality check.  However, as
-//! there can be 'holes' in the underlying representation of a [`SparseSlotMap`]
+//! there can be 'holes' in the underlying representation of a [`SlotMap`]
 //! iteration can be inefficient when many slots are unoccupied. If you often
 //! require fast iteration over all values, we also provide a [`DenseSlotMap`].
 //! It trades access performance for fast iteration over values by storing the
@@ -62,7 +70,7 @@
 //! slot in the vector is a `(value, version)` tuple. After insertion the
 //! returned key also contains a version. Only when the stored version and
 //! version in a key match is a key valid. This allows us to reuse space in the
-//! vector after deletion without letting deleted keys point to spurious new
+//! vector after deletion without letting removed keys point to spurious new
 //! elements. After 2<sup>31</sup> deletions and insertions to the same
 //! underlying slot the version wraps around and such a spurious reference
 //! could potentially occur. It is incredibly unlikely however, and in all
@@ -73,9 +81,10 @@
 //! [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
 //! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
 //! [`Key`]: struct.Key.html
-//! [`SparseSlotMap`]: sparse/struct.SparseSlotMap.html
+//! [`SlotMap`]: struct.SlotMap.html
 //! [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
 //! [`serde`]: https://github.com/serde-rs/serde
+//! [`slab`]: https://github.com/carllerche/slab
 
 #[cfg(feature = "serde")]
 #[macro_use]
@@ -88,11 +97,11 @@ extern crate quickcheck;
 #[cfg(test)]
 extern crate serde_json;
 
-mod slot;
+pub(crate) mod slot;
 use slot::OccupiedVersion;
 
-pub mod sparse;
-pub use sparse::SparseSlotMap;
+mod sparse;
+pub use sparse::*;
 
 /// Key used to access stored values in a slot map.
 ///
@@ -111,7 +120,7 @@ pub struct Key {
 // TODO: DenseSlotMap
 
 ///// A dense slotmap, for faster iteration but slower individual access compared
-///// to [SparseSlotMap](struct.SparseSlotMap.html).
+///// to [SlotMap](struct.SlotMap.html).
 /////
 ///// Not implemented yet.
 //#[derive(Debug)]
@@ -126,7 +135,7 @@ mod tests {
     #[test]
     fn key_serde() {
         // Check round-trip through serde.
-        let mut sm = SparseSlotMap::new();
+        let mut sm = SlotMap::new();
         let k = sm.insert(42);
         let ser = serde_json::to_string(&k).unwrap();
         let de: Key = serde_json::from_str(&ser).unwrap();
@@ -138,3 +147,4 @@ mod tests {
         assert_eq!(u32::from(malicious.version), 5);
     }
 }
+

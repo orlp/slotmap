@@ -100,8 +100,6 @@ extern crate quickcheck;
 #[cfg(test)]
 extern crate serde_json;
 
-pub(crate) mod slot;
-
 pub(crate) mod normal;
 pub use normal::*;
 
@@ -117,14 +115,16 @@ pub use normal::*;
 pub struct Key {
     idx: u32,
 
-    #[cfg_attr(feature = "serde", serde(deserialize_with="deserialize_key_version"))]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_key_version"))]
     version: u32,
 }
 
 
 #[cfg(feature = "serde")]
 fn deserialize_key_version<'de, D>(deserializer: D) -> Result<u32, D::Error>
-where D: Deserializer<'de> {
+where
+    D: Deserializer<'de>,
+{
     let version: u32 = Deserialize::deserialize(deserializer)?;
     Ok(version | 1) // Ensure version is odd.
 }
@@ -159,4 +159,3 @@ mod tests {
         assert_eq!(u32::from(malicious.version), 5);
     }
 }
-

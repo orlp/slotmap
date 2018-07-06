@@ -1,6 +1,6 @@
 //! Contains the slot map implementation.
 use std;
-use std::iter::{FusedIterator, Enumerate};
+use std::iter::{Enumerate, FusedIterator};
 use std::mem::ManuallyDrop;
 use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
@@ -9,7 +9,9 @@ use super::Key;
 
 // Little helper function to turn (bool, T) into Option<T>.
 fn to_option<T, F>(b: bool, f: F) -> Option<T>
-where F: FnOnce() -> T {
+where
+    F: FnOnce() -> T,
+{
     if b {
         Some(f())
     } else {
@@ -295,7 +297,7 @@ impl<T> SlotMap<T> {
         slot.next_free = self.free_head as u32;
         self.free_head = idx;
         self.num_elems -= 1;
-        
+
         // Remove value from slot.
         slot.version = slot.version.wrapping_add(1);
         ptr::read(&*slot.value)
@@ -338,22 +340,22 @@ impl<T> SlotMap<T> {
     /// ```
     /// # use slotmap::*;
     /// let mut sm = SlotMap::new();
-    /// 
+    ///
     /// let k1 = sm.insert(0);
     /// let k2 = sm.insert(1);
     /// let k3 = sm.insert(2);
-    /// 
+    ///
     /// sm.retain(|key, val| key == k1 || *val == 1);
-    /// 
+    ///
     /// assert!(sm.contains_key(k1));
     /// assert!(sm.contains_key(k2));
     /// assert!(!sm.contains_key(k3));
-    /// 
+    ///
     /// assert_eq!(2, sm.len());
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
-    where 
-        F: FnMut(Key, &mut T) -> bool
+    where
+        F: FnMut(Key, &mut T) -> bool,
     {
         let len = self.slots.len();
         for i in 0..len {
@@ -414,8 +416,9 @@ impl<T> SlotMap<T> {
     /// ```
     pub fn drain(&mut self) -> Drain<T> {
         Drain {
-            sm: self,
             cur: 0,
+            num_left: self.len(),
+            sm: self,
         }
     }
 
@@ -516,6 +519,7 @@ impl<T> SlotMap<T> {
     ///
     /// let mut it = sm.iter();
     /// assert_eq!(it.next(), Some((k0, &0)));
+    /// assert_eq!(it.len(), 2);
     /// assert_eq!(it.next(), Some((k1, &1)));
     /// assert_eq!(it.next(), Some((k2, &2)));
     /// assert_eq!(it.next(), None);
@@ -523,6 +527,7 @@ impl<T> SlotMap<T> {
     pub fn iter(&self) -> Iter<T> {
         Iter::<T> {
             slots: self.slots.iter().enumerate(),
+            num_left: self.len(),
         }
     }
 
@@ -552,6 +557,7 @@ impl<T> SlotMap<T> {
     /// ```
     pub fn iter_mut(&mut self) -> IterMut<T> {
         IterMut::<T> {
+            num_left: self.len(),
             slots: self.slots.iter_mut().enumerate(),
         }
     }
@@ -653,6 +659,7 @@ impl<T> IndexMut<Key> for SlotMap<T> {
 /// A draining iterator for `SlotMap`.
 #[derive(Debug)]
 pub struct Drain<'a, T: 'a> {
+    num_left: usize,
     sm: &'a mut SlotMap<T>,
     cur: usize,
 }
@@ -660,18 +667,21 @@ pub struct Drain<'a, T: 'a> {
 /// An iterator that moves key-value pairs out of a `SlotMap`.
 #[derive(Debug)]
 pub struct IntoIter<T> {
+    num_left: usize,
     slots: Enumerate<std::vec::IntoIter<Slot<T>>>,
 }
 
 /// An iterator over the key-value pairs in a `SlotMap`.
 #[derive(Debug)]
 pub struct Iter<'a, T: 'a> {
+    num_left: usize,
     slots: Enumerate<std::slice::Iter<'a, Slot<T>>>,
 }
 
 /// A mutable iterator over the key-value pairs in a `SlotMap`.
 #[derive(Debug)]
 pub struct IterMut<'a, T: 'a> {
+    num_left: usize,
     slots: Enumerate<std::slice::IterMut<'a, Slot<T>>>,
 }
 
@@ -702,7 +712,7 @@ impl<'a, T> Iterator for Drain<'a, T> {
             let idx = self.cur;
             self.cur += 1;
 
-            unsafe { 
+            unsafe {
                 // This is safe because removing doesn't shrink slots.
                 if self.sm.slots.get_unchecked(idx).occupied() {
                     let key = Key {
@@ -710,6 +720,7 @@ impl<'a, T> Iterator for Drain<'a, T> {
                         version: self.sm.slots.get_unchecked(idx).version,
                     };
 
+                    self.num_left -= 1;
                     return Some((key, self.sm.remove_from_slot(idx)));
                 }
             }
@@ -717,11 +728,15 @@ impl<'a, T> Iterator for Drain<'a, T> {
 
         None
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.num_left, Some(self.num_left))
+    }
 }
 
 impl<'a, T> Drop for Drain<'a, T> {
     fn drop(&mut self) {
-        self.for_each(|_drop| { });
+        self.for_each(|_drop| {});
     }
 }
 
@@ -740,11 +755,16 @@ impl<T> Iterator for IntoIter<T> {
                 slot.version = 0;
 
                 // This is safe because we know the slot was occupied.
+                self.num_left -= 1;
                 return Some((key, unsafe { ptr::read(&*slot.value) }));
             }
         }
 
         None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.num_left, Some(self.num_left))
     }
 }
 
@@ -759,11 +779,16 @@ impl<'a, T> Iterator for Iter<'a, T> {
                     version: slot.version,
                 };
 
+                self.num_left -= 1;
                 return Some((key, &slot.value));
             }
         }
 
         None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.num_left, Some(self.num_left))
     }
 }
 
@@ -778,11 +803,16 @@ impl<'a, T> Iterator for IterMut<'a, T> {
                     version: slot.version,
                 };
 
+                self.num_left -= 1;
                 return Some((key, &mut slot.value));
             }
         }
 
         None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.num_left, Some(self.num_left))
     }
 }
 
@@ -796,6 +826,10 @@ impl<'a, T> Iterator for Keys<'a, T> {
 
         None
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
 
 impl<'a, T> Iterator for Values<'a, T> {
@@ -808,6 +842,10 @@ impl<'a, T> Iterator for Values<'a, T> {
 
         None
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
 
 impl<'a, T> Iterator for ValuesMut<'a, T> {
@@ -819,6 +857,10 @@ impl<'a, T> Iterator for ValuesMut<'a, T> {
         }
 
         None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
     }
 }
 
@@ -845,7 +887,10 @@ impl<T> IntoIterator for SlotMap<T> {
     type IntoIter = IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        IntoIter { slots: self.slots.into_iter().enumerate() }
+        IntoIter {
+            num_left: self.len(),
+            slots: self.slots.into_iter().enumerate(),
+        }
     }
 }
 
@@ -856,6 +901,14 @@ impl<'a, T> FusedIterator for Values<'a, T> {}
 impl<'a, T> FusedIterator for ValuesMut<'a, T> {}
 impl<'a, T> FusedIterator for Drain<'a, T> {}
 impl<T> FusedIterator for IntoIter<T> {}
+
+impl<'a, T> ExactSizeIterator for Iter<'a, T> {}
+impl<'a, T> ExactSizeIterator for IterMut<'a, T> {}
+impl<'a, T> ExactSizeIterator for Keys<'a, T> {}
+impl<'a, T> ExactSizeIterator for Values<'a, T> {}
+impl<'a, T> ExactSizeIterator for ValuesMut<'a, T> {}
+impl<'a, T> ExactSizeIterator for Drain<'a, T> {}
+impl<T> ExactSizeIterator for IntoIter<T> {}
 
 // Serialization with serde.
 #[cfg(feature = "serde")]

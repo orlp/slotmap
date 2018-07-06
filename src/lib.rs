@@ -32,27 +32,6 @@
 //! assert_eq!(sm.contains_key(bar), false);  // After deletion a key stays invalid.
 //! ```
 //!
-//! # Why not [`slab`]?
-//!
-//! Unlike [`slab`], the keys returned by the slots maps are versioned. This
-//! means that once a key is removed, it stays removed, even if the physical
-//! storage inside the slotmap is re-used for new elements. Additionally, at the
-//! time of writing [`slab`] does not support serialization.
-//!
-//! # Choosing `SlotMap` or `DenseSlotMap`
-//!
-//! The overhead on access with a [`Key`] in a [`SlotMap`] compared to
-//! storing your elements in a [`Vec`] is a mere equality check.  However, as
-//! there can be 'holes' in the underlying representation of a [`SlotMap`]
-//! iteration can be inefficient when many slots are unoccupied. If you often
-//! require fast iteration over all values, we also provide a [`DenseSlotMap`].
-//! It trades access performance for fast iteration over values by storing the
-//! actual values contiguously and using an extra array access to translate a
-//! key into a value index. Iteration over keys or key-value pairs is the same
-//! speed for both containers. If you must have fast key or key-value iteration
-//! store the [`Key`] inside your value and use the fast value iteration of
-//! [`DenseSlotMap`].
-//!
 //! # Serialization through [`serde`]
 //!
 //! Both [`Key`] and the slot maps have full (de)seralization support through
@@ -62,7 +41,27 @@
 //! been taken such that deserializing keys and slot maps from untrusted sources
 //! is safe.
 //!
-//! # Implementation
+//! # Why not [`slab`]?
+//!
+//! Unlike [`slab`], the keys returned by the slots maps are versioned. This
+//! means that once a key is removed, it stays removed, even if the physical
+//! storage inside the slotmap is re-used for new elements. A [`DenseSlotMap`]
+//! also provides faster iteration than [`slab`] does. Additionally, at the time
+//! of writing [`slab`] does not support serialization.
+//!
+//! # Choosing `SlotMap` or `DenseSlotMap`
+//!
+//! The overhead on access with a [`Key`] in a [`SlotMap`] compared to
+//! storing your elements in a [`Vec`] is a mere equality check.  However, as
+//! there can be 'holes' in the underlying representation of a [`SlotMap`]
+//! iteration can be inefficient when many slots are unoccupied (a slot gets
+//! unoccupied when an element is removed, and gets filled back up on
+//! insertion). If you often require fast iteration over all values, we also
+//! provide a [`DenseSlotMap`]. It trades random access performance for fast
+//! iteration over values by storing the actual values contiguously and using an
+//! extra array access to translate a key into a value index.
+//!
+//! # Performance characteristics and implementation details
 //!
 //! Insertion, access and deletion is all O(1) with low overhead by storing the
 //! elements inside a [`Vec`]. Unlike references or indices into a vector,
@@ -76,6 +75,11 @@
 //! could potentially occur. It is incredibly unlikely however, and in all
 //! circumstances is the behavior safe. A slot map can hold up to 2<sup>32</sup>
 //! elements at a time.
+//!
+//! A slot map never shrinks - it couldn't even if it wanted to. It needs to
+//! remember for each slot what the latest version is as to not generate
+//! duplicate keys. The overhead for each element in [`SlotMap`] is 8 bytes. In
+//! [`DenseSlotMap`] it is 12 bytes.
 //!
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 //! [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html

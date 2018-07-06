@@ -25,15 +25,14 @@ A short example:
 use slotmap::SlotMap;
 
 let mut sm = SlotMap::new();
-let foo = sm.insert("foo");
+let foo = sm.insert("foo");  // Key generated on insert.
 let bar = sm.insert("bar");
 assert_eq!(sm[foo], "foo");
 assert_eq!(sm[bar], "bar");
 
 sm.remove(bar);
-let reused = sm.insert("reuse");      // Space from bar reused.
-assert_eq!(sm.contains(bar), false);  // After deletion a key stays invalid,
-                                      // even if we reuse its space.
+let reused = sm.insert("reuse");  // Space from bar reused.
+assert_eq!(sm.contains_key(bar), false);  // After deletion a key stays invalid.
 ```
 
 # License

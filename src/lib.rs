@@ -107,6 +107,9 @@ use serde::{Deserialize, Deserializer};
 pub(crate) mod normal;
 pub use normal::*;
 
+// pub mod dense;
+// pub use dense::DenseSlotMap;
+
 /// Key used to access stored values in a slot map.
 ///
 /// Do not use a key from one slot map in another. The behavior is safe but
@@ -132,15 +135,6 @@ where
     let version: u32 = Deserialize::deserialize(deserializer)?;
     Ok(version | 1) // Ensure version is odd.
 }
-
-// TODO: DenseSlotMap
-
-///// A dense slotmap, for faster iteration but slower individual access compared
-///// to [SlotMap](struct.SlotMap.html).
-/////
-///// Not implemented yet.
-//#[derive(Debug)]
-//pub struct DenseSlotMap;
 
 #[cfg(test)]
 mod tests {

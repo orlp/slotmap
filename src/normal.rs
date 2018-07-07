@@ -7,18 +7,6 @@ use std::{fmt, ptr};
 
 use super::Key;
 
-// Little helper function to turn (bool, T) into Option<T>.
-fn to_option<T, F>(b: bool, f: F) -> Option<T>
-where
-    F: FnOnce() -> T,
-{
-    if b {
-        Some(f())
-    } else {
-        None
-    }
-}
-
 // A slot, which represents storage for a value and a current version.
 // Can be occupied or vacant.
 struct Slot<T> {
@@ -204,7 +192,10 @@ impl<T> SlotMap<T> {
     /// assert_eq!(sm.contains_key(key), false);
     /// ```
     pub fn contains_key(&self, key: Key) -> bool {
-        self.slots[key.idx as usize].version == key.version
+        match self.slots.get(key.idx as usize) {
+            Some(slot) => slot.version == key.version,
+            None => false,
+        }
     }
 
     /// Inserts a value into the slot map. Returns a unique
@@ -316,14 +307,12 @@ impl<T> SlotMap<T> {
     /// assert_eq!(sm.remove(key), None);
     /// ```
     pub fn remove(&mut self, key: Key) -> Option<T> {
-        if self.slots[key.idx as usize].version != key.version {
-            return None;
+        if self.contains_key(key) {
+            // This is safe because we know that the slot is occupied.
+            Some(unsafe { self.remove_from_slot(key.idx as usize) })
+        } else {
+            None
         }
-
-        // This is safe because we know that the slot was occupied. We know this
-        // because keys are only ever given out with an odd version and we
-        // checked that slot.version == key.version.
-        Some(unsafe { self.remove_from_slot(key.idx as usize) })
     }
 
     /// Retains only the elements specified by the predicate.
@@ -435,8 +424,10 @@ impl<T> SlotMap<T> {
     /// assert_eq!(sm.get(key), None);
     /// ```
     pub fn get(&self, key: Key) -> Option<&T> {
-        let slot = &self.slots[key.idx as usize];
-        to_option(slot.version == key.version, move || &*slot.value)
+        self.slots
+            .get(key.idx as usize)
+            .filter(|slot| slot.version == key.version)
+            .map(|slot| &*slot.value)
     }
 
     /// Returns a reference to the value corresponding to the key without
@@ -475,8 +466,10 @@ impl<T> SlotMap<T> {
     /// assert_eq!(sm[key], 6.5);
     /// ```
     pub fn get_mut(&mut self, key: Key) -> Option<&mut T> {
-        let slot = &mut self.slots[key.idx as usize];
-        to_option(slot.version == key.version, move || &mut *slot.value)
+        self.slots
+            .get_mut(key.idx as usize)
+            .filter(|slot| slot.version == key.version)
+            .map(|slot| &mut *slot.value)
     }
 
     /// Returns a mutable reference to the value corresponding to the key
@@ -641,7 +634,7 @@ impl<T> Index<Key> for SlotMap<T> {
     fn index(&self, key: Key) -> &T {
         match self.get(key) {
             Some(r) => r,
-            None => panic!("removed SlotMap key used"),
+            None => panic!("invalid SlotMap key used"),
         }
     }
 }
@@ -650,7 +643,7 @@ impl<T> IndexMut<Key> for SlotMap<T> {
     fn index_mut(&mut self, key: Key) -> &mut T {
         match self.get_mut(key) {
             Some(r) => r,
-            None => panic!("removed SlotMap key used"),
+            None => panic!("invalid SlotMap key used"),
         }
     }
 }

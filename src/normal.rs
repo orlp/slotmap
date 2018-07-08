@@ -66,7 +66,6 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
     }
 }
 
-
 /// Slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](index.html) for more details.
@@ -813,11 +812,7 @@ impl<'a, T> Iterator for Keys<'a, T> {
     type Item = Key;
 
     fn next(&mut self) -> Option<Key> {
-        if let Some((key, _)) = self.inner.next() {
-            return Some(key);
-        }
-
-        None
+        self.inner.next().map(|(key, _)| key)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -829,11 +824,7 @@ impl<'a, T> Iterator for Values<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        if let Some((_, value)) = self.inner.next() {
-            return Some(value);
-        }
-
-        None
+        self.inner.next().map(|(_, value)| value)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -845,11 +836,7 @@ impl<'a, T> Iterator for ValuesMut<'a, T> {
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<&'a mut T> {
-        if let Some((_, value)) = self.inner.next() {
-            return Some(value);
-        }
-
-        None
+        self.inner.next().map(|(_, value)| value)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -997,7 +984,6 @@ mod serialize {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

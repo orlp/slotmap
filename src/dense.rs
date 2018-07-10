@@ -953,6 +953,7 @@ mod tests {
                     }
 
                     // Serde round-trip.
+                    #[cfg(feature = "serde")]
                     3 => {
                         let ser = serde_json::to_string(&sm).unwrap();
                         sm = serde_json::from_str(&ser).unwrap();

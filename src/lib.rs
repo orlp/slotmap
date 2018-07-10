@@ -107,8 +107,8 @@ use serde::{Deserialize, Deserializer};
 pub(crate) mod normal;
 pub use normal::*;
 
-// pub mod dense;
-// pub use dense::DenseSlotMap;
+pub mod dense;
+pub use dense::DenseSlotMap;
 
 /// Key used to access stored values in a slot map.
 ///
@@ -122,10 +122,12 @@ pub use normal::*;
 pub struct Key {
     idx: u32,
 
-    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_key_version"))]
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "deserialize_key_version")
+    )]
     version: u32,
 }
-
 
 #[cfg(feature = "serde")]
 fn deserialize_key_version<'de, D>(deserializer: D) -> Result<u32, D::Error>

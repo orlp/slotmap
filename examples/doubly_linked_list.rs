@@ -14,7 +14,6 @@ struct List<T> {
     sm: SlotMap<Node<T>>,
     head: Option<Key>,
     tail: Option<Key>,
-    len: usize,
 }
 
 impl<T> List<T> {
@@ -23,12 +22,11 @@ impl<T> List<T> {
             sm: SlotMap::new(),
             head: None,
             tail: None,
-            len: 0,
         }
     }
 
     fn len(&self) -> usize {
-        self.len
+        self.sm.len()
     }
 
     fn push_head(&mut self, value: T) {
@@ -44,7 +42,6 @@ impl<T> List<T> {
             self.tail = Some(k);
         }
         self.head = Some(k);
-        self.len += 1;
     }
     
     fn push_tail(&mut self, value: T) {
@@ -60,14 +57,12 @@ impl<T> List<T> {
             self.head = Some(k);
         }
         self.tail = Some(k);
-        self.len += 1;
     }
 
     fn pop_head(&mut self) -> Option<T> {
         if let Some(head) = self.head {
             self.head = self.sm[head].next;
-            self.len -= 1;
-            if self.len == 0 {
+            if self.len() == 1 {
                 self.tail = None;
             }
 
@@ -80,8 +75,7 @@ impl<T> List<T> {
     fn pop_tail(&mut self) -> Option<T> {
         if let Some(tail) = self.tail {
             self.tail = self.sm[tail].prev;
-            self.len -= 1;
-            if self.len == 0 {
+            if self.len() == 1 {
                 self.head = None;
             }
 

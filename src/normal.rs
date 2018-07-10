@@ -1040,8 +1040,13 @@ mod tests {
             let mut sm = SlotMap::new();
             let mut sm_keys = Vec::new();
 
+            #[cfg(not(feature = "serde"))]
+            let num_ops = 3;
+            #[cfg(feature = "serde")]
+            let num_ops = 4;
+
             for (op, val) in operations {
-                match op % 3 {
+                match op % num_ops {
                     // Insert.
                     0 => {
                         hm.insert(unique_key, val);
@@ -1071,6 +1076,12 @@ mod tests {
                            hm.get(hm_key) != sm.get(sm_key) {
                             return false;
                         }
+                    }
+
+                    // Serde round-trip.
+                    3 => {
+                        let ser = serde_json::to_string(&sm).unwrap();
+                        sm = serde_json::from_str(&ser).unwrap();
                     }
 
                     _ => unreachable!(),

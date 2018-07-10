@@ -958,21 +958,9 @@ mod serialize {
                 return Err(de::Error::custom(&"too many slots"));
             }
 
-            // We have our slots, rebuild freelist. Find first free slot.
-            let first_free = slots
-                .iter()
-                .position(|s| s.occupied())
-                .unwrap_or_else(|| slots.len());
-
-            // Link first free to end.
-            let len = slots.len();
-            if let Some(slot) = slots.get_mut(first_free) {
-                slot.next_free = len as u32;
-            }
-
-            // Link up the rest.
-            let mut next_free = first_free;
-            for (i, slot) in slots.iter_mut().enumerate().skip(first_free + 1) {
+            // We have our slots, rebuild freelist.
+            let mut next_free = slots.len();
+            for (i, slot) in slots.iter_mut().enumerate() {
                 if !slot.occupied() {
                     slot.next_free = next_free as u32;
                     next_free = i;

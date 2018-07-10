@@ -191,10 +191,10 @@ impl<T> SlotMap<T> {
     /// assert_eq!(sm.contains_key(key), false);
     /// ```
     pub fn contains_key(&self, key: Key) -> bool {
-        match self.slots.get(key.idx as usize) {
-            Some(slot) => slot.version == key.version,
-            None => false,
-        }
+        self.slots
+            .get(key.idx as usize)
+            .map(|slot| slot.version == key.version)
+            .unwrap_or(false)
     }
 
     /// Inserts a value into the slot map. Returns a unique
@@ -244,25 +244,9 @@ impl<T> SlotMap<T> {
 
         let idx = self.free_head;
 
-        let key;
-        if idx >= self.slots.len() {
-            key = Key {
-                idx: idx as u32,
-                version: 1,
-            };
-
-            // Create new slot before adjusting freelist in case f panics.
-            self.slots.push(Slot {
-                value: ManuallyDrop::new(f(key)),
-                version: 1,
-                next_free: 0,
-            });
-            self.free_head = self.slots.len();
-        } else {
-            // This is safe because we checked that idx < self.slots.len().
-            let slot = unsafe { self.slots.get_unchecked_mut(idx) };
+        if let Some(slot) = self.slots.get_mut(idx) {
             let occupied_version = slot.version | 1;
-            key = Key {
+            let key = Key {
                 idx: idx as u32,
                 version: occupied_version,
             };
@@ -271,8 +255,23 @@ impl<T> SlotMap<T> {
             slot.value = ManuallyDrop::new(f(key));
             slot.version = occupied_version;
             self.free_head = slot.next_free as usize;
+            self.num_elems = new_num_elems;
+            return key;
         }
+        
+        let key = Key {
+            idx: idx as u32,
+            version: 1,
+        };
 
+        // Create new slot before adjusting freelist in case f panics.
+        self.slots.push(Slot {
+            value: ManuallyDrop::new(f(key)),
+            version: 1,
+            next_free: 0,
+        });
+
+        self.free_head = self.slots.len();
         self.num_elems = new_num_elems;
 
         key
@@ -909,7 +908,7 @@ mod serialize {
         {
             let safe_slot = SafeSlot {
                 version: self.version,
-                value: to_option(self.occupied(), move || &*self.value),
+                value: if self.occupied() { Some(&*self.value) } else { None },
             };
             safe_slot.serialize(serializer)
         }
@@ -965,20 +964,24 @@ mod serialize {
                 .position(|s| s.occupied())
                 .unwrap_or_else(|| slots.len());
 
+            // Link first free to end.
+            let len = slots.len();
+            if let Some(slot) = slots.get_mut(first_free) {
+                slot.next_free = len as u32;
+            }
+
+            // Link up the rest.
             let mut next_free = first_free;
-            let mut num_elems = first_free;
-            for (i, slot) in slots.iter_mut().enumerate().skip(first_free) {
-                if slot.occupied() {
-                    num_elems += 1;
-                } else {
+            for (i, slot) in slots.iter_mut().enumerate().skip(first_free + 1) {
+                if !slot.occupied() {
                     slot.next_free = next_free as u32;
                     next_free = i;
                 }
             }
 
             Ok(SlotMap {
+                num_elems: slots.iter().filter(|s| s.occupied()).count() as u32,
                 slots,
-                num_elems: num_elems as u32,
                 free_head: next_free,
             })
         }
@@ -1116,5 +1119,21 @@ mod tests {
         smkv.sort();
         dekv.sort();
         assert_eq!(smkv, dekv);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn slotmap_serde_freelist() {
+        let mut sm = SlotMap::new();
+        let k = sm.insert(5i32);
+        sm.remove(k);
+
+        let ser = serde_json::to_string(&sm).unwrap();
+        let mut de: SlotMap<i32> = serde_json::from_str(&ser).unwrap();
+
+        de.insert(0);
+        de.insert(1);
+        de.insert(2);
+        assert_eq!(de.len(), 3);
     }
 }

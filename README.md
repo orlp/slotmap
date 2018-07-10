@@ -1,5 +1,3 @@
-# WIP - NOT READY FOR USE YET
-
 # slotmap
 
 A Rust library providing two containers with persistent unique keys to access

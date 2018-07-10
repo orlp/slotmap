@@ -1,6 +1,6 @@
 [package]
 name = "slotmap"
-version = "0.1.0"  # Remember to update html_root_url!
+version = "0.1.1"  # Remember to update html_root_url!
 authors = ["Orson Peters <orsonpeters@gmail.com>"]
 description = "Slotmap data structure"
 license = "Zlib"

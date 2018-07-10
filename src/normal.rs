@@ -959,16 +959,19 @@ mod serialize {
             }
 
             // We have our slots, rebuild freelist.
+            let mut num_elems = 0;
             let mut next_free = slots.len();
             for (i, slot) in slots.iter_mut().enumerate() {
-                if !slot.occupied() {
+                if slot.occupied() {
+                    num_elems += 1;
+                } else {
                     slot.next_free = next_free as u32;
                     next_free = i;
                 }
             }
 
             Ok(SlotMap {
-                num_elems: slots.iter().filter(|s| s.occupied()).count() as u32,
+                num_elems,
                 slots,
                 free_head: next_free,
             })
@@ -1101,6 +1104,7 @@ mod tests {
 
         let ser = serde_json::to_string(&sm).unwrap();
         let de: SlotMap<(Key, i32)> = serde_json::from_str(&ser).unwrap();
+        assert_eq!(de.len(), sm.len());
 
         let mut smkv: Vec<_> = sm.iter().collect();
         let mut dekv: Vec<_> = de.iter().collect();

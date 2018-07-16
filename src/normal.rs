@@ -202,7 +202,8 @@ impl<T> SlotMap<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map overflows a `u32`.
+    /// Panics if the number of elements in the slot map equals
+    /// 2<sup>32</sup> - 1.
     ///
     /// # Examples
     ///
@@ -222,7 +223,8 @@ impl<T> SlotMap<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map overflows a `u32`.
+    /// Panics if the number of elements in the slot map equals
+    /// 2<sup>32</sup> - 1.
     ///
     /// # Examples
     ///
@@ -237,10 +239,10 @@ impl<T> SlotMap<T> {
         F: FnOnce(Key) -> T,
     {
         // In case f panics, we don't make any changes until we have the value.
-        let new_num_elems = self
-            .num_elems
-            .checked_add(1)
-            .expect("SlotMap number of elements overflow");
+        let new_num_elems = num_elems + 1;
+        if new_num_elems == std::u32::MAX {
+            panic!("SlotMap number of elements overflow");
+        }
 
         let idx = self.free_head;
 
@@ -364,7 +366,7 @@ impl<T> SlotMap<T> {
         }
     }
 
-    /// Clears the slotmap. Keeps the allocated memory for reuse.
+    /// Clears the slot map. Keeps the allocated memory for reuse.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -385,7 +387,7 @@ impl<T> SlotMap<T> {
         self.drain();
     }
 
-    /// Clears the slotmap, returning all key-value pairs as an iterator. Keeps
+    /// Clears the slot map, returning all key-value pairs as an iterator. Keeps
     /// the allocated memory for reuse.
     ///
     /// This function must iterate over all slots, empty or not. In the face of

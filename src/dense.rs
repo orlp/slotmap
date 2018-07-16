@@ -167,7 +167,8 @@ impl<T> DenseSlotMap<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map overflows a `u32`.
+    /// Panics if the number of elements in the slot map equals
+    /// 2<sup>32</sup> - 1.
     ///
     /// # Examples
     ///
@@ -187,7 +188,8 @@ impl<T> DenseSlotMap<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map overflows a `u32`.
+    /// Panics if the number of elements in the slot map equals
+    /// 2<sup>32</sup> - 1.
     ///
     /// # Examples
     ///
@@ -201,9 +203,9 @@ impl<T> DenseSlotMap<T> {
     where
         F: FnOnce(Key) -> T,
     {
-        (self.len() as u32)
-            .checked_add(1)
-            .expect("DenseSlotMap number of elements overflow");
+        if self.len() + 1 == std::u32::MAX {
+            panic!("DenseSlotMap number of elements overflow");
+        }
 
         let idx = self.free_head;
 
@@ -332,7 +334,7 @@ impl<T> DenseSlotMap<T> {
         }
     }
 
-    /// Clears the slotmap. Keeps the allocated memory for reuse.
+    /// Clears the slot map. Keeps the allocated memory for reuse.
     ///
     /// # Examples
     ///
@@ -350,7 +352,7 @@ impl<T> DenseSlotMap<T> {
         self.drain();
     }
 
-    /// Clears the slotmap, returning all key-value pairs as an iterator. Keeps
+    /// Clears the slot map, returning all key-value pairs as an iterator. Keeps
     /// the allocated memory for reuse.
     ///
     /// # Examples

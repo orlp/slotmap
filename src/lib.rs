@@ -73,8 +73,8 @@
 //! elements. After 2<sup>31</sup> deletions and insertions to the same
 //! underlying slot the version wraps around and such a spurious reference
 //! could potentially occur. It is incredibly unlikely however, and in all
-//! circumstances is the behavior safe. A slot map can hold up to 2<sup>32</sup>
-//! elements at a time.
+//! circumstances is the behavior safe. A slot map can hold up to
+//! 2<sup>32</sup> - 1 elements at a time.
 //!
 //! A slot map never shrinks - it couldn't even if it wanted to. It needs to
 //! remember for each slot what the latest version is as to not generate

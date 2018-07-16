@@ -239,7 +239,7 @@ impl<T> SlotMap<T> {
         F: FnOnce(Key) -> T,
     {
         // In case f panics, we don't make any changes until we have the value.
-        let new_num_elems = num_elems + 1;
+        let new_num_elems = self.num_elems + 1;
         if new_num_elems == std::u32::MAX {
             panic!("SlotMap number of elements overflow");
         }

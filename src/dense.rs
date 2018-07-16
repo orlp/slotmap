@@ -203,7 +203,7 @@ impl<T> DenseSlotMap<T> {
     where
         F: FnOnce(Key) -> T,
     {
-        if self.len() + 1 == std::u32::MAX {
+        if self.len() + 1 == std::u32::MAX as usize {
             panic!("DenseSlotMap number of elements overflow");
         }
 

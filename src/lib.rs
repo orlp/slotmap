@@ -101,9 +101,6 @@ extern crate quickcheck;
 #[cfg(test)]
 extern crate serde_json;
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Deserializer};
-
 pub(crate) mod normal;
 pub use normal::*;
 
@@ -117,25 +114,103 @@ pub use dense::DenseSlotMap;
 /// `Ord` so they can be used in e.g.
 /// [`BTreeMap`](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html)
 /// but their order is arbitrary.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key {
     idx: u32,
-
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "deserialize_key_version")
-    )]
     version: u32,
 }
 
+impl Key {
+    /// Creates a new key that is always invalid and distinct from any non-null
+    /// key. A null key can only be created through this method, or default
+    /// initialization of `Key`.
+    ///
+    /// A null key is always invalid, but an invalid key (that is, a key that
+    /// has been removed from the slot map) does not become a null key. A null
+    /// is safe to use with any safe method of any slot map instance.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::<i32>::new();
+    /// let nk = Key::null();
+    /// assert!(nk.is_null());
+    /// assert_eq!(sm.get(nk), None);
+    /// ```
+    pub fn null() -> Self {
+        Self {
+            idx: std::u32::MAX,
+            version: 1,
+        }
+    }
+
+    /// Checks if a key is null. There is only a single null key, that is
+    /// `a.is_null() && b.is_null()` implies `a == b`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let a = Key::null();
+    /// let b = Key::default();
+    /// assert_eq!(a, b);
+    /// ```
+    pub fn is_null(self) -> bool {
+        self.idx == std::u32::MAX
+    }
+}
+
+impl Default for Key {
+    fn default() -> Self {
+        Self::null()
+    }
+}
+
+// Serialization with serde.
 #[cfg(feature = "serde")]
-fn deserialize_key_version<'de, D>(deserializer: D) -> Result<u32, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let version: u32 = Deserialize::deserialize(deserializer)?;
-    Ok(version | 1) // Ensure version is odd.
+mod serialize {
+    use super::*;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize, Deserialize)]
+    pub struct SerKey {
+        idx: u32,
+        version: u32,
+    }
+
+    impl Serialize for Key {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let ser_key = SerKey {
+                idx: self.idx,
+                version: self.version,
+            };
+            ser_key.serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Key {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let ser_key: SerKey = Deserialize::deserialize(deserializer)?;
+            let mut key = Key {
+                idx: ser_key.idx,
+                version: ser_key.version | 1,  // Ensure version is odd.
+            };
+
+            // Ensure a.is_null() && b.is_null() implies a == b.
+            if key.version == std::u32::MAX {
+                key.version = 1;
+            }
+
+            Ok(key)
+        }
+    }
 }
 
 #[cfg(test)]

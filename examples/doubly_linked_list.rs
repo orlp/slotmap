@@ -6,22 +6,22 @@ use slotmap::{SlotMap, Key};
 
 struct Node<T> {
     value: T,
-    prev: Option<Key>,
-    next: Option<Key>,
+    prev: Key,
+    next: Key,
 }
 
 struct List<T> {
     sm: SlotMap<Node<T>>,
-    head: Option<Key>,
-    tail: Option<Key>,
+    head: Key,
+    tail: Key,
 }
 
 impl<T> List<T> {
     fn new() -> Self {
         Self {
             sm: SlotMap::new(),
-            head: None,
-            tail: None,
+            head: Key::null(),
+            tail: Key::null(),
         }
     }
 
@@ -32,59 +32,53 @@ impl<T> List<T> {
     fn push_head(&mut self, value: T) {
         let k = self.sm.insert(Node {
             value,
-            prev: None,
+            prev: Key::null(),
             next: self.head,
         });
 
-        if let Some(head) = self.head {
-            self.sm[head].prev = Some(k);
+        if let Some(old_head) = self.sm.get_mut(self.head) {
+            old_head.prev = k;
         } else {
-            self.tail = Some(k);
+            self.tail = k;
         }
-        self.head = Some(k);
+        self.head = k;
     }
     
     fn push_tail(&mut self, value: T) {
         let k = self.sm.insert(Node {
             value,
             prev: self.tail,
-            next: None,
+            next: Key::null(),
         });
 
-        if let Some(tail) = self.tail {
-            self.sm[tail].next = Some(k);
+        if let Some(old_tail) = self.sm.get_mut(self.tail) {
+            old_tail.next = k;
         } else {
-            self.head = Some(k);
+            self.head = k;
         }
-        self.tail = Some(k);
+        self.tail = k;
     }
 
     fn pop_head(&mut self) -> Option<T> {
-        if let Some(head) = self.head {
-            self.head = self.sm[head].next;
-            if self.len() == 1 {
-                self.tail = None;
-            }
-
-            Some(self.sm.remove(head).unwrap().value)
+        if let Some(old_head) = self.sm.remove(self.head) {
+            self.head = old_head.next;
+            Some(old_head.value)
         } else {
             None
         }
     }
 
     fn pop_tail(&mut self) -> Option<T> {
-        if let Some(tail) = self.tail {
-            self.tail = self.sm[tail].prev;
-            if self.len() == 1 {
-                self.head = None;
-            }
-
-            Some(self.sm.remove(tail).unwrap().value)
+        if let Some(old_tail) = self.sm.remove(self.tail) {
+            self.tail = old_tail.prev;
+            Some(old_tail.value)
         } else {
             None
         }
     }
 }
+
+extern crate serde_json;
 
 fn main() {
     let mut dll = List::new();
@@ -99,4 +93,5 @@ fn main() {
     assert_eq!(dll.pop_tail(), Some(7));
     assert_eq!(dll.pop_tail(), Some(6));
     assert_eq!(dll.pop_head(), None);
+    assert_eq!(dll.pop_tail(), None);
 }

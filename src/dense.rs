@@ -818,7 +818,7 @@ mod serialize {
             D: Deserializer<'de>,
         {
             let ser_slots: Vec<SerSlot<T>> = Deserialize::deserialize(deserializer)?;
-            if ser_slots.len() >= 1 << 32 {
+            if ser_slots.len() >= (1 << 32) - 1 {
                 return Err(de::Error::custom(&"too many slots"));
             }
 

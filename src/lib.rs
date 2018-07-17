@@ -166,8 +166,8 @@ impl <T> Key<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let a = Key::null();
-    /// let b = Key::default();
+    /// let a: Key<i32> = Key::null();
+    /// let b: Key<i32> = Key::default();
     /// assert_eq!(a, b);
     /// ```
     pub fn is_null(self) -> bool {

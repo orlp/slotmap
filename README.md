@@ -12,7 +12,7 @@ To start using `slotmap` add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-slotmap = "0.1"
+slotmap = "0.2"
 ```
 
 # Example

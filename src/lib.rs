@@ -1,5 +1,5 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
-#![doc(html_root_url = "https://docs.rs/slotmap/0.1.1")]
+#![doc(html_root_url = "https://docs.rs/slotmap/0.2.0")]
 #![crate_name = "slotmap"]
 
 //! # slotmap

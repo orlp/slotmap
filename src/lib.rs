@@ -121,8 +121,12 @@ pub struct Key<T> {
     value_type: std::marker::PhantomData<T>,
 }
 
+// Copy is implemented manually because we want Key<T> to implement Copy even
+// when T is not Copy.
 impl <T> Copy for Key<T> {}
 
+// Clone is implemented manually because we want Key<T> to implement Clone even
+// when T is not Clone.
 impl <T> Clone for Key<T> {
     fn clone(&self) -> Self {
         *self
@@ -168,6 +172,16 @@ impl <T> Key<T> {
     /// ```
     pub fn is_null(self) -> bool {
         self.idx == std::u32::MAX
+    }
+
+    // Creates a new key. This exists to avoid typing std::marker::PhantomData
+    // every time, but is not public because users cannot create arbitrary keys.
+    fn new(idx: u32, version: u32) -> Self {
+        Self {
+            idx,
+            version,
+            value_type: std::marker::PhantomData,
+        }
     }
 }
 

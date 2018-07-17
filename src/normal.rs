@@ -248,11 +248,7 @@ impl<T> SlotMap<T> {
 
         if let Some(slot) = self.slots.get_mut(idx) {
             let occupied_version = slot.version | 1;
-            let key = Key {
-                idx: idx as u32,
-                version: occupied_version,
-                value_type: std::marker::PhantomData,
-            };
+            let key = Key::new(idx as u32, occupied_version);
 
             // Assign slot.value first in case f panics.
             slot.value = ManuallyDrop::new(f(key));
@@ -262,11 +258,7 @@ impl<T> SlotMap<T> {
             return key;
         }
 
-        let key = Key {
-            idx: idx as u32,
-            version: 1,
-            value_type: std::marker::PhantomData,
-        };
+        let key = Key::new(idx as u32, 1);
 
         // Create new slot before adjusting freelist in case f panics.
         self.slots.push(Slot {
@@ -353,11 +345,7 @@ impl<T> SlotMap<T> {
             let should_remove = {
                 // This is safe because removing elements does not shrink slots.
                 let slot = unsafe { self.slots.get_unchecked_mut(i) };
-                let key = Key {
-                    idx: i as u32,
-                    version: slot.version,
-                    value_type: std::marker::PhantomData,
-                };
+                let key = Key::new(i as u32, slot.version);
 
                 slot.occupied() && !f(key, &mut slot.value)
             };
@@ -711,11 +699,7 @@ impl<'a, T> Iterator for Drain<'a, T> {
             unsafe {
                 // This is safe because removing doesn't shrink slots.
                 if self.sm.slots.get_unchecked(idx).occupied() {
-                    let key = Key {
-                        idx: idx as u32,
-                        version: self.sm.slots.get_unchecked(idx).version,
-                        value_type: std::marker::PhantomData,
-                    };
+                    let key = Key::new(idx as u32, self.sm.slots.get_unchecked(idx).version);
 
                     self.num_left -= 1;
                     return Some((key, self.sm.remove_from_slot(idx)));
@@ -743,11 +727,7 @@ impl<T> Iterator for IntoIter<T> {
     fn next(&mut self) -> Option<(Key<T>, T)> {
         while let Some((idx, mut slot)) = self.slots.next() {
             if slot.occupied() {
-                let key = Key {
-                    idx: idx as u32,
-                    version: slot.version,
-                    value_type: std::marker::PhantomData,
-                };
+                let key = Key::new(idx as u32, slot.version);
 
                 // Prevent dropping after extracting the value.
                 slot.version = 0;
@@ -772,11 +752,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
     fn next(&mut self) -> Option<(Key<T>, &'a T)> {
         while let Some((idx, slot)) = self.slots.next() {
             if slot.occupied() {
-                let key = Key {
-                    idx: idx as u32,
-                    version: slot.version,
-                    value_type: std::marker::PhantomData,
-                };
+                let key = Key::new(idx as u32, slot.version);
 
                 self.num_left -= 1;
                 return Some((key, &slot.value));
@@ -797,11 +773,7 @@ impl<'a, T> Iterator for IterMut<'a, T> {
     fn next(&mut self) -> Option<(Key<T>, &'a mut T)> {
         while let Some((idx, slot)) = self.slots.next() {
             if slot.occupied() {
-                let key = Key {
-                    idx: idx as u32,
-                    version: slot.version,
-                    value_type: std::marker::PhantomData,
-                };
+                let key = Key::new(idx as u32, slot.version);
 
                 self.num_left -= 1;
                 return Some((key, &mut slot.value));

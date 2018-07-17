@@ -211,11 +211,7 @@ impl<T> DenseSlotMap<T> {
 
         if let Some(slot) = self.slots.get_mut(idx) {
             let occupied_version = slot.version | 1;
-            let key = Key {
-                idx: idx as u32,
-                version: occupied_version,
-                value_type: std::marker::PhantomData,
-            };
+            let key = Key::new(idx as u32, occupied_version);
 
             // Push value before adjusting slots/freelist in case f panics.
             self.key_values.push(KeyValue { key, value: f(key) });
@@ -226,11 +222,7 @@ impl<T> DenseSlotMap<T> {
             return key;
         }
 
-        let key = Key {
-            idx: idx as u32,
-            version: 1,
-            value_type: std::marker::PhantomData,
-        };
+        let key = Key::new(idx as u32, 1);
 
         // Push value before adjusting slots/freelist in case f panics.
         self.key_values.push(KeyValue { key, value: f(key) });

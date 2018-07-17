@@ -114,13 +114,22 @@ pub use dense::DenseSlotMap;
 /// `Ord` so they can be used in e.g.
 /// [`BTreeMap`](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html)
 /// but their order is arbitrary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Key {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Key<T> {
     idx: u32,
     version: u32,
+    value_type: std::marker::PhantomData<T>,
 }
 
-impl Key {
+impl <T> Copy for Key<T> {}
+
+impl <T> Clone for Key<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl <T> Key<T> {
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method, or default
     /// initialization of `Key`.
@@ -142,6 +151,7 @@ impl Key {
         Self {
             idx: std::u32::MAX,
             version: 1,
+            value_type: std::marker::PhantomData,
         }
     }
 
@@ -161,7 +171,7 @@ impl Key {
     }
 }
 
-impl Default for Key {
+impl <T> Default for Key<T> {
     fn default() -> Self {
         Self::null()
     }

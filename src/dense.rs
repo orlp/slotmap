@@ -26,7 +26,7 @@ struct Slot {
 // A key-value pair.
 #[derive(Debug, Clone)]
 struct KeyValue<T> {
-    key: Key,
+    key: Key<T>,
     value: T,
 }
 
@@ -155,7 +155,7 @@ impl<T> DenseSlotMap<T> {
     /// sm.remove(key);
     /// assert_eq!(sm.contains_key(key), false);
     /// ```
-    pub fn contains_key(&self, key: Key) -> bool {
+    pub fn contains_key(&self, key: Key<T>) -> bool {
         self.slots
             .get(key.idx as usize)
             .map(|slot| slot.version == key.version)
@@ -178,7 +178,7 @@ impl<T> DenseSlotMap<T> {
     /// let key = sm.insert(42);
     /// assert_eq!(sm[key], 42);
     /// ```
-    pub fn insert(&mut self, value: T) -> Key {
+    pub fn insert(&mut self, value: T) -> Key<T> {
         self.insert_with_key(|_| value)
     }
 
@@ -199,9 +199,9 @@ impl<T> DenseSlotMap<T> {
     /// let key = sm.insert_with_key(|k| (k, 20));
     /// assert_eq!(sm[key], (key, 20));
     /// ```
-    pub fn insert_with_key<F>(&mut self, f: F) -> Key
+    pub fn insert_with_key<F>(&mut self, f: F) -> Key<T>
     where
-        F: FnOnce(Key) -> T,
+        F: FnOnce(Key<T>) -> T,
     {
         if self.len() + 1 == std::u32::MAX as usize {
             panic!("DenseSlotMap number of elements overflow");
@@ -214,6 +214,7 @@ impl<T> DenseSlotMap<T> {
             let key = Key {
                 idx: idx as u32,
                 version: occupied_version,
+                value_type: std::marker::PhantomData,
             };
 
             // Push value before adjusting slots/freelist in case f panics.
@@ -228,6 +229,7 @@ impl<T> DenseSlotMap<T> {
         let key = Key {
             idx: idx as u32,
             version: 1,
+            value_type: std::marker::PhantomData,
         };
 
         // Push value before adjusting slots/freelist in case f panics.
@@ -281,7 +283,7 @@ impl<T> DenseSlotMap<T> {
     /// assert_eq!(sm.remove(key), Some(42));
     /// assert_eq!(sm.remove(key), None);
     /// ```
-    pub fn remove(&mut self, key: Key) -> Option<T> {
+    pub fn remove(&mut self, key: Key<T>) -> Option<T> {
         if self.contains_key(key) {
             Some(self.remove_from_slot(key.idx as usize))
         } else {
@@ -315,7 +317,7 @@ impl<T> DenseSlotMap<T> {
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
-        F: FnMut(Key, &mut T) -> bool,
+        F: FnMut(Key<T>, &mut T) -> bool,
     {
         let mut i = 0;
         while i < self.key_values.len() {
@@ -381,7 +383,7 @@ impl<T> DenseSlotMap<T> {
     /// sm.remove(key);
     /// assert_eq!(sm.get(key), None);
     /// ```
-    pub fn get(&self, key: Key) -> Option<&T> {
+    pub fn get(&self, key: Key<T>) -> Option<&T> {
         self.slots
             .get(key.idx as usize)
             .filter(|slot| slot.version == key.version)
@@ -410,7 +412,7 @@ impl<T> DenseSlotMap<T> {
     /// sm.remove(key);
     /// // sm.get_unchecked(key) is now dangerous!
     /// ```
-    pub unsafe fn get_unchecked(&self, key: Key) -> &T {
+    pub unsafe fn get_unchecked(&self, key: Key<T>) -> &T {
         let idx = self.slots.get_unchecked(key.idx as usize).idx_or_free;
         &self.key_values.get_unchecked(idx as usize).value
     }
@@ -428,7 +430,7 @@ impl<T> DenseSlotMap<T> {
     /// }
     /// assert_eq!(sm[key], 6.5);
     /// ```
-    pub fn get_mut(&mut self, key: Key) -> Option<&mut T> {
+    pub fn get_mut(&mut self, key: Key<T>) -> Option<&mut T> {
         self.slots
             .get(key.idx as usize)
             .filter(|slot| slot.version == key.version)
@@ -455,7 +457,7 @@ impl<T> DenseSlotMap<T> {
     /// sm.remove(key);
     /// // sm.get_unchecked_mut(key) is now dangerous!
     /// ```
-    pub unsafe fn get_unchecked_mut(&mut self, key: Key) -> &mut T {
+    pub unsafe fn get_unchecked_mut(&mut self, key: Key<T>) -> &mut T {
         let idx = self.slots.get_unchecked(key.idx as usize).idx_or_free;
         &mut self.key_values.get_unchecked_mut(idx as usize).value
     }
@@ -576,10 +578,10 @@ impl<T> Default for DenseSlotMap<T> {
     }
 }
 
-impl<T> Index<Key> for DenseSlotMap<T> {
+impl<T> Index<Key<T>> for DenseSlotMap<T> {
     type Output = T;
 
-    fn index(&self, key: Key) -> &T {
+    fn index(&self, key: Key<T>) -> &T {
         match self.get(key) {
             Some(r) => r,
             None => panic!("invalid DenseSlotMap key used"),
@@ -587,8 +589,8 @@ impl<T> Index<Key> for DenseSlotMap<T> {
     }
 }
 
-impl<T> IndexMut<Key> for DenseSlotMap<T> {
-    fn index_mut(&mut self, key: Key) -> &mut T {
+impl<T> IndexMut<Key<T>> for DenseSlotMap<T> {
+    fn index_mut(&mut self, key: Key<T>) -> &mut T {
         match self.get_mut(key) {
             Some(r) => r,
             None => panic!("invalid DenseSlotMap key used"),
@@ -640,9 +642,9 @@ pub struct ValuesMut<'a, T: 'a> {
 }
 
 impl<'a, T> Iterator for Drain<'a, T> {
-    type Item = (Key, T);
+    type Item = (Key<T>, T);
 
-    fn next(&mut self) -> Option<(Key, T)> {
+    fn next(&mut self) -> Option<(Key<T>, T)> {
         // We make no iteration order guarantees, so we just repeatedly pop.
         self.sm.key_values.pop().map(|kv| {
             self.sm.free_slot(kv.key.idx as usize);
@@ -663,9 +665,9 @@ impl<'a, T> Drop for Drain<'a, T> {
 }
 
 impl<T> Iterator for IntoIter<T> {
-    type Item = (Key, T);
+    type Item = (Key<T>, T);
 
-    fn next(&mut self) -> Option<(Key, T)> {
+    fn next(&mut self) -> Option<(Key<T>, T)> {
         self.inner.next().map(|kv| (kv.key, kv.value))
     }
 
@@ -675,9 +677,9 @@ impl<T> Iterator for IntoIter<T> {
 }
 
 impl<'a, T> Iterator for Iter<'a, T> {
-    type Item = (Key, &'a T);
+    type Item = (Key<T>, &'a T);
 
-    fn next(&mut self) -> Option<(Key, &'a T)> {
+    fn next(&mut self) -> Option<(Key<T>, &'a T)> {
         self.inner.next().map(|kv| (kv.key, &kv.value))
     }
 
@@ -687,9 +689,9 @@ impl<'a, T> Iterator for Iter<'a, T> {
 }
 
 impl<'a, T> Iterator for IterMut<'a, T> {
-    type Item = (Key, &'a mut T);
+    type Item = (Key<T>, &'a mut T);
 
-    fn next(&mut self) -> Option<(Key, &'a mut T)> {
+    fn next(&mut self) -> Option<(Key<T>, &'a mut T)> {
         self.inner.next().map(|kv| (kv.key, &mut kv.value))
     }
 
@@ -699,9 +701,9 @@ impl<'a, T> Iterator for IterMut<'a, T> {
 }
 
 impl<'a, T> Iterator for Keys<'a, T> {
-    type Item = Key;
+    type Item = Key<T>;
 
-    fn next(&mut self) -> Option<Key> {
+    fn next(&mut self) -> Option<Key<T>> {
         self.inner.next().map(|(key, _)| key)
     }
 
@@ -735,7 +737,7 @@ impl<'a, T> Iterator for ValuesMut<'a, T> {
 }
 
 impl<'a, T> IntoIterator for &'a DenseSlotMap<T> {
-    type Item = (Key, &'a T);
+    type Item = (Key<T>, &'a T);
     type IntoIter = Iter<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -744,7 +746,7 @@ impl<'a, T> IntoIterator for &'a DenseSlotMap<T> {
 }
 
 impl<'a, T> IntoIterator for &'a mut DenseSlotMap<T> {
-    type Item = (Key, &'a mut T);
+    type Item = (Key<T>, &'a mut T);
     type IntoIter = IterMut<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -753,7 +755,7 @@ impl<'a, T> IntoIterator for &'a mut DenseSlotMap<T> {
 }
 
 impl<T> IntoIterator for DenseSlotMap<T> {
-    type Item = (Key, T);
+    type Item = (Key<T>, T);
     type IntoIter = IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {

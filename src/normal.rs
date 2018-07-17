@@ -190,7 +190,7 @@ impl<T> SlotMap<T> {
     /// sm.remove(key);
     /// assert_eq!(sm.contains_key(key), false);
     /// ```
-    pub fn contains_key(&self, key: Key) -> bool {
+    pub fn contains_key(&self, key: Key<T>) -> bool {
         self.slots
             .get(key.idx as usize)
             .map(|slot| slot.version == key.version)
@@ -213,7 +213,7 @@ impl<T> SlotMap<T> {
     /// let key = sm.insert(42);
     /// assert_eq!(sm[key], 42);
     /// ```
-    pub fn insert(&mut self, value: T) -> Key {
+    pub fn insert(&mut self, value: T) -> Key<T> {
         self.insert_with_key(|_| value)
     }
 
@@ -234,9 +234,9 @@ impl<T> SlotMap<T> {
     /// let key = sm.insert_with_key(|k| (k, 20));
     /// assert_eq!(sm[key], (key, 20));
     /// ```
-    pub fn insert_with_key<F>(&mut self, f: F) -> Key
+    pub fn insert_with_key<F>(&mut self, f: F) -> Key<T>
     where
-        F: FnOnce(Key) -> T,
+        F: FnOnce(Key<T>) -> T,
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
@@ -248,10 +248,7 @@ impl<T> SlotMap<T> {
 
         if let Some(slot) = self.slots.get_mut(idx) {
             let occupied_version = slot.version | 1;
-            let key = Key {
-                idx: idx as u32,
-                version: occupied_version,
-            };
+            let key = Key::new(idx as u32, occupied_version);
 
             // Assign slot.value first in case f panics.
             slot.value = ManuallyDrop::new(f(key));
@@ -261,10 +258,7 @@ impl<T> SlotMap<T> {
             return key;
         }
 
-        let key = Key {
-            idx: idx as u32,
-            version: 1,
-        };
+        let key = Key::new(idx as u32, 1);
 
         // Create new slot before adjusting freelist in case f panics.
         self.slots.push(Slot {
@@ -306,7 +300,7 @@ impl<T> SlotMap<T> {
     /// assert_eq!(sm.remove(key), Some(42));
     /// assert_eq!(sm.remove(key), None);
     /// ```
-    pub fn remove(&mut self, key: Key) -> Option<T> {
+    pub fn remove(&mut self, key: Key<T>) -> Option<T> {
         if self.contains_key(key) {
             // This is safe because we know that the slot is occupied.
             Some(unsafe { self.remove_from_slot(key.idx as usize) })
@@ -344,17 +338,14 @@ impl<T> SlotMap<T> {
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
-        F: FnMut(Key, &mut T) -> bool,
+        F: FnMut(Key<T>, &mut T) -> bool,
     {
         let len = self.slots.len();
         for i in 0..len {
             let should_remove = {
                 // This is safe because removing elements does not shrink slots.
                 let slot = unsafe { self.slots.get_unchecked_mut(i) };
-                let key = Key {
-                    idx: i as u32,
-                    version: slot.version,
-                };
+                let key = Key::new(i as u32, slot.version);
 
                 slot.occupied() && !f(key, &mut slot.value)
             };
@@ -423,7 +414,7 @@ impl<T> SlotMap<T> {
     /// sm.remove(key);
     /// assert_eq!(sm.get(key), None);
     /// ```
-    pub fn get(&self, key: Key) -> Option<&T> {
+    pub fn get(&self, key: Key<T>) -> Option<&T> {
         self.slots
             .get(key.idx as usize)
             .filter(|slot| slot.version == key.version)
@@ -448,7 +439,7 @@ impl<T> SlotMap<T> {
     /// sm.remove(key);
     /// // sm.get_unchecked(key) is now dangerous!
     /// ```
-    pub unsafe fn get_unchecked(&self, key: Key) -> &T {
+    pub unsafe fn get_unchecked(&self, key: Key<T>) -> &T {
         &self.slots.get_unchecked(key.idx as usize).value
     }
 
@@ -465,7 +456,7 @@ impl<T> SlotMap<T> {
     /// }
     /// assert_eq!(sm[key], 6.5);
     /// ```
-    pub fn get_mut(&mut self, key: Key) -> Option<&mut T> {
+    pub fn get_mut(&mut self, key: Key<T>) -> Option<&mut T> {
         self.slots
             .get_mut(key.idx as usize)
             .filter(|slot| slot.version == key.version)
@@ -491,7 +482,7 @@ impl<T> SlotMap<T> {
     /// sm.remove(key);
     /// // sm.get_unchecked_mut(key) is now dangerous!
     /// ```
-    pub unsafe fn get_unchecked_mut(&mut self, key: Key) -> &mut T {
+    pub unsafe fn get_unchecked_mut(&mut self, key: Key<T>) -> &mut T {
         &mut self.slots.get_unchecked_mut(key.idx as usize).value
     }
 
@@ -628,10 +619,10 @@ impl<T> Default for SlotMap<T> {
     }
 }
 
-impl<T> Index<Key> for SlotMap<T> {
+impl<T> Index<Key<T>> for SlotMap<T> {
     type Output = T;
 
-    fn index(&self, key: Key) -> &T {
+    fn index(&self, key: Key<T>) -> &T {
         match self.get(key) {
             Some(r) => r,
             None => panic!("invalid SlotMap key used"),
@@ -639,8 +630,8 @@ impl<T> Index<Key> for SlotMap<T> {
     }
 }
 
-impl<T> IndexMut<Key> for SlotMap<T> {
-    fn index_mut(&mut self, key: Key) -> &mut T {
+impl<T> IndexMut<Key<T>> for SlotMap<T> {
+    fn index_mut(&mut self, key: Key<T>) -> &mut T {
         match self.get_mut(key) {
             Some(r) => r,
             None => panic!("invalid SlotMap key used"),
@@ -697,9 +688,9 @@ pub struct ValuesMut<'a, T: 'a> {
 }
 
 impl<'a, T> Iterator for Drain<'a, T> {
-    type Item = (Key, T);
+    type Item = (Key<T>, T);
 
-    fn next(&mut self) -> Option<(Key, T)> {
+    fn next(&mut self) -> Option<(Key<T>, T)> {
         let len = self.sm.slots.len();
         while self.cur < len {
             let idx = self.cur;
@@ -708,10 +699,7 @@ impl<'a, T> Iterator for Drain<'a, T> {
             unsafe {
                 // This is safe because removing doesn't shrink slots.
                 if self.sm.slots.get_unchecked(idx).occupied() {
-                    let key = Key {
-                        idx: idx as u32,
-                        version: self.sm.slots.get_unchecked(idx).version,
-                    };
+                    let key = Key::new(idx as u32, self.sm.slots.get_unchecked(idx).version);
 
                     self.num_left -= 1;
                     return Some((key, self.sm.remove_from_slot(idx)));
@@ -734,15 +722,12 @@ impl<'a, T> Drop for Drain<'a, T> {
 }
 
 impl<T> Iterator for IntoIter<T> {
-    type Item = (Key, T);
+    type Item = (Key<T>, T);
 
-    fn next(&mut self) -> Option<(Key, T)> {
+    fn next(&mut self) -> Option<(Key<T>, T)> {
         while let Some((idx, mut slot)) = self.slots.next() {
             if slot.occupied() {
-                let key = Key {
-                    idx: idx as u32,
-                    version: slot.version,
-                };
+                let key = Key::new(idx as u32, slot.version);
 
                 // Prevent dropping after extracting the value.
                 slot.version = 0;
@@ -762,15 +747,12 @@ impl<T> Iterator for IntoIter<T> {
 }
 
 impl<'a, T> Iterator for Iter<'a, T> {
-    type Item = (Key, &'a T);
+    type Item = (Key<T>, &'a T);
 
-    fn next(&mut self) -> Option<(Key, &'a T)> {
+    fn next(&mut self) -> Option<(Key<T>, &'a T)> {
         while let Some((idx, slot)) = self.slots.next() {
             if slot.occupied() {
-                let key = Key {
-                    idx: idx as u32,
-                    version: slot.version,
-                };
+                let key = Key::new(idx as u32, slot.version);
 
                 self.num_left -= 1;
                 return Some((key, &slot.value));
@@ -786,15 +768,12 @@ impl<'a, T> Iterator for Iter<'a, T> {
 }
 
 impl<'a, T> Iterator for IterMut<'a, T> {
-    type Item = (Key, &'a mut T);
+    type Item = (Key<T>, &'a mut T);
 
-    fn next(&mut self) -> Option<(Key, &'a mut T)> {
+    fn next(&mut self) -> Option<(Key<T>, &'a mut T)> {
         while let Some((idx, slot)) = self.slots.next() {
             if slot.occupied() {
-                let key = Key {
-                    idx: idx as u32,
-                    version: slot.version,
-                };
+                let key = Key::new(idx as u32, slot.version);
 
                 self.num_left -= 1;
                 return Some((key, &mut slot.value));
@@ -810,9 +789,9 @@ impl<'a, T> Iterator for IterMut<'a, T> {
 }
 
 impl<'a, T> Iterator for Keys<'a, T> {
-    type Item = Key;
+    type Item = Key<T>;
 
-    fn next(&mut self) -> Option<Key> {
+    fn next(&mut self) -> Option<Key<T>> {
         self.inner.next().map(|(key, _)| key)
     }
 
@@ -846,7 +825,7 @@ impl<'a, T> Iterator for ValuesMut<'a, T> {
 }
 
 impl<'a, T> IntoIterator for &'a SlotMap<T> {
-    type Item = (Key, &'a T);
+    type Item = (Key<T>, &'a T);
     type IntoIter = Iter<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -855,7 +834,7 @@ impl<'a, T> IntoIterator for &'a SlotMap<T> {
 }
 
 impl<'a, T> IntoIterator for &'a mut SlotMap<T> {
-    type Item = (Key, &'a mut T);
+    type Item = (Key<T>, &'a mut T);
     type IntoIter = IterMut<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -864,7 +843,7 @@ impl<'a, T> IntoIterator for &'a mut SlotMap<T> {
 }
 
 impl<T> IntoIterator for SlotMap<T> {
-    type Item = (Key, T);
+    type Item = (Key<T>, T);
     type IntoIter = IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {

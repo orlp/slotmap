@@ -6,14 +6,14 @@ use slotmap::{SlotMap, Key};
 
 struct Node<T> {
     value: T,
-    prev: Key,
-    next: Key,
+    prev: Key<Node<T>>,
+    next: Key<Node<T>>,
 }
 
 struct List<T> {
     sm: SlotMap<Node<T>>,
-    head: Key,
-    tail: Key,
+    head: Key<Node<T>>,
+    tail: Key<Node<T>>,
 }
 
 impl<T> List<T> {

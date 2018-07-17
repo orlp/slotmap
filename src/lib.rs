@@ -1,5 +1,5 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
-#![doc(html_root_url = "https://docs.rs/slotmap/0.2.0")]
+#![doc(html_root_url = "https://docs.rs/slotmap/0.3.0")]
 #![crate_name = "slotmap"]
 
 //! # slotmap
@@ -114,13 +114,26 @@ pub use dense::DenseSlotMap;
 /// `Ord` so they can be used in e.g.
 /// [`BTreeMap`](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html)
 /// but their order is arbitrary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Key {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Key<T> {
     idx: u32,
     version: u32,
+    value_type: std::marker::PhantomData<T>,
 }
 
-impl Key {
+// Copy is implemented manually because we want Key<T> to implement Copy even
+// when T is not Copy.
+impl <T> Copy for Key<T> {}
+
+// Clone is implemented manually because we want Key<T> to implement Clone even
+// when T is not Clone.
+impl <T> Clone for Key<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl <T> Key<T> {
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method, or default
     /// initialization of `Key`.
@@ -142,6 +155,7 @@ impl Key {
         Self {
             idx: std::u32::MAX,
             version: 1,
+            value_type: std::marker::PhantomData,
         }
     }
 
@@ -152,16 +166,26 @@ impl Key {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let a = Key::null();
-    /// let b = Key::default();
+    /// let a: Key<i32> = Key::null();
+    /// let b: Key<i32> = Key::default();
     /// assert_eq!(a, b);
     /// ```
     pub fn is_null(self) -> bool {
         self.idx == std::u32::MAX
     }
+
+    // Creates a new key. This exists to avoid typing std::marker::PhantomData
+    // every time, but is not public because users cannot create arbitrary keys.
+    fn new(idx: u32, version: u32) -> Self {
+        Self {
+            idx,
+            version,
+            value_type: std::marker::PhantomData,
+        }
+    }
 }
 
-impl Default for Key {
+impl <T> Default for Key<T> {
     fn default() -> Self {
         Self::null()
     }

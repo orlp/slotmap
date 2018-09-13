@@ -204,7 +204,7 @@ mod serialize {
             };
 
             // Ensure a.is_null() && b.is_null() implies a == b.
-            if key.version == std::u32::MAX {
+            if key.idx == std::u32::MAX {
                 key.version = 1;
             }
 

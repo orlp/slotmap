@@ -107,6 +107,8 @@ pub use normal::*;
 pub mod dense;
 pub use dense::DenseSlotMap;
 
+use std::num::NonZeroU32;
+
 /// Key used to access stored values in a slot map.
 ///
 /// Do not use a key from one slot map in another. The behavior is safe but
@@ -117,10 +119,17 @@ pub use dense::DenseSlotMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key {
     idx: u32,
-    version: u32,
+    version: NonZeroU32,
 }
 
 impl Key {
+    fn new(idx: u32, version: u32) -> Self {
+        Self {
+            idx,
+            version: NonZeroU32::new(version).unwrap(),
+        }
+    }
+
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method, or default
     /// initialization of `Key`.
@@ -139,10 +148,7 @@ impl Key {
     /// assert_eq!(sm.get(nk), None);
     /// ```
     pub fn null() -> Self {
-        Self {
-            idx: std::u32::MAX,
-            version: 1,
-        }
+        Self::new(std::u32::MAX, 1)
     }
 
     /// Checks if a key is null. There is only a single null key, that is
@@ -186,7 +192,7 @@ mod serialize {
         {
             let ser_key = SerKey {
                 idx: self.idx,
-                version: self.version,
+                version: self.version.get(),
             };
             ser_key.serialize(serializer)
         }
@@ -197,18 +203,15 @@ mod serialize {
         where
             D: Deserializer<'de>,
         {
-            let ser_key: SerKey = Deserialize::deserialize(deserializer)?;
-            let mut key = Key {
-                idx: ser_key.idx,
-                version: ser_key.version | 1, // Ensure version is odd.
-            };
+            let mut ser_key: SerKey = Deserialize::deserialize(deserializer)?;
 
             // Ensure a.is_null() && b.is_null() implies a == b.
-            if key.idx == std::u32::MAX {
-                key.version = 1;
+            if ser_key.idx == std::u32::MAX {
+                ser_key.version = 1;
             }
 
-            Ok(key)
+            ser_key.version |= 1; // Ensure version is odd.
+            Ok(Key::new(ser_key.idx, ser_key.version))
         }
     }
 }
@@ -231,6 +234,6 @@ mod tests {
         // Even if a malicious entity sends up even (unoccupied) versions in the
         // key, we make the version point to the occupied version.
         let malicious = serde_json::from_str::<Key>(&r#"{"idx":0,"version":4}"#).unwrap();
-        assert_eq!(u32::from(malicious.version), 5);
+        assert_eq!(malicious.version.get(), 5);
     }
 }

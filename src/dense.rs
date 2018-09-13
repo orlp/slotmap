@@ -154,7 +154,7 @@ impl<T> DenseSlotMap<T> {
     pub fn contains_key(&self, key: Key) -> bool {
         self.slots
             .get(key.idx as usize)
-            .map(|slot| slot.version == key.version)
+            .map(|slot| slot.version == key.version.get())
             .unwrap_or(false)
     }
 
@@ -207,10 +207,7 @@ impl<T> DenseSlotMap<T> {
 
         if let Some(slot) = self.slots.get_mut(idx) {
             let occupied_version = slot.version | 1;
-            let key = Key {
-                idx: idx as u32,
-                version: occupied_version,
-            };
+            let key = Key::new(idx as u32, occupied_version);
 
             // Push value before adjusting slots/freelist in case f panics.
             self.keys.push(key);
@@ -222,10 +219,7 @@ impl<T> DenseSlotMap<T> {
             return key;
         }
 
-        let key = Key {
-            idx: idx as u32,
-            version: 1,
-        };
+        let key = Key::new(idx as u32, 1);
 
         // Push value before adjusting slots/freelist in case f panics.
         self.keys.push(key);
@@ -383,7 +377,7 @@ impl<T> DenseSlotMap<T> {
     pub fn get(&self, key: Key) -> Option<&T> {
         self.slots
             .get(key.idx as usize)
-            .filter(|slot| slot.version == key.version)
+            .filter(|slot| slot.version == key.version.get())
             .map(|slot| unsafe {
                 // This is safe because we only store valid indices.
                 let idx = slot.idx_or_free as usize;
@@ -430,7 +424,7 @@ impl<T> DenseSlotMap<T> {
     pub fn get_mut(&mut self, key: Key) -> Option<&mut T> {
         self.slots
             .get(key.idx as usize)
-            .filter(|slot| slot.version == key.version)
+            .filter(|slot| slot.version == key.version.get())
             .map(|slot| slot.idx_or_free as usize)
             .map(move |idx| unsafe { self.values.get_unchecked_mut(idx) })
     }
@@ -863,10 +857,7 @@ mod serialize {
             let mut next_free = ser_slots.len();
             for (i, ser_slot) in ser_slots.into_iter().enumerate() {
                 if let Some(value) = ser_slot.value {
-                    let key = Key {
-                        version: ser_slot.version,
-                        idx: i as u32,
-                    };
+                    let key = Key::new(i as u32, ser_slot.version);
                     keys.push(key);
                     values.push(value);
                     slots.push(Slot {

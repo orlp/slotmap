@@ -2,7 +2,7 @@
 
 extern crate slotmap;
 
-use slotmap::{SlotMap, Key};
+use slotmap::{Key, SlotMap};
 
 struct Node<T> {
     value: T,
@@ -43,7 +43,7 @@ impl<T> List<T> {
         }
         self.head = k;
     }
-    
+
     fn push_tail(&mut self, value: T) {
         let k = self.sm.insert(Node {
             value,

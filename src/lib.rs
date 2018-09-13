@@ -200,7 +200,7 @@ mod serialize {
             let ser_key: SerKey = Deserialize::deserialize(deserializer)?;
             let mut key = Key {
                 idx: ser_key.idx,
-                version: ser_key.version | 1,  // Ensure version is odd.
+                version: ser_key.version | 1, // Ensure version is odd.
             };
 
             // Ensure a.is_null() && b.is_null() implies a == b.

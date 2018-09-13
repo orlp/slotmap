@@ -652,7 +652,6 @@ impl<'a, T> Iterator for Drain<'a, T> {
 
     fn next(&mut self) -> Option<(Key, T)> {
         // We make no iteration order guarantees, so we just repeatedly pop.
-
         let key = self.sm.keys.pop();
         let value = self.sm.values.pop();
 
@@ -680,7 +679,6 @@ impl<T> Iterator for IntoIter<T> {
     type Item = (Key, T);
 
     fn next(&mut self) -> Option<(Key, T)> {
-
         let key = self.inner_keys.next();
         let value = self.inner_values.next();
 
@@ -700,7 +698,6 @@ impl<'a, T> Iterator for Iter<'a, T> {
     type Item = (Key, &'a T);
 
     fn next(&mut self) -> Option<(Key, &'a T)> {
-        
         let key = self.inner_keys.next();
         let value = self.inner_values.next();
 
@@ -720,7 +717,6 @@ impl<'a, T> Iterator for IterMut<'a, T> {
     type Item = (Key, &'a mut T);
 
     fn next(&mut self) -> Option<(Key, &'a mut T)> {
-        
         let key = self.inner_keys.next();
         let value = self.inner_values.next();
 
@@ -804,7 +800,7 @@ impl<T> IntoIterator for DenseSlotMap<T> {
 
 impl<'a, T> FusedIterator for Iter<'a, T> {}
 impl<'a, T> FusedIterator for IterMut<'a, T> {}
-impl<'a>    FusedIterator for Keys<'a> {}
+impl<'a> FusedIterator for Keys<'a> {}
 impl<'a, T> FusedIterator for Values<'a, T> {}
 impl<'a, T> FusedIterator for ValuesMut<'a, T> {}
 impl<'a, T> FusedIterator for Drain<'a, T> {}
@@ -812,7 +808,7 @@ impl<T> FusedIterator for IntoIter<T> {}
 
 impl<'a, T> ExactSizeIterator for Iter<'a, T> {}
 impl<'a, T> ExactSizeIterator for IterMut<'a, T> {}
-impl<'a>    ExactSizeIterator for Keys<'a> {}
+impl<'a> ExactSizeIterator for Keys<'a> {}
 impl<'a, T> ExactSizeIterator for Values<'a, T> {}
 impl<'a, T> ExactSizeIterator for ValuesMut<'a, T> {}
 impl<'a, T> ExactSizeIterator for Drain<'a, T> {}
@@ -840,13 +836,12 @@ mod serialize {
                 .iter()
                 .map(|slot| SerSlot {
                     value: if slot.version % 2 > 0 {
-                        Some(&self.key_values[slot.idx_or_free as usize].value)
+                        self.values.get(slot.idx_or_free as usize)
                     } else {
                         None
                     },
                     version: slot.version,
-                })
-                .collect();
+                }).collect();
             ser_slots.serialize(serializer)
         }
     }
@@ -861,8 +856,9 @@ mod serialize {
                 return Err(de::Error::custom(&"too many slots"));
             }
 
-            // Rebuild slots and key_values.
-            let mut key_values = Vec::new();
+            // Rebuild slots, key and values.
+            let mut keys = Vec::new();
+            let mut values = Vec::new();
             let mut slots = Vec::new();
             let mut next_free = ser_slots.len();
             for (i, ser_slot) in ser_slots.into_iter().enumerate() {
@@ -871,10 +867,11 @@ mod serialize {
                         version: ser_slot.version,
                         idx: i as u32,
                     };
-                    key_values.push(KeyValue { key, value });
+                    keys.push(key);
+                    values.push(value);
                     slots.push(Slot {
                         version: ser_slot.version,
-                        idx_or_free: (key_values.len() - 1) as u32,
+                        idx_or_free: (keys.len() - 1) as u32,
                     });
                 } else {
                     slots.push(Slot {
@@ -886,7 +883,8 @@ mod serialize {
             }
 
             Ok(DenseSlotMap {
-                key_values,
+                keys,
+                values,
                 slots,
                 free_head: next_free,
             })

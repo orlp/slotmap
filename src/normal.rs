@@ -1,4 +1,8 @@
+// Necessary for the union differing on stable/nightly.
+#![allow(unused_unsafe)] 
+
 //! Contains the slot map implementation.
+
 use std;
 use std::iter::{Enumerate, FusedIterator};
 use std::mem::ManuallyDrop;
@@ -7,21 +11,63 @@ use std::{fmt, ptr};
 
 use super::Key;
 
-// A slot, which represents storage for a value and a current version.
-// Can be occupied or vacant.
-struct Slot<T> {
-    // A value when occupied, memory in an unsafe state otherwise.
+
+// Duplicated docs.
+
+/// A trait for items that can go in a [`SlotMap`]. Due to current stable Rust
+/// restrictions a type must be [`Copy`] to be placed in a slot map. If you must
+/// store a type that is not [`Copy`] you must use nightly Rust and enable the
+/// `unstable` feature for `slotmap` by editing your `Cargo.toml`.
+///
+/// ```norun
+/// slotmap = { version = "...", features = ["unstable"] }
+/// ```
+///
+/// This trait should already be automatically implemented for any type that is
+/// slottable.
+///
+/// [`SlotMap`]: struct.SlotMap.html
+/// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
+#[cfg(not(feature = "unstable"))]
+pub trait Slottable: Copy {}
+
+/// A trait for items that can go in a [`SlotMap`]. Due to current stable Rust
+/// restrictions a type must be [`Copy`] to be placed in a slot map. If you must
+/// store a type that is not [`Copy`] you must use nightly Rust and enable the
+/// `unstable` feature for `slotmap` by editing your `Cargo.toml`.
+///
+/// ```norun
+/// slotmap = { version = "...", features = ["unstable"] }
+/// ```
+///
+/// This trait should already be automatically implemented for any type that is
+/// slottable.
+///
+/// [`SlotMap`]: struct.SlotMap.html
+/// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
+#[cfg(feature = "unstable")]
+pub trait Slottable {}
+
+#[cfg(not(feature = "unstable"))]
+impl<T: Copy> Slottable for T {}
+
+#[cfg(feature = "unstable")]
+impl<T> Slottable for T {}
+
+// Storage inside a slot or metadata for the freelist when vacant.
+union SlotUnion<T: Slottable> {
     value: ManuallyDrop<T>,
-
-    // Even = vacant, odd = occupied.
-    version: u32,
-
-    // This could be in an union with value, but that requires unions for types
-    // without copy. This isn't available in stable Rust yet.
     next_free: u32,
 }
 
-impl<T> Slot<T> {
+// A slot, which represents storage for a value and a current version.
+// Can be occupied or vacant.
+struct Slot<T: Slottable> {
+    u: SlotUnion<T>,
+    version: u32, // Even = vacant, odd = occupied.
+}
+
+impl<T: Slottable> Slot<T> {
     // Is this slot occupied?
     #[inline(always)]
     pub fn occupied(&self) -> bool {
@@ -29,39 +75,42 @@ impl<T> Slot<T> {
     }
 }
 
-impl<T> Drop for Slot<T> {
+impl<T: Slottable> Drop for Slot<T> {
     fn drop(&mut self) {
         if std::mem::needs_drop::<T>() && self.occupied() {
             // This is safe because we checked that we're occupied.
             unsafe {
-                ManuallyDrop::drop(&mut self.value);
+                ManuallyDrop::drop(&mut self.u.value);
             }
         }
     }
 }
 
-impl<T: Clone> Clone for Slot<T> {
+impl<T: Clone + Slottable> Clone for Slot<T> {
     fn clone(&self) -> Self {
         Self {
-            value: if self.occupied() {
-                self.value.clone()
-            } else {
-                unsafe { std::mem::uninitialized() }
+            u: unsafe {
+                if self.occupied() {
+                    SlotUnion { value: self.u.value.clone() }
+                } else {
+                    SlotUnion { next_free: self.u.next_free }
+                }
             },
             version: self.version,
-            next_free: self.next_free,
         }
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Slot<T> {
+impl<T: fmt::Debug + Slottable> fmt::Debug for Slot<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let mut builder = fmt.debug_struct("Slot");
         builder.field("version", &self.version);
-        if self.occupied() {
-            builder.field("value", &self.value).finish()
-        } else {
-            builder.field("next_free", &self.next_free).finish()
+        unsafe {
+            if self.occupied() {
+                builder.field("value", &self.u.value).finish()
+            } else {
+                builder.field("next_free", &self.u.next_free).finish()
+            }
         }
     }
 }
@@ -70,13 +119,13 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 ///
 /// See [crate documentation](index.html) for more details.
 #[derive(Debug, Clone)]
-pub struct SlotMap<T> {
+pub struct SlotMap<T: Slottable> {
     slots: Vec<Slot<T>>,
     free_head: usize,
     num_elems: u32,
 }
 
-impl<T> SlotMap<T> {
+impl<T: Slottable> SlotMap<T> {
     /// Construct a new, empty `SlotMap`.
     ///
     /// The slot map will not allocate until values are inserted.
@@ -250,11 +299,15 @@ impl<T> SlotMap<T> {
             let occupied_version = slot.version | 1;
             let key = Key::new(idx as u32, occupied_version);
 
-            // Assign slot.value first in case f panics.
-            slot.value = ManuallyDrop::new(f(key));
-            slot.version = occupied_version;
-            self.free_head = slot.next_free as usize;
+            // Get value first in case f panics.
+            let value = ManuallyDrop::new(f(key));
+
+            // Update. Make sure to extract next_free before overwriting the
+            // union.
+            self.free_head = unsafe { slot.u.next_free as usize };
             self.num_elems = new_num_elems;
+            unsafe { slot.u.value = value };
+            slot.version = occupied_version;
             return key;
         }
 
@@ -262,9 +315,8 @@ impl<T> SlotMap<T> {
 
         // Create new slot before adjusting freelist in case f panics.
         self.slots.push(Slot {
-            value: ManuallyDrop::new(f(key)),
+            u: SlotUnion { value: ManuallyDrop::new(f(key)) },
             version: 1,
-            next_free: 0,
         });
 
         self.free_head = self.slots.len();
@@ -277,15 +329,17 @@ impl<T> SlotMap<T> {
     // occupied. Returns the value removed.
     #[inline(always)]
     unsafe fn remove_from_slot(&mut self, idx: usize) -> T {
-        // Maintain freelist.
+        // Remove value from slot before overwriting union.
         let slot = self.slots.get_unchecked_mut(idx);
-        slot.next_free = self.free_head as u32;
+        let value = ptr::read(&*slot.u.value);
+
+        // Maintain freelist.
+        slot.u.next_free = self.free_head as u32;
         self.free_head = idx;
         self.num_elems -= 1;
-
-        // Remove value from slot.
         slot.version = slot.version.wrapping_add(1);
-        ptr::read(&*slot.value)
+
+        value
     }
 
     /// Removes a key from the slot map, returning the value at the key if the
@@ -346,7 +400,7 @@ impl<T> SlotMap<T> {
                 // This is safe because removing elements does not shrink slots.
                 let slot = unsafe { self.slots.get_unchecked_mut(i) };
                 let key = Key::new(i as u32, slot.version);
-                slot.occupied() && !f(key, &mut slot.value)
+                slot.occupied() && !f(key, unsafe { &mut slot.u.value })
             };
 
             if should_remove {
@@ -417,7 +471,7 @@ impl<T> SlotMap<T> {
         self.slots
             .get(key.idx as usize)
             .filter(|slot| slot.version == key.version.get())
-            .map(|slot| &*slot.value)
+            .map(|slot| unsafe { &*slot.u.value })
     }
 
     /// Returns a reference to the value corresponding to the key without
@@ -439,7 +493,7 @@ impl<T> SlotMap<T> {
     /// // sm.get_unchecked(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked(&self, key: Key) -> &T {
-        &self.slots.get_unchecked(key.idx as usize).value
+        &self.slots.get_unchecked(key.idx as usize).u.value
     }
 
     /// Returns a mutable reference to the value corresponding to the key.
@@ -459,7 +513,7 @@ impl<T> SlotMap<T> {
         self.slots
             .get_mut(key.idx as usize)
             .filter(|slot| slot.version == key.version.get())
-            .map(|slot| &mut *slot.value)
+            .map(|slot| unsafe { &mut *slot.u.value })
     }
 
     /// Returns a mutable reference to the value corresponding to the key
@@ -482,7 +536,7 @@ impl<T> SlotMap<T> {
     /// // sm.get_unchecked_mut(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: Key) -> &mut T {
-        &mut self.slots.get_unchecked_mut(key.idx as usize).value
+        &mut self.slots.get_unchecked_mut(key.idx as usize).u.value
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The
@@ -612,13 +666,13 @@ impl<T> SlotMap<T> {
     }
 }
 
-impl<T> Default for SlotMap<T> {
+impl<T: Slottable> Default for SlotMap<T> {
     fn default() -> Self {
         SlotMap::new()
     }
 }
 
-impl<T> Index<Key> for SlotMap<T> {
+impl<T: Slottable> Index<Key> for SlotMap<T> {
     type Output = T;
 
     fn index(&self, key: Key) -> &T {
@@ -629,7 +683,7 @@ impl<T> Index<Key> for SlotMap<T> {
     }
 }
 
-impl<T> IndexMut<Key> for SlotMap<T> {
+impl<T: Slottable> IndexMut<Key> for SlotMap<T> {
     fn index_mut(&mut self, key: Key) -> &mut T {
         match self.get_mut(key) {
             Some(r) => r,
@@ -641,7 +695,7 @@ impl<T> IndexMut<Key> for SlotMap<T> {
 // Iterators.
 /// A draining iterator for `SlotMap`.
 #[derive(Debug)]
-pub struct Drain<'a, T: 'a> {
+pub struct Drain<'a, T: 'a + Slottable> {
     num_left: usize,
     sm: &'a mut SlotMap<T>,
     cur: usize,
@@ -649,44 +703,44 @@ pub struct Drain<'a, T: 'a> {
 
 /// An iterator that moves key-value pairs out of a `SlotMap`.
 #[derive(Debug)]
-pub struct IntoIter<T> {
+pub struct IntoIter<T: Slottable> {
     num_left: usize,
     slots: Enumerate<std::vec::IntoIter<Slot<T>>>,
 }
 
 /// An iterator over the key-value pairs in a `SlotMap`.
 #[derive(Debug)]
-pub struct Iter<'a, T: 'a> {
+pub struct Iter<'a, T: 'a + Slottable> {
     num_left: usize,
     slots: Enumerate<std::slice::Iter<'a, Slot<T>>>,
 }
 
 /// A mutable iterator over the key-value pairs in a `SlotMap`.
 #[derive(Debug)]
-pub struct IterMut<'a, T: 'a> {
+pub struct IterMut<'a, T: 'a + Slottable> {
     num_left: usize,
     slots: Enumerate<std::slice::IterMut<'a, Slot<T>>>,
 }
 
 /// An iterator over the keys in a `SlotMap`.
 #[derive(Debug)]
-pub struct Keys<'a, T: 'a> {
+pub struct Keys<'a, T: 'a + Slottable> {
     inner: Iter<'a, T>,
 }
 
 /// An iterator over the values in a `SlotMap`.
 #[derive(Debug)]
-pub struct Values<'a, T: 'a> {
+pub struct Values<'a, T: 'a + Slottable> {
     inner: Iter<'a, T>,
 }
 
 /// A mutable iterator over the values in a `SlotMap`.
 #[derive(Debug)]
-pub struct ValuesMut<'a, T: 'a> {
+pub struct ValuesMut<'a, T: 'a + Slottable> {
     inner: IterMut<'a, T>,
 }
 
-impl<'a, T> Iterator for Drain<'a, T> {
+impl<'a, T: Slottable> Iterator for Drain<'a, T> {
     type Item = (Key, T);
 
     fn next(&mut self) -> Option<(Key, T)> {
@@ -713,13 +767,13 @@ impl<'a, T> Iterator for Drain<'a, T> {
     }
 }
 
-impl<'a, T> Drop for Drain<'a, T> {
+impl<'a, T: Slottable> Drop for Drain<'a, T> {
     fn drop(&mut self) {
         self.for_each(|_drop| {});
     }
 }
 
-impl<T> Iterator for IntoIter<T> {
+impl<T: Slottable> Iterator for IntoIter<T> {
     type Item = (Key, T);
 
     fn next(&mut self) -> Option<(Key, T)> {
@@ -732,7 +786,7 @@ impl<T> Iterator for IntoIter<T> {
 
                 // This is safe because we know the slot was occupied.
                 self.num_left -= 1;
-                return Some((key, unsafe { ptr::read(&*slot.value) }));
+                return Some((key, unsafe { ptr::read(&*slot.u.value) }));
             }
         }
 
@@ -744,7 +798,7 @@ impl<T> Iterator for IntoIter<T> {
     }
 }
 
-impl<'a, T> Iterator for Iter<'a, T> {
+impl<'a, T: Slottable> Iterator for Iter<'a, T> {
     type Item = (Key, &'a T);
 
     fn next(&mut self) -> Option<(Key, &'a T)> {
@@ -752,7 +806,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
             if slot.occupied() {
                 let key = Key::new(idx as u32, slot.version);
                 self.num_left -= 1;
-                return Some((key, &slot.value));
+                return Some((key, unsafe { &slot.u.value }));
             }
         }
 
@@ -764,7 +818,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for IterMut<'a, T> {
+impl<'a, T: Slottable> Iterator for IterMut<'a, T> {
     type Item = (Key, &'a mut T);
 
     fn next(&mut self) -> Option<(Key, &'a mut T)> {
@@ -772,7 +826,7 @@ impl<'a, T> Iterator for IterMut<'a, T> {
             if slot.occupied() {
                 let key = Key::new(idx as u32, slot.version);
                 self.num_left -= 1;
-                return Some((key, &mut slot.value));
+                return Some((key, unsafe { &mut slot.u.value }));
             }
         }
 
@@ -784,7 +838,7 @@ impl<'a, T> Iterator for IterMut<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for Keys<'a, T> {
+impl<'a, T: Slottable> Iterator for Keys<'a, T> {
     type Item = Key;
 
     fn next(&mut self) -> Option<Key> {
@@ -796,7 +850,7 @@ impl<'a, T> Iterator for Keys<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for Values<'a, T> {
+impl<'a, T: Slottable> Iterator for Values<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
@@ -808,7 +862,7 @@ impl<'a, T> Iterator for Values<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for ValuesMut<'a, T> {
+impl<'a, T: Slottable> Iterator for ValuesMut<'a, T> {
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<&'a mut T> {
@@ -820,7 +874,7 @@ impl<'a, T> Iterator for ValuesMut<'a, T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a SlotMap<T> {
+impl<'a, T: Slottable> IntoIterator for &'a SlotMap<T> {
     type Item = (Key, &'a T);
     type IntoIter = Iter<'a, T>;
 
@@ -829,7 +883,7 @@ impl<'a, T> IntoIterator for &'a SlotMap<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut SlotMap<T> {
+impl<'a, T: Slottable> IntoIterator for &'a mut SlotMap<T> {
     type Item = (Key, &'a mut T);
     type IntoIter = IterMut<'a, T>;
 
@@ -838,7 +892,7 @@ impl<'a, T> IntoIterator for &'a mut SlotMap<T> {
     }
 }
 
-impl<T> IntoIterator for SlotMap<T> {
+impl<T: Slottable> IntoIterator for SlotMap<T> {
     type Item = (Key, T);
     type IntoIter = IntoIter<T>;
 
@@ -850,21 +904,21 @@ impl<T> IntoIterator for SlotMap<T> {
     }
 }
 
-impl<'a, T> FusedIterator for Iter<'a, T> {}
-impl<'a, T> FusedIterator for IterMut<'a, T> {}
-impl<'a, T> FusedIterator for Keys<'a, T> {}
-impl<'a, T> FusedIterator for Values<'a, T> {}
-impl<'a, T> FusedIterator for ValuesMut<'a, T> {}
-impl<'a, T> FusedIterator for Drain<'a, T> {}
-impl<T> FusedIterator for IntoIter<T> {}
+impl<'a, T: Slottable> FusedIterator for Iter<'a, T> {}
+impl<'a, T: Slottable> FusedIterator for IterMut<'a, T> {}
+impl<'a, T: Slottable> FusedIterator for Keys<'a, T> {}
+impl<'a, T: Slottable> FusedIterator for Values<'a, T> {}
+impl<'a, T: Slottable> FusedIterator for ValuesMut<'a, T> {}
+impl<'a, T: Slottable> FusedIterator for Drain<'a, T> {}
+impl<T: Slottable> FusedIterator for IntoIter<T> {}
 
-impl<'a, T> ExactSizeIterator for Iter<'a, T> {}
-impl<'a, T> ExactSizeIterator for IterMut<'a, T> {}
-impl<'a, T> ExactSizeIterator for Keys<'a, T> {}
-impl<'a, T> ExactSizeIterator for Values<'a, T> {}
-impl<'a, T> ExactSizeIterator for ValuesMut<'a, T> {}
-impl<'a, T> ExactSizeIterator for Drain<'a, T> {}
-impl<T> ExactSizeIterator for IntoIter<T> {}
+impl<'a, T: Slottable> ExactSizeIterator for Iter<'a, T> {}
+impl<'a, T: Slottable> ExactSizeIterator for IterMut<'a, T> {}
+impl<'a, T: Slottable> ExactSizeIterator for Keys<'a, T> {}
+impl<'a, T: Slottable> ExactSizeIterator for Values<'a, T> {}
+impl<'a, T: Slottable> ExactSizeIterator for ValuesMut<'a, T> {}
+impl<'a, T: Slottable> ExactSizeIterator for Drain<'a, T> {}
+impl<T: Slottable> ExactSizeIterator for IntoIter<T> {}
 
 // Serialization with serde.
 #[cfg(feature = "serde")]
@@ -878,7 +932,7 @@ mod serialize {
         version: u32,
     }
 
-    impl<T: Serialize> Serialize for Slot<T> {
+    impl<T: Serialize + Slottable> Serialize for Slot<T> {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
@@ -886,7 +940,7 @@ mod serialize {
             let safe_slot = SafeSlot {
                 version: self.version,
                 value: if self.occupied() {
-                    Some(&*self.value)
+                    Some(unsafe { &*self.u.value })
                 } else {
                     None
                 },
@@ -897,7 +951,7 @@ mod serialize {
 
     impl<'de, T> Deserialize<'de> for Slot<T>
     where
-        T: Deserialize<'de>,
+        T: Deserialize<'de> + Slottable,
     {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
@@ -910,17 +964,18 @@ mod serialize {
             }
 
             Ok(Slot {
-                value: match safe_slot.value {
-                    Some(value) => ManuallyDrop::new(value),
-                    None => unsafe { std::mem::uninitialized() },
+                u: unsafe {
+                    match safe_slot.value {
+                        Some(value) => SlotUnion { value: ManuallyDrop::new(value) },
+                        None => SlotUnion { next_free: 0, }
+                    }
                 },
                 version: safe_slot.version,
-                next_free: 0,
             })
         }
     }
 
-    impl<T: Serialize> Serialize for SlotMap<T> {
+    impl<T: Serialize + Slottable> Serialize for SlotMap<T> {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
@@ -929,7 +984,7 @@ mod serialize {
         }
     }
 
-    impl<'de, T: Deserialize<'de>> Deserialize<'de> for SlotMap<T> {
+    impl<'de, T: Deserialize<'de> + Slottable> Deserialize<'de> for SlotMap<T> {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
@@ -946,7 +1001,7 @@ mod serialize {
                 if slot.occupied() {
                     num_elems += 1;
                 } else {
-                    slot.next_free = next_free as u32;
+                    slot.u.next_free = next_free as u32;
                     next_free = i;
                 }
             }
@@ -968,6 +1023,7 @@ mod tests {
     #[cfg(feature = "serde")]
     use serde_json;
 
+    #[cfg(feature = "unstable")]
     #[test]
     fn check_drops() {
         let drops = std::cell::RefCell::new(0usize);

@@ -2,21 +2,22 @@
 
 extern crate slotmap;
 
-use slotmap::{Key, SlotMap};
+use slotmap::{Key, SlotMap, Slottable};
 
+#[derive(Copy, Clone)]
 struct Node<T> {
     value: T,
     prev: Key,
     next: Key,
 }
 
-struct List<T> {
+struct List<T: Slottable> {
     sm: SlotMap<Node<T>>,
     head: Key,
     tail: Key,
 }
 
-impl<T> List<T> {
+impl<T: Slottable> List<T> {
     fn new() -> Self {
         Self {
             sm: SlotMap::new(),

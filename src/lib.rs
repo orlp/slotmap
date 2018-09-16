@@ -1,6 +1,7 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
 #![doc(html_root_url = "https://docs.rs/slotmap/0.2.0")]
 #![crate_name = "slotmap"]
+#![cfg_attr(feature = "unstable", feature(untagged_unions))]
 
 //! # slotmap
 //!

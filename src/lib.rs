@@ -5,12 +5,12 @@
 
 //! # slotmap
 //!
-//! This library provides two containers with persistent unique keys to access
-//! stored values, [`SlotMap`] and [`DenseSlotMap`]. Upon insertion a key
-//! is returned that can be used to later access or remove the values.
-//! Insertion, deletion and access all take O(1) time with low overhead. Great
-//! for storing collections of objects that need stable, safe references but
-//! have no clear ownership otherwise, such as game entities or graph nodes.
+//! This library provides a container with persistent unique keys to access
+//! stored values, [`SlotMap`]. Upon insertion a key is returned that can be
+//! used to later access or remove the values. Insertion, removal and access all
+//! take O(1) time with low overhead. Great for storing collections of objects
+//! that need stable, safe references but have no clear ownership otherwise,
+//! such as game entities or graph nodes.
 //!
 //! The difference between a [`BTreeMap`] or [`HashMap`] and a slot map is
 //! that the slot map generates and returns the key when inserting a value. A
@@ -44,23 +44,14 @@
 //!
 //! # Why not [`slab`]?
 //!
-//! Unlike [`slab`], the keys returned by the slots maps are versioned. This
-//! means that once a key is removed, it stays removed, even if the physical
-//! storage inside the slotmap is re-used for new elements. A [`DenseSlotMap`]
+//! Unlike [`slab`], the keys returned by [`SlotMap`] are versioned. This means
+//! that once a key is removed, it stays removed, even if the physical storage
+//! inside the slotmap is re-used for new elements. The [`Key`] is a
+//! permanently unique<sup>*</sup> reference to the inserted value. Despite
+//! supporting versioning, a [`SlotMap`] is not slower than [`slab`], by
+//! internally using carefully checked unsafe code. A [`HopSlotMap`]
 //! also provides faster iteration than [`slab`] does. Additionally, at the time
 //! of writing [`slab`] does not support serialization.
-//!
-//! # Choosing `SlotMap` or `DenseSlotMap`
-//!
-//! The overhead on access with a [`Key`] in a [`SlotMap`] compared to
-//! storing your elements in a [`Vec`] is a mere equality check.  However, as
-//! there can be 'holes' in the underlying representation of a [`SlotMap`]
-//! iteration can be inefficient when many slots are unoccupied (a slot gets
-//! unoccupied when an element is removed, and gets filled back up on
-//! insertion). If you often require fast iteration over all values, we also
-//! provide a [`DenseSlotMap`]. It trades random access performance for fast
-//! iteration over values by storing the actual values contiguously and using an
-//! extra array access to translate a key into a value index.
 //!
 //! # Performance characteristics and implementation details
 //!
@@ -71,23 +62,36 @@
 //! returned key also contains a version. Only when the stored version and
 //! version in a key match is a key valid. This allows us to reuse space in the
 //! vector after deletion without letting removed keys point to spurious new
-//! elements. After 2<sup>31</sup> deletions and insertions to the same
-//! underlying slot the version wraps around and such a spurious reference
+//! elements. <sup>*</sup>After 2<sup>31</sup> deletions and insertions to the
+//! same underlying slot the version wraps around and such a spurious reference
 //! could potentially occur. It is incredibly unlikely however, and in all
 //! circumstances is the behavior safe. A slot map can hold up to
-//! 2<sup>32</sup> - 1 elements at a time.
+//! 2<sup>32</sup> - 2 elements at a time.
 //!
-//! A slot map never shrinks - it couldn't even if it wanted to. It needs to
-//! remember for each slot what the latest version is as to not generate
-//! duplicate keys. The overhead for each element in [`SlotMap`] is 8 bytes. In
-//! [`DenseSlotMap`] it is 12 bytes.
+//! The memory usage for each slot in [`SlotMap`] is `4 + max(sizeof(T), 4)`
+//! rounded up to the alignment of `T`. Similarly it is `4 + max(sizeof(T), 12)`
+//! for [`HopSlotMap`].
+//!
+//! # Choosing `SlotMap` or `HopSlotMap`
+//!
+//! A [`SlotMap`] can never shrink the size of its underlying storage, because for
+//! each storage slot it must remember what the latest stored version was, even
+//! if the slot is empty now. This means that iteration can be slow as it must
+//! iterate over potentially a lot of empty slots.
+//!
+//! [`HopSlotMap`] solves this by maintaining more information on
+//! insertion/removal, allowing it to iterate only over filled slots by 'hopping
+//! over' contiguous blocks of vacant slots. This can give it significantly
+//! better iteration speed.  If you expect to iterate over all elements in a
+//! [`SlotMap`] a lot, choose [`HopSlotMap`]. The downside is that insertion and
+//! removal is roughly twice as slow. Random access is the same speed for both.
 //!
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 //! [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
 //! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
 //! [`Key`]: struct.Key.html
 //! [`SlotMap`]: struct.SlotMap.html
-//! [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
+//! [`HopSlotMap`]: hop/struct.HopSlotMap.html
 //! [`serde`]: https://github.com/serde-rs/serde
 //! [`slab`]: https://github.com/carllerche/slab
 
@@ -105,10 +109,52 @@ extern crate serde_json;
 pub(crate) mod normal;
 pub use normal::*;
 
-pub mod dense;
-pub use dense::DenseSlotMap;
+pub mod hop;
+pub use hop::HopSlotMap;
 
 use std::num::NonZeroU32;
+
+// Duplicated docs.
+
+/// A trait for items that can go in a slot map. Due to current stable Rust
+/// restrictions a type must be [`Copy`] to be placed in a slot map. If you must
+/// store a type that is not [`Copy`] you must use nightly Rust and enable the
+/// `unstable` feature for `slotmap` by editing your `Cargo.toml`.
+///
+/// ```norun
+/// slotmap = { version = "...", features = ["unstable"] }
+/// ```
+///
+/// This trait should already be automatically implemented for any type that is
+/// slottable.
+///
+/// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
+#[cfg(not(feature = "unstable"))]
+pub trait Slottable: Copy {}
+
+/// A trait for items that can go in a slot map. Due to current stable Rust
+/// restrictions a type must be [`Copy`] to be placed in a slot map. If you must
+/// store a type that is not [`Copy`] you must use nightly Rust and enable the
+/// `unstable` feature for `slotmap` by editing your `Cargo.toml`.
+///
+/// ```norun
+/// slotmap = { version = "...", features = ["unstable"] }
+/// ```
+///
+/// This trait should already be automatically implemented for any type that is
+/// slottable.
+///
+/// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
+#[cfg(feature = "unstable")]
+pub trait Slottable {}
+
+#[cfg(not(feature = "unstable"))]
+impl<T: Copy> Slottable for T {}
+
+#[cfg(feature = "unstable")]
+impl<T> Slottable for T {}
+
+
 
 /// Key used to access stored values in a slot map.
 ///

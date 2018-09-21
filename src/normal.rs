@@ -397,8 +397,9 @@ impl<T: Slottable> SlotMap<T> {
             let should_remove = {
                 // This is safe because removing elements does not shrink slots.
                 let slot = unsafe { self.slots.get_unchecked_mut(i) };
-                let key = Key::new(i as u32, slot.version);
+                let version = slot.version;
                 if let OccupiedMut(value) = slot.get_mut() {
+                    let key = Key::new(i as u32, version);
                     !f(key, value)
                 } else {
                     false
@@ -810,8 +811,8 @@ impl<'a, T: Slottable> Iterator for Iter<'a, T> {
 
     fn next(&mut self) -> Option<(Key, &'a T)> {
         while let Some((idx, slot)) = self.slots.next() {
-            let key = Key::new(idx as u32, slot.version);
             if let Occupied(value) = slot.get() {
+                let key = Key::new(idx as u32, slot.version);
                 self.num_left -= 1;
                 return Some((key, value));
             }
@@ -830,8 +831,9 @@ impl<'a, T: Slottable> Iterator for IterMut<'a, T> {
 
     fn next(&mut self) -> Option<(Key, &'a mut T)> {
         while let Some((idx, slot)) = self.slots.next() {
-            let key = Key::new(idx as u32, slot.version);
+            let version = slot.version;
             if let OccupiedMut(value) = slot.get_mut() {
+                let key = Key::new(idx as u32, version);
                 self.num_left -= 1;
                 return Some((key, value));
             }

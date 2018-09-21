@@ -121,7 +121,7 @@ impl<T: fmt::Debug + Slottable> fmt::Debug for Slot<T> {
 }
 
 
-/// Slot map, storage with stable unique keys.
+/// Hop slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](index.html) for more details.
 #[derive(Debug, Clone)]

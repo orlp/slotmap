@@ -133,8 +133,6 @@ pub struct HopSlotMap<T: Slottable> {
 impl<T: Slottable> HopSlotMap<T> {
     /// Construct a new, empty `HopSlotMap`.
     ///
-    /// The slot map will not allocate until values are inserted.
-    ///
     /// # Examples
     ///
     /// ```
@@ -148,7 +146,7 @@ impl<T: Slottable> HopSlotMap<T> {
     /// Creates an empty `HopSlotMap` with the given capacity.
     ///
     /// The slot map will not reallocate until it holds at least `capacity`
-    /// elements. If `capacity` is 0, the slot map will not allocate.
+    /// elements.
     ///
     /// # Examples
     ///

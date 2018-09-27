@@ -117,8 +117,6 @@ pub struct SlotMap<T: Slottable> {
 impl<T: Slottable> SlotMap<T> {
     /// Construct a new, empty `SlotMap`.
     ///
-    /// The slot map will not allocate until values are inserted.
-    ///
     /// # Examples
     ///
     /// ```
@@ -132,7 +130,7 @@ impl<T: Slottable> SlotMap<T> {
     /// Creates an empty `SlotMap` with the given capacity.
     ///
     /// The slot map will not reallocate until it holds at least `capacity`
-    /// elements. If `capacity` is 0, the slot map will not allocate.
+    /// elements.
     ///
     /// # Examples
     ///

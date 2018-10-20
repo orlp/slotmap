@@ -114,8 +114,10 @@ impl<T> SecondaryMap<T> {
     /// let mut sec: SecondaryMap<i32> = SecondaryMap::with_capacity(sm.capacity());
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
+        let mut slots = Vec::with_capacity(capacity + 1); // Sentinel.
+        slots.push(Slot { version: 0, value: None });
         Self {
-            slots: Vec::with_capacity(capacity + 1), // Sentinel.
+            slots,
             num_elems: 0,
         }
     }

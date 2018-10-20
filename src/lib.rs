@@ -112,6 +112,9 @@ pub use normal::*;
 pub mod hop;
 pub use hop::HopSlotMap;
 
+pub mod secondary;
+pub use secondary::SecondaryMap;
+
 use std::num::NonZeroU32;
 
 // Duplicated docs.
@@ -126,9 +129,11 @@ use std::num::NonZeroU32;
 /// ```
 ///
 /// This trait should already be automatically implemented for any type that is
-/// slottable.
+/// slottable. If you can't use unstable Rust and still want to store [`Copy`]
+/// data, store that as associated data in a [`SecondaryMap`].
 ///
 /// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
+/// [`SecondaryMap`]: secondary/struct.SecondaryMap.html
 #[cfg(not(feature = "unstable"))]
 pub trait Slottable: Copy {}
 
@@ -214,11 +219,21 @@ impl Key {
     }
 }
 
+
 impl Default for Key {
     fn default() -> Self {
         Self::null()
     }
 }
+
+
+// Returns if a is an older version than b, taking into account wrapping of
+// versions.
+fn is_older_version(a: u32, b: u32) -> bool {
+    let diff = a.wrapping_sub(b);
+    diff >= (1 << 31)
+}
+
 
 // Serialization with serde.
 #[cfg(feature = "serde")]
@@ -265,8 +280,17 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "serde")]
     use super::*;
+
+    #[test]
+    fn check_is_older_version() {
+        let is_older = |a, b| is_older_version(a, b);
+        assert!(!is_older(42, 42));
+        assert!(is_older(0, 1));
+        assert!(is_older(0, 1 << 31));
+        assert!(!is_older(0, (1 << 31) + 1));
+        assert!(is_older((-1i32) as u32, 0));
+    }
 
     #[cfg(feature = "serde")]
     #[test]

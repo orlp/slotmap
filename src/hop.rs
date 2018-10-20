@@ -285,11 +285,8 @@ impl<T: Slottable> HopSlotMap<T> {
     // For that same ergonomy it uses u32, not usize as index.
     // Safe iff idx is a valid index and the slot at that index is vacant.
     unsafe fn freelist(&mut self, idx: u32) -> &mut FreeListEntry {
-        // TODO: unchecked.
-        // &mut self.slots[idx as usize].u.free
         &mut self.slots.get_unchecked_mut(idx as usize).u.free
     }
-
 
     /// Inserts a value given by `f` into the slot map. The `Key` where the
     /// value will be stored is passed into `f`. This is useful to store values

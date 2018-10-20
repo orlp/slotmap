@@ -1,11 +1,11 @@
 # slotmap
 
 A Rust library providing two containers with persistent unique keys to access
-stored values, `SlotMap` and `DenseSlotMap`. Upon insertion a key is
-returned that can be used to later access or remove the values. Insertion,
-deletion and access all take O(1) time with low overhead. Great for storing
-collections of objects that need stable, safe references but have no clear
-ownership otherwise, such as game entities or graph nodes. Please refer to the
+stored values, `SlotMap` and `HopSlotMap`. Upon insertion a key is returned that
+can be used to later access or remove the values. Insertion, deletion and access
+all take O(1) time with low overhead. Great for storing collections of objects
+that need stable, safe references but have no clear ownership otherwise, such as
+game entities or graph nodes. Please refer to the
 [**the documentation**](https://docs.rs/slotmap) for more information.
 
 To start using `slotmap` add the following to your `Cargo.toml`:

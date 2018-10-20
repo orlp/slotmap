@@ -1067,14 +1067,14 @@ mod serialize {
         where
             S: Serializer,
         {
-            let safe_slot = SerdeSlot {
+            let serde_slot = SerdeSlot {
                 version: self.version,
                 value: match self.get() {
                     Occupied(value) => Some(value),
                     Vacant(_) => None,
                 },
             };
-            safe_slot.serialize(serializer)
+            serde_slot.serialize(serializer)
         }
     }
 
@@ -1086,14 +1086,14 @@ mod serialize {
         where
             D: Deserializer<'de>,
         {
-            let safe_slot: SerdeSlot<T> = Deserialize::deserialize(deserializer)?;
-            let occupied = safe_slot.version % 2 > 0;
-            if occupied ^ safe_slot.value.is_some() {
+            let serde_slot: SerdeSlot<T> = Deserialize::deserialize(deserializer)?;
+            let occupied = serde_slot.version % 2 > 0;
+            if occupied ^ serde_slot.value.is_some() {
                 return Err(de::Error::custom(&"inconsistent occupation in Slot"));
             }
 
             Ok(Slot {
-                u: match safe_slot.value {
+                u: match serde_slot.value {
                     Some(value) => SlotUnion {
                         value: ManuallyDrop::new(value)
                     },
@@ -1101,7 +1101,7 @@ mod serialize {
                         free: FreeListEntry { next: 0, prev: 0, other_end: 0 },
                     },
                 },
-                version: safe_slot.version,
+                version: serde_slot.version,
             })
         }
     }

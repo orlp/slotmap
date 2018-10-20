@@ -154,7 +154,7 @@ impl<T: Slottable> HopSlotMap<T> {
     /// # use slotmap::*;
     /// let mut sm: HopSlotMap<i32> = HopSlotMap::with_capacity(10);
     /// ```
-    pub fn with_capacity(capacity: usize) -> HopSlotMap<T> {
+    pub fn with_capacity(capacity: usize) -> Self {
         // Create slots with sentinel at index 0.
         let mut slots = Vec::with_capacity(capacity + 1);
         slots.push(Slot {
@@ -168,7 +168,7 @@ impl<T: Slottable> HopSlotMap<T> {
             version: 0,
         });
 
-        HopSlotMap { slots, num_elems: 0 }
+        Self { slots, num_elems: 0 }
     }
 
     /// Returns the number of elements in the slot map.
@@ -257,8 +257,7 @@ impl<T: Slottable> HopSlotMap<T> {
     pub fn contains_key(&self, key: Key) -> bool {
         self.slots
             .get(key.idx as usize)
-            .map(|slot| slot.version == key.version.get())
-            .unwrap_or(false)
+            .map_or(false, |slot| slot.version == key.version.get())
     }
 
     /// Inserts a value into the slot map. Returns a unique `Key` that can be
@@ -769,7 +768,7 @@ impl<T: Slottable> HopSlotMap<T> {
 
 impl<T: Slottable> Default for HopSlotMap<T> {
     fn default() -> Self {
-        HopSlotMap::new()
+        Self::new()
     }
 }
 

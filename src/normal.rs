@@ -138,7 +138,7 @@ impl<T: Slottable> SlotMap<T> {
     /// # use slotmap::*;
     /// let mut sm: SlotMap<i32> = SlotMap::with_capacity(10);
     /// ```
-    pub fn with_capacity(capacity: usize) -> SlotMap<T> {
+    pub fn with_capacity(capacity: usize) -> Self {
         // Create slots with a sentinel at index 0.
         // We don't actually use the sentinel for anything currently, but
         // HopSlotMap does, and if we want keys to remain valid through
@@ -149,7 +149,7 @@ impl<T: Slottable> SlotMap<T> {
             version: 0,
         });
 
-        SlotMap { slots, free_head: 1, num_elems: 0 }
+        Self { slots, free_head: 1, num_elems: 0 }
     }
 
     /// Returns the number of elements in the slot map.
@@ -238,8 +238,7 @@ impl<T: Slottable> SlotMap<T> {
     pub fn contains_key(&self, key: Key) -> bool {
         self.slots
             .get(key.idx as usize)
-            .map(|slot| slot.version == key.version.get())
-            .unwrap_or(false)
+            .map_or(false, |slot| slot.version == key.version.get())
     }
 
     /// Inserts a value into the slot map. Returns a unique
@@ -674,7 +673,7 @@ impl<T: Slottable> SlotMap<T> {
 
 impl<T: Slottable> Default for SlotMap<T> {
     fn default() -> Self {
-        SlotMap::new()
+        Self::new()
     }
 }
 

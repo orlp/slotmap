@@ -209,8 +209,7 @@ impl<T> SecondaryMap<T> {
     pub fn contains_key(&self, key: Key) -> bool {
         self.slots
             .get(key.idx as usize)
-            .map(|slot| slot.version == key.version.get())
-            .unwrap_or(false)
+            .map_or(false, |slot| slot.version == key.version.get())
     }
 
     /// Inserts a value into the secondary map at the given `key`. Can silently
@@ -636,7 +635,7 @@ impl<T> SecondaryMap<T> {
 
 impl<T> Default for SecondaryMap<T> {
     fn default() -> Self {
-        SecondaryMap::new()
+        Self::new()
     }
 }
 
@@ -676,8 +675,8 @@ impl<T: PartialEq> PartialEq for SecondaryMap<T> {
 impl<T: Eq> Eq for SecondaryMap<T> {}
 
 impl<T> FromIterator<(Key, T)> for SecondaryMap<T> {
-    fn from_iter<I: IntoIterator<Item = (Key, T)>>(iter: I) -> SecondaryMap<T> {
-        let mut sec = SecondaryMap::new();
+    fn from_iter<I: IntoIterator<Item = (Key, T)>>(iter: I) -> Self {
+        let mut sec = Self::new();
         sec.extend(iter);
         sec
     }

@@ -465,7 +465,7 @@ impl<T: Slottable> HopSlotMap<T> {
 
     /// Retains only the elements specified by the predicate.
     ///
-    /// In other words, remove all key-value pairs (k, v) such that
+    /// In other words, remove all key-value pairs `(k, v)` such that
     /// `f(k, &mut v)` returns false. This method operates in place and
     /// invalidates any removed keys.
     ///

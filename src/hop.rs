@@ -1216,7 +1216,7 @@ mod tests {
             // Now all original items should have been dropped exactly once.
             assert_eq!(*drops.borrow(), 1000);
 
-            // Re-use some empty slots.
+            // Reuse some empty slots.
             for _ in 0..250 {
                 clone.insert(CountDrop(&drops));
             }

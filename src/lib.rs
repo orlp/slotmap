@@ -18,6 +18,11 @@
 //! A slot map's main purpose is to simply own things in a safe and efficient
 //! manner.
 //!
+//! You can also create (multiple) secondary maps that can map the keys returned
+//! by [`SlotMap`] to other values, to associate arbitrary data with objects
+//! stored in slot maps, without hashing required - it's direct indexing under
+//! the hood.
+//!
 //! # Examples
 //!
 //! ```
@@ -29,8 +34,16 @@
 //! assert_eq!(sm[bar], "bar");
 //!
 //! sm.remove(bar);
-//! let reused = sm.insert("reuse");  // Space from bar reused.
+//! let reuse = sm.insert("reuse");  // Space from bar reused.
 //! assert_eq!(sm.contains_key(bar), false);  // After deletion a key stays invalid.
+//!
+//! let mut sec = SecondaryMap::new();
+//! sec.insert(foo, "noun");  // We provide the key for secondary maps.
+//! sec.insert(reuse, "verb");
+//!
+//! for (key, val) in sm {
+//!     println!("{} is a {}", val, sec[key]);
+//! }
 //! ```
 //!
 //! # Serialization through [`serde`]
@@ -46,7 +59,7 @@
 //!
 //! Unlike [`slab`], the keys returned by [`SlotMap`] are versioned. This means
 //! that once a key is removed, it stays removed, even if the physical storage
-//! inside the slotmap is re-used for new elements. The [`Key`] is a
+//! inside the slotmap is reused for new elements. The [`Key`] is a
 //! permanently unique<sup>*</sup> reference to the inserted value. Despite
 //! supporting versioning, a [`SlotMap`] is not slower than [`slab`], by
 //! internally using carefully checked unsafe code. A [`HopSlotMap`]
@@ -86,11 +99,31 @@
 //! [`SlotMap`] a lot, choose [`HopSlotMap`]. The downside is that insertion and
 //! removal is roughly twice as slow. Random access is the same speed for both.
 //!
+//! # Choosing `SecondaryMap` or `SparseSecondaryMap`
+//!
+//! You want to associate extra data with objects stored in a slot map, so you
+//! use (multiple) secondary maps to map keys to that data.
+//!
+//! A [`SecondaryMap`] is simply a [`Vec`] of slots like slot map is, and
+//! essentially provides all the same guarantees as [`SlotMap`] does for its
+//! operations (with the exception that you provide the keys as produced by the
+//! primary slot map). This does mean that even if you associate data to only
+//! a single element from the primary slot map, you could need and have to
+//! initialize as much memory as the original.
+//!
+//! A [`SparseSecondaryMap`] is like a [`HashMap`] from keys to objects, however
+//! it automatically removes outdated keys for slots that had their space
+//! reused. You should use this variant if you expect to store some associated
+//! data for only a small portion of the primary slot map.
+//!
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 //! [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
 //! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
 //! [`Key`]: struct.Key.html
 //! [`SlotMap`]: struct.SlotMap.html
+//! [`HopSlotMap`]: hop/struct.HopSlotMap.html
+//! [`SecondaryMap`]: secondary/struct.SecondaryMap.html
+//! [`SparseSecondaryMap`]: sparse_secondary/struct.SparseSecondaryMap.html
 //! [`HopSlotMap`]: hop/struct.HopSlotMap.html
 //! [`serde`]: https://github.com/serde-rs/serde
 //! [`slab`]: https://github.com/carllerche/slab

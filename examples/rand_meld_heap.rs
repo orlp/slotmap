@@ -3,7 +3,7 @@
 
 extern crate slotmap;
 
-use slotmap::{SlotMap, Key, Slottable};
+use slotmap::{SlotMap, SecondaryMap, Key, Slottable};
 
 // Intentionally not copy or clone.
 struct NodeHandle(Key);
@@ -167,5 +167,23 @@ fn main() {
 
     while rhm.len() > 0 {
         println!("{}", rhm.pop().unwrap());
+    }
+
+    let mut sm = SlotMap::new();
+    let foo = sm.insert("foo");  // Key generated on insert.
+    let bar = sm.insert("bar");
+    assert_eq!(sm[foo], "foo");
+    assert_eq!(sm[bar], "bar");
+
+    sm.remove(bar);
+    let reuse = sm.insert("reuse");  // Space from bar reused.
+    assert_eq!(sm.contains_key(bar), false);  // After deletion a key stays invalid.
+
+    let mut sec = SecondaryMap::new();
+    sec.insert(foo, "noun");  // We provide the key for secondary maps.
+    sec.insert(reuse, "verb");
+
+    for (key, val) in sm {
+        println!("{} is a {}", val, sec[key]);
     }
 }

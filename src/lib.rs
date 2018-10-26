@@ -250,6 +250,51 @@ impl Key {
     pub fn is_null(self) -> bool {
         self.idx == std::u32::MAX
     }
+
+    /// Returns this key's internal data represented as a primitive `u64`
+    /// suitable for taking and returning as arguments in extern "C"
+    /// functions (for example, if you wanted to use SlotMap keys as
+    /// safe opaque handles).
+    ///
+    /// See `Key::from_ffi` for the inverse operation.
+    ///
+    /// # Examples
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::<i32>::new();
+    ///
+    /// let foo = sm.insert(30);
+    /// let encoded = foo.as_ffi();
+    /// let decoded = Key::from_ffi(encoded).unwrap();
+    ///
+    /// assert_eq!(foo, decoded);
+    /// assert_eq!(sm[decoded], 30);
+    /// ```
+    pub fn as_ffi(self) -> u64 {
+        ((self.version.get() as u64) << 32) | (self.idx as u64)
+    }
+
+    /// Convert a value previously returned by a call to `as_ffi`
+    /// into a `Key`. Returns `None` if the value does not encode
+    /// a valid key, and could not have been returned by a previous
+    /// call to `Key::as_ffi`.
+    ///
+    /// # Examples
+    /// ```
+    /// # use slotmap::*;
+    /// assert!(Key::from_ffi(0).is_none());
+    /// let null = Key::null();
+    /// assert_eq!(Key::from_ffi(null.as_ffi()), Some(null));
+    /// ```
+    pub fn from_ffi(k: u64) -> Option<Key> {
+        let idx = k as u32;
+        let version = (k >> 32) as u32;
+        if version == 0 {
+            None
+        } else {
+            Some(Key::new(idx, version))
+        }
+    }
 }
 
 

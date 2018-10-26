@@ -3,7 +3,7 @@
 
 extern crate slotmap;
 
-use slotmap::{SlotMap, SecondaryMap, Key, Slottable};
+use slotmap::{Key, SecondaryMap, SlotMap, Slottable};
 
 // Intentionally not copy or clone.
 struct NodeHandle(Key);
@@ -105,8 +105,12 @@ impl<T: Ord + std::fmt::Debug + Slottable> RandMeldHeap<T> {
     }
 
     fn meld(&mut self, mut a: Key, mut b: Key) -> Key {
-        if a.is_null() { return b; }
-        if b.is_null() { return a; }
+        if a.is_null() {
+            return b;
+        }
+        if b.is_null() {
+            return a;
+        }
 
         if self.sm[a].value > self.sm[b].value {
             std::mem::swap(&mut a, &mut b);
@@ -143,7 +147,7 @@ impl<T: Ord + std::fmt::Debug + Slottable> RandMeldHeap<T> {
                 parent = child;
             }
         }
-        
+
         ret
     }
 
@@ -151,7 +155,6 @@ impl<T: Ord + std::fmt::Debug + Slottable> RandMeldHeap<T> {
         self.sm.len()
     }
 }
-
 
 fn main() {
     let mut rhm = RandMeldHeap::new();
@@ -170,17 +173,17 @@ fn main() {
     }
 
     let mut sm = SlotMap::new();
-    let foo = sm.insert("foo");  // Key generated on insert.
+    let foo = sm.insert("foo"); // Key generated on insert.
     let bar = sm.insert("bar");
     assert_eq!(sm[foo], "foo");
     assert_eq!(sm[bar], "bar");
 
     sm.remove(bar);
-    let reuse = sm.insert("reuse");  // Space from bar reused.
-    assert_eq!(sm.contains_key(bar), false);  // After deletion a key stays invalid.
+    let reuse = sm.insert("reuse"); // Space from bar reused.
+    assert_eq!(sm.contains_key(bar), false); // After deletion a key stays invalid.
 
     let mut sec = SecondaryMap::new();
-    sec.insert(foo, "noun");  // We provide the key for secondary maps.
+    sec.insert(foo, "noun"); // We provide the key for secondary maps.
     sec.insert(reuse, "verb");
 
     for (key, val) in sm {

@@ -1,5 +1,5 @@
 // Necessary for the union differing on stable/nightly.
-#![allow(unused_unsafe)] 
+#![allow(unused_unsafe)]
 
 //! Contains the faster iteration, slower insertion/removal slot map
 //! implementation.
@@ -19,7 +19,6 @@ use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
 
 use super::{Key, Slottable};
-
 
 // Metadata to maintain the freelist.
 #[derive(Clone, Copy, Debug)]
@@ -120,7 +119,6 @@ impl<T: fmt::Debug + Slottable> fmt::Debug for Slot<T> {
     }
 }
 
-
 /// Hop slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](index.html) for more details.
@@ -163,12 +161,15 @@ impl<T: Slottable> HopSlotMap<T> {
                     next: 0,
                     prev: 0,
                     other_end: 0,
-                }
+                },
             },
             version: 0,
         });
 
-        Self { slots, num_elems: 0 }
+        Self {
+            slots,
+            num_elems: 0,
+        }
     }
 
     /// Returns the number of elements in the slot map.
@@ -237,8 +238,7 @@ impl<T: Slottable> HopSlotMap<T> {
     /// ```
     pub fn reserve(&mut self, additional: usize) {
         // One slot is reserved for the freelist sentinel.
-        let needed = (self.len() + additional)
-            .saturating_sub(self.slots.len() - 1);
+        let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
         self.slots.reserve(needed);
     }
 
@@ -330,7 +330,9 @@ impl<T: Slottable> HopSlotMap<T> {
                 let key = Key::new(self.slots.len() as u32, 1);
 
                 self.slots.push(Slot {
-                    u: SlotUnion { value: ManuallyDrop::new(f(key)) },
+                    u: SlotUnion {
+                        value: ManuallyDrop::new(f(key)),
+                    },
                     version: 1,
                 });
                 self.num_elems = new_num_elems;
@@ -401,7 +403,7 @@ impl<T: Slottable> HopSlotMap<T> {
                     next: old_head,
                     prev: 0,
                 };
-            },
+            }
 
             (false, true) => {
                 // Prepend to vacant block on right.
@@ -413,14 +415,14 @@ impl<T: Slottable> HopSlotMap<T> {
                 // neighbours.
                 self.freelist(front_data.prev).next = i;
                 self.freelist(front_data.next).prev = i;
-            },
+            }
 
             (true, false) => {
                 // Append to vacant block on left.
                 let front = self.freelist(i - 1).other_end;
                 self.freelist(i).other_end = front;
                 self.freelist(front).other_end = i;
-            },
+            }
 
             (true, true) => {
                 // We must merge left and right.
@@ -503,11 +505,11 @@ impl<T: Slottable> HopSlotMap<T> {
                     OccupiedMut(value) => {
                         let key = Key::new(i as u32, version);
                         !f(key, value)
-                    },
+                    }
                     VacantMut(free) => {
                         i = free.other_end as usize;
                         false
-                    },
+                    }
                 }
             };
 
@@ -671,9 +673,7 @@ impl<T: Slottable> HopSlotMap<T> {
     /// ```
     pub fn iter(&self) -> Iter<T> {
         Iter::<T> {
-            cur: unsafe {
-                self.slots.get_unchecked(0).u.free.other_end as usize + 1
-            },
+            cur: unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 },
             num_left: self.len(),
             slots: &self.slots[..],
         }
@@ -847,7 +847,9 @@ impl<'a, T: Slottable> Iterator for Drain<'a, T> {
     type Item = (Key, T);
 
     fn next(&mut self) -> Option<(Key, T)> {
-        if self.cur >= self.sm.slots.len() { return None; }
+        if self.cur >= self.sm.slots.len() {
+            return None;
+        }
 
         let (idx, version) = {
             let slot = &self.sm.slots[self.cur];
@@ -856,7 +858,9 @@ impl<'a, T: Slottable> Iterator for Drain<'a, T> {
                 Vacant(free) => {
                     // Skip block of contiguous vacant slots.
                     let idx = free.other_end as usize + 1;
-                    if idx >= self.sm.slots.len() { return None; }
+                    if idx >= self.sm.slots.len() {
+                        return None;
+                    }
                     (idx, self.sm.slots[idx].version)
                 }
             }
@@ -864,7 +868,9 @@ impl<'a, T: Slottable> Iterator for Drain<'a, T> {
 
         self.cur = idx + 1;
         self.num_left -= 1;
-        Some((Key::new(idx as u32, version), unsafe { self.sm.remove_from_slot(idx) }))
+        Some((Key::new(idx as u32, version), unsafe {
+            self.sm.remove_from_slot(idx)
+        }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -882,16 +888,20 @@ impl<T: Slottable> Iterator for IntoIter<T> {
     type Item = (Key, T);
 
     fn next(&mut self) -> Option<(Key, T)> {
-        if self.cur >= self.slots.len() { return None; }
+        if self.cur >= self.slots.len() {
+            return None;
+        }
 
         let idx = match self.slots[self.cur].get() {
             Occupied(_) => self.cur,
             Vacant(free) => {
                 // Skip block of contiguous vacant slots.
                 let idx = free.other_end as usize + 1;
-                if idx >= self.slots.len() { return None; }
+                if idx >= self.slots.len() {
+                    return None;
+                }
                 idx
-            },
+            }
         };
 
         self.cur = idx + 1;
@@ -913,7 +923,9 @@ impl<'a, T: Slottable> Iterator for Iter<'a, T> {
     fn next(&mut self) -> Option<(Key, &'a T)> {
         // All unchecked indices are safe due to the invariants of the freelist
         // and that num_left guarantees there is another element.
-        if self.num_left == 0 { return None; }
+        if self.num_left == 0 {
+            return None;
+        }
         self.num_left -= 1;
 
         let idx = match unsafe { self.slots.get_unchecked(self.cur).get() } {
@@ -923,7 +935,9 @@ impl<'a, T: Slottable> Iterator for Iter<'a, T> {
 
         self.cur = idx + 1;
         let slot = unsafe { self.slots.get_unchecked(idx) };
-        Some((Key::new(idx as u32, slot.version), unsafe { &*slot.u.value }))
+        Some((Key::new(idx as u32, slot.version), unsafe {
+            &*slot.u.value
+        }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -935,14 +949,18 @@ impl<'a, T: Slottable> Iterator for IterMut<'a, T> {
     type Item = (Key, &'a mut T);
 
     fn next(&mut self) -> Option<(Key, &'a mut T)> {
-        if self.cur >= self.slots.len() { return None; }
+        if self.cur >= self.slots.len() {
+            return None;
+        }
 
         let idx = match self.slots[self.cur].get() {
             Occupied(_) => self.cur,
             Vacant(free) => {
                 // Skip block of contiguous vacant slots.
                 let idx = free.other_end as usize + 1;
-                if idx >= self.slots.len() { return None; }
+                if idx >= self.slots.len() {
+                    return None;
+                }
                 idx
             }
         };
@@ -1091,10 +1109,14 @@ mod serialize {
             Ok(Slot {
                 u: match serde_slot.value {
                     Some(value) => SlotUnion {
-                        value: ManuallyDrop::new(value)
+                        value: ManuallyDrop::new(value),
                     },
                     None => SlotUnion {
-                        free: FreeListEntry { next: 0, prev: 0, other_end: 0 },
+                        free: FreeListEntry {
+                            next: 0,
+                            prev: 0,
+                            other_end: 0,
+                        },
                     },
                 },
                 version: serde_slot.version,
@@ -1164,10 +1186,7 @@ mod serialize {
                 }
             }
 
-            Ok(HopSlotMap {
-                num_elems,
-                slots,
-            })
+            Ok(HopSlotMap { num_elems, slots })
         }
     }
 }

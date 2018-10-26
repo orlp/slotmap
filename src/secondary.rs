@@ -1,10 +1,10 @@
 //! Contains the secondary map implementation.
 
+use super::{is_older_version, Key};
 use std;
-use super::{Key, is_older_version};
-use std::ops::{Index, IndexMut};
-use std::iter::{Enumerate, FusedIterator, FromIterator, Extend};
 use std::hint::unreachable_unchecked;
+use std::iter::{Enumerate, Extend, FromIterator, FusedIterator};
+use std::ops::{Index, IndexMut};
 
 // We could use unions to remove the memory overhead of Option here as well, but
 // until non-Copy elements inside unions stabilize it's better to give users at
@@ -52,7 +52,7 @@ impl<T> Slot<T> {
 /// [`Slottable`]: ../trait.Slottable.html
 /// [`SparseSecondaryMap`]: ../sparse_secondary/struct.SparseSecondaryMap.html
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-/// 
+///
 /// Example usage:
 ///
 /// ```
@@ -85,7 +85,6 @@ pub struct SecondaryMap<T> {
     num_elems: usize,
 }
 
-
 impl<T> SecondaryMap<T> {
     /// Construct a new, empty `SecondaryMap`.
     ///
@@ -115,7 +114,10 @@ impl<T> SecondaryMap<T> {
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
         let mut slots = Vec::with_capacity(capacity + 1); // Sentinel.
-        slots.push(Slot { version: 0, value: None });
+        slots.push(Slot {
+            version: 0,
+            value: None,
+        });
         Self {
             slots,
             num_elems: 0,
@@ -245,7 +247,7 @@ impl<T> SecondaryMap<T> {
         if slot.version == key.version.get() {
             return std::mem::replace(&mut slot.value, Some(value));
         }
-        
+
         if slot.occupied() {
             // Don't replace existing newer values.
             if is_older_version(key.version.get(), slot.version) {
@@ -255,7 +257,10 @@ impl<T> SecondaryMap<T> {
             self.num_elems += 1;
         }
 
-        *slot = Slot { version: key.version.get(), value: Some(value) };
+        *slot = Slot {
+            version: key.version.get(),
+            value: Some(value),
+        };
 
         None
     }
@@ -275,7 +280,7 @@ impl<T> SecondaryMap<T> {
     /// squared.insert(k, 16);
     /// squared.remove(k);
     /// assert!(!squared.contains_key(k));
-    /// 
+    ///
     /// // It's not necessary to remove keys deleted from the primary slot map, they
     /// // get deleted automatically when their slots are reused on a subsequent insert.
     /// squared.insert(k, 16);
@@ -495,7 +500,12 @@ impl<T> SecondaryMap<T> {
     /// // sec.get_unchecked_mut(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: Key) -> &mut T {
-        if let Some(value) = self.slots.get_unchecked_mut(key.idx as usize).value.as_mut() {
+        if let Some(value) = self
+            .slots
+            .get_unchecked_mut(key.idx as usize)
+            .value
+            .as_mut()
+        {
             value
         } else {
             unreachable_unchecked()
@@ -668,9 +678,10 @@ impl<T: PartialEq> PartialEq for SecondaryMap<T> {
         }
 
         self.iter().all(|(key, value)| {
-            other.get(key).map_or(false, |other_value| *value == *other_value)
+            other
+                .get(key)
+                .map_or(false, |other_value| *value == *other_value)
         })
-
     }
 }
 
@@ -724,7 +735,6 @@ pub struct Iter<'a, T: 'a> {
     num_left: usize,
     slots: Enumerate<std::slice::Iter<'a, Slot<T>>>,
 }
-
 
 /// A mutable iterator over the key-value pairs in a `SecondaryMap`.
 #[derive(Debug)]
@@ -928,7 +938,6 @@ impl<'a, T> ExactSizeIterator for ValuesMut<'a, T> {}
 impl<'a, T> ExactSizeIterator for Drain<'a, T> {}
 impl<T> ExactSizeIterator for IntoIter<T> {}
 
-
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
@@ -999,22 +1008,22 @@ mod serialize {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 
-            slots[0] = Slot { value: None, version: 0 };
+            slots[0] = Slot {
+                value: None,
+                version: 0,
+            };
 
             let num_elems = slots.iter().map(|s| s.value.is_some() as usize).sum();
 
-            Ok(SecondaryMap {
-                num_elems,
-                slots,
-            })
+            Ok(SecondaryMap { num_elems, slots })
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use ::*;
     use std::collections::HashMap;
+    use *;
 
     #[cfg(feature = "serde")]
     use serde_json;

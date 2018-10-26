@@ -192,8 +192,6 @@ impl<T: Copy> Slottable for T {}
 #[cfg(feature = "unstable")]
 impl<T> Slottable for T {}
 
-
-
 /// Key used to access stored values in a slot map.
 ///
 /// Do not use a key from one slot map in another. The behavior is safe but
@@ -252,13 +250,11 @@ impl Key {
     }
 }
 
-
 impl Default for Key {
     fn default() -> Self {
         Self::null()
     }
 }
-
 
 // Returns if a is an older version than b, taking into account wrapping of
 // versions.
@@ -266,7 +262,6 @@ fn is_older_version(a: u32, b: u32) -> bool {
     let diff = a.wrapping_sub(b);
     diff >= (1 << 31)
 }
-
 
 // Serialization with serde.
 #[cfg(feature = "serde")]

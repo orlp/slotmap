@@ -1,5 +1,5 @@
 // Necessary for the union differing on stable/nightly.
-#![allow(unused_unsafe)] 
+#![allow(unused_unsafe)]
 
 //! Contains the slot map implementation.
 
@@ -10,7 +10,6 @@ use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
 
 use super::{Key, Slottable};
-
 
 // Storage inside a slot or metadata for the freelist when vacant.
 union SlotUnion<T: Slottable> {
@@ -103,7 +102,6 @@ impl<T: fmt::Debug + Slottable> fmt::Debug for Slot<T> {
     }
 }
 
-
 /// Slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](index.html) for more details.
@@ -145,11 +143,15 @@ impl<T: Slottable> SlotMap<T> {
         // conversion we have to have one as well.
         let mut slots = Vec::with_capacity(capacity + 1);
         slots.push(Slot {
-            u: SlotUnion { next_free: 0 }, 
+            u: SlotUnion { next_free: 0 },
             version: 0,
         });
 
-        Self { slots, free_head: 1, num_elems: 0 }
+        Self {
+            slots,
+            free_head: 1,
+            num_elems: 0,
+        }
     }
 
     /// Returns the number of elements in the slot map.
@@ -218,8 +220,7 @@ impl<T: Slottable> SlotMap<T> {
     /// ```
     pub fn reserve(&mut self, additional: usize) {
         // One slot is reserved for the sentinel.
-        let needed = (self.len() + additional)
-            .saturating_sub(self.slots.len() - 1);
+        let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
         self.slots.reserve(needed);
     }
 
@@ -301,7 +302,9 @@ impl<T: Slottable> SlotMap<T> {
             // union.
             self.free_head = unsafe { slot.u.next_free as usize };
             self.num_elems = new_num_elems;
-            unsafe { slot.u.value = ManuallyDrop::new(value); }
+            unsafe {
+                slot.u.value = ManuallyDrop::new(value);
+            }
             slot.version = occupied_version;
             return key;
         }
@@ -310,7 +313,9 @@ impl<T: Slottable> SlotMap<T> {
 
         // Create new slot before adjusting freelist in case f panics.
         self.slots.push(Slot {
-            u: SlotUnion { value: ManuallyDrop::new(f(key)) },
+            u: SlotUnion {
+                value: ManuallyDrop::new(f(key)),
+            },
             version: 1,
         });
 
@@ -973,8 +978,10 @@ mod serialize {
 
             Ok(Slot {
                 u: match serde_slot.value {
-                    Some(value) => SlotUnion { value: ManuallyDrop::new(value) },
-                    None => SlotUnion { next_free: 0, }
+                    Some(value) => SlotUnion {
+                        value: ManuallyDrop::new(value),
+                    },
+                    None => SlotUnion { next_free: 0 },
                 },
                 version: serde_slot.version,
             })

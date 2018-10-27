@@ -3,30 +3,34 @@
 
 extern crate slotmap;
 
-use slotmap::{Key, SecondaryMap, SlotMap, Slottable};
+use slotmap::{new_key_type, Key, SlotMap, Slottable};
+
+new_key_type! {
+    struct HeapKey;
+}
 
 // Intentionally not copy or clone.
-struct NodeHandle(Key);
+struct NodeHandle(HeapKey);
 
 #[derive(Copy, Clone)]
 struct Node<T: Slottable> {
     value: T,
-    children: [Key; 2],
-    parent: Key,
+    children: [HeapKey; 2],
+    parent: HeapKey,
 }
 
 struct RandMeldHeap<T: Ord + Slottable> {
-    sm: SlotMap<Node<T>>,
+    sm: SlotMap<HeapKey, Node<T>>,
     rng: std::num::Wrapping<u32>,
-    root: Key,
+    root: HeapKey,
 }
 
 impl<T: Ord + std::fmt::Debug + Slottable> RandMeldHeap<T> {
     pub fn new() -> Self {
         Self {
-            sm: SlotMap::new(),
+            sm: SlotMap::with_key(),
             rng: std::num::Wrapping(0xdeadbeef),
-            root: Key::null(),
+            root: HeapKey::null(),
         }
     }
 
@@ -39,8 +43,8 @@ impl<T: Ord + std::fmt::Debug + Slottable> RandMeldHeap<T> {
     pub fn insert(&mut self, value: T) -> NodeHandle {
         let k = self.sm.insert(Node {
             value,
-            children: [Key::null(), Key::null()],
-            parent: Key::null(),
+            children: [HeapKey::null(), HeapKey::null()],
+            parent: HeapKey::null(),
         });
 
         let root = self.root;
@@ -53,7 +57,7 @@ impl<T: Ord + std::fmt::Debug + Slottable> RandMeldHeap<T> {
         if let Some(root) = self.sm.remove(self.root) {
             self.root = self.meld(root.children[0], root.children[1]);
             if let Some(new_root) = self.sm.get_mut(self.root) {
-                new_root.parent = Key::null();
+                new_root.parent = HeapKey::null();
             }
 
             Some(root.value)
@@ -75,14 +79,14 @@ impl<T: Ord + std::fmt::Debug + Slottable> RandMeldHeap<T> {
         self.unlink_node(node);
         self.sm[node] = Node {
             value,
-            children: [Key::null(), Key::null()],
-            parent: Key::null(),
+            children: [HeapKey::null(), HeapKey::null()],
+            parent: HeapKey::null(),
         };
         let root = self.root;
         self.root = self.meld(node, root);
     }
 
-    fn unlink_node(&mut self, node: Key) {
+    fn unlink_node(&mut self, node: HeapKey) {
         // Remove node from heap by merging children and placing them where
         // node used to be.
         let children = self.sm[node].children;
@@ -104,7 +108,7 @@ impl<T: Ord + std::fmt::Debug + Slottable> RandMeldHeap<T> {
         }
     }
 
-    fn meld(&mut self, mut a: Key, mut b: Key) -> Key {
+    fn meld(&mut self, mut a: HeapKey, mut b: HeapKey) -> HeapKey {
         if a.is_null() {
             return b;
         }
@@ -170,23 +174,5 @@ fn main() {
 
     while rhm.len() > 0 {
         println!("{}", rhm.pop().unwrap());
-    }
-
-    let mut sm = SlotMap::new();
-    let foo = sm.insert("foo"); // Key generated on insert.
-    let bar = sm.insert("bar");
-    assert_eq!(sm[foo], "foo");
-    assert_eq!(sm[bar], "bar");
-
-    sm.remove(bar);
-    let reuse = sm.insert("reuse"); // Space from bar reused.
-    assert_eq!(sm.contains_key(bar), false); // After deletion a key stays invalid.
-
-    let mut sec = SecondaryMap::new();
-    sec.insert(foo, "noun"); // We provide the key for secondary maps.
-    sec.insert(reuse, "verb");
-
-    for (key, val) in sm {
-        println!("{} is a {}", val, sec[key]);
     }
 }

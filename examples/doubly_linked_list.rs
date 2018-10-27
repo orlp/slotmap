@@ -2,27 +2,31 @@
 
 extern crate slotmap;
 
-use slotmap::{Key, SlotMap, Slottable};
+use slotmap::{new_key_type, Key, SlotMap, Slottable};
+
+new_key_type! {
+    struct ListKey;
+}
 
 #[derive(Copy, Clone)]
 struct Node<T> {
     value: T,
-    prev: Key,
-    next: Key,
+    prev: ListKey,
+    next: ListKey,
 }
 
 struct List<T: Slottable> {
-    sm: SlotMap<Node<T>>,
-    head: Key,
-    tail: Key,
+    sm: SlotMap<ListKey, Node<T>>,
+    head: ListKey,
+    tail: ListKey,
 }
 
 impl<T: Slottable> List<T> {
     fn new() -> Self {
         Self {
-            sm: SlotMap::new(),
-            head: Key::null(),
-            tail: Key::null(),
+            sm: SlotMap::with_key(),
+            head: ListKey::null(),
+            tail: ListKey::null(),
         }
     }
 
@@ -33,7 +37,7 @@ impl<T: Slottable> List<T> {
     fn push_head(&mut self, value: T) {
         let k = self.sm.insert(Node {
             value,
-            prev: Key::null(),
+            prev: ListKey::null(),
             next: self.head,
         });
 
@@ -49,7 +53,7 @@ impl<T: Slottable> List<T> {
         let k = self.sm.insert(Node {
             value,
             prev: self.tail,
-            next: Key::null(),
+            next: ListKey::null(),
         });
 
         if let Some(old_tail) = self.sm.get_mut(self.tail) {

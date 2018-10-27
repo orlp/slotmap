@@ -1,9 +1,10 @@
 //! Contains the secondary map implementation.
 
-use super::{is_older_version, Key};
+use super::{is_older_version, Key, KeyData};
 use std;
 use std::hint::unreachable_unchecked;
 use std::iter::{Enumerate, Extend, FromIterator, FusedIterator};
+use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
 // We could use unions to remove the memory overhead of Option here as well, but
@@ -28,18 +29,19 @@ impl<T> Slot<T> {
 /// A `SecondaryMap` allows you to efficiently store additional information for
 /// each element in a slot map. You can have multiple secondary maps per slot
 /// map, but not multiple slot maps per secondary map. It is safe but
-/// unspecified behavior if you use `Key`s from multiple different slot maps in
+/// unspecified behavior if you use keys from multiple different slot maps in
 /// the same `SecondaryMap`.
 ///
 /// A `SecondaryMap` does not leak memory even if you never remove elements. In
-/// return, when you remove a `Key` from the primary slot map, after any insert
+/// return, when you remove a key from the primary slot map, after any insert
 /// the space associated with the removed element may be reclaimed. Don't expect
 /// the values associated with a removed key to stick around after an insertion
 /// has happened!
 ///
 /// Unlike a [`SlotMap`], a `SecondaryMap`s elements do not need to be
 /// [`Slottable`]. This means that if you can't or don't want to use nightly
-/// Rust you can store that data as secondary properties.
+/// Rust, and your data is not [`Slottable`], you can store that data as
+/// secondary data.
 ///
 /// Finally a note on memory complexity, the `SecondaryMap` can use memory for
 /// each slot in the primary slot map, and has to iterate over every slot during
@@ -58,11 +60,11 @@ impl<T> Slot<T> {
 /// ```
 /// # use slotmap::*;
 /// // Nightly Rust needed to store String which is not Copy.
-/// let mut players: SlotMap<&'static str> = SlotMap::new();
+/// let mut players: SlotMap<_, &'static str> = SlotMap::new();
 /// // But not for secondary maps.
-/// let mut nicks: SecondaryMap<String> = SecondaryMap::new();
-/// let mut health: SecondaryMap<u32> = SecondaryMap::new();
-/// let mut ammo: SecondaryMap<u32> = SecondaryMap::new();
+/// let mut nicks: SecondaryMap<_, String> = SecondaryMap::new();
+/// let mut health = SecondaryMap::new();
+/// let mut ammo = SecondaryMap::new();
 ///
 /// let alice = players.insert("alice");
 /// nicks.insert(alice, "the_dragon1".to_string());
@@ -80,19 +82,20 @@ impl<T> Slot<T> {
 /// ```
 
 #[derive(Debug)]
-pub struct SecondaryMap<T> {
-    slots: Vec<Slot<T>>,
+pub struct SecondaryMap<K: Key, V> {
+    slots: Vec<Slot<V>>,
     num_elems: usize,
+    _k: PhantomData<fn(K) -> K>,
 }
 
-impl<T> SecondaryMap<T> {
-    /// Construct a new, empty `SecondaryMap`.
+impl<K: Key, V> SecondaryMap<K, V> {
+    /// Constructs a new, empty `SecondaryMap`.
     ///
     /// # Examples
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sec: SecondaryMap<i32> = SecondaryMap::new();
+    /// let mut sec: SecondaryMap<DefaultKey, i32> = SecondaryMap::new();
     /// ```
     pub fn new() -> Self {
         Self::with_capacity(0)
@@ -109,8 +112,8 @@ impl<T> SecondaryMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm: SlotMap<i32> = SlotMap::with_capacity(10);
-    /// let mut sec: SecondaryMap<i32> = SecondaryMap::with_capacity(sm.capacity());
+    /// let mut sm: SlotMap<_, i32> = SlotMap::with_capacity(10);
+    /// let mut sec: SecondaryMap<DefaultKey, i32> = SecondaryMap::with_capacity(sm.capacity());
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
         let mut slots = Vec::with_capacity(capacity + 1); // Sentinel.
@@ -121,6 +124,7 @@ impl<T> SecondaryMap<T> {
         Self {
             slots,
             num_elems: 0,
+            _k: PhantomData,
         }
     }
 
@@ -147,7 +151,7 @@ impl<T> SecondaryMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sec: SecondaryMap<i32> = SecondaryMap::new();
+    /// let mut sec: SecondaryMap<DefaultKey, i32> = SecondaryMap::new();
     /// assert!(sec.is_empty());
     /// ```
     pub fn is_empty(&self) -> bool {
@@ -161,7 +165,7 @@ impl<T> SecondaryMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sec: SecondaryMap<i32> = SecondaryMap::with_capacity(10);
+    /// let mut sec: SecondaryMap<DefaultKey, i32> = SecondaryMap::with_capacity(10);
     /// assert!(sec.capacity() >= 10);
     /// ```
     pub fn capacity(&self) -> usize {
@@ -184,7 +188,7 @@ impl<T> SecondaryMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sec: SecondaryMap<i32> = SecondaryMap::with_capacity(10);
+    /// let mut sec: SecondaryMap<DefaultKey, i32> = SecondaryMap::with_capacity(10);
     /// assert!(sec.capacity() >= 10);
     /// sec.set_capacity(1000);
     /// assert!(sec.capacity() >= 1000);
@@ -210,7 +214,8 @@ impl<T> SecondaryMap<T> {
     /// squared.insert(k, 16);
     /// assert!(squared.contains_key(k));
     /// ```
-    pub fn contains_key(&self, key: Key) -> bool {
+    pub fn contains_key(&self, key: K) -> bool {
+        let key = key.into();
         self.slots
             .get(key.idx as usize)
             .map_or(false, |slot| slot.version == key.version.get())
@@ -235,7 +240,8 @@ impl<T> SecondaryMap<T> {
     /// squared[k] *= squared[k];
     /// assert_eq!(squared[k], 16);
     /// ```
-    pub fn insert(&mut self, key: Key, value: T) -> Option<T> {
+    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        let key = key.into();
         for _ in self.slots.len()..=key.idx as usize {
             self.slots.push(Slot {
                 version: 0,
@@ -290,7 +296,8 @@ impl<T> SecondaryMap<T> {
     /// assert!(squared.contains_key(k)); // Slot has not been reused in squared yet.
     /// squared.insert(new_k, 4);
     /// assert!(!squared.contains_key(k)); // Old key is no longer available.
-    pub fn remove(&mut self, key: Key) -> Option<T> {
+    pub fn remove(&mut self, key: K) -> Option<V> {
+        let key = key.into();
         if let Some(slot) = self.slots.get_mut(key.idx as usize) {
             if slot.version == key.version.get() {
                 // We actually decrement version here, to ensure that if the
@@ -335,7 +342,7 @@ impl<T> SecondaryMap<T> {
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
-        F: FnMut(Key, &mut T) -> bool,
+        F: FnMut(K, &mut V) -> bool,
     {
         let len = self.slots.len();
         for i in 0..len {
@@ -343,7 +350,7 @@ impl<T> SecondaryMap<T> {
             let slot = unsafe { self.slots.get_unchecked_mut(i) };
             let should_remove = {
                 if let Some(value) = &mut slot.value {
-                    let key = Key::new(i as u32, slot.version);
+                    let key = KeyData::new(i as u32, slot.version).into();
                     !f(key, value)
                 } else {
                     false
@@ -399,7 +406,7 @@ impl<T> SecondaryMap<T> {
     /// assert_eq!(sec.len(), 0);
     /// assert_eq!(v, vec![(k, 1)]);
     /// ```
-    pub fn drain(&mut self) -> Drain<T> {
+    pub fn drain(&mut self) -> Drain<K, V> {
         Drain {
             cur: 1,
             num_left: self.len(),
@@ -421,7 +428,8 @@ impl<T> SecondaryMap<T> {
     /// sec.remove(key);
     /// assert_eq!(sec.get(key), None);
     /// ```
-    pub fn get(&self, key: Key) -> Option<&T> {
+    pub fn get(&self, key: K) -> Option<&V> {
+        let key = key.into();
         self.slots
             .get(key.idx as usize)
             .filter(|slot| slot.version == key.version.get())
@@ -448,7 +456,8 @@ impl<T> SecondaryMap<T> {
     /// sec.remove(key);
     /// // sec.get_unchecked(key) is now dangerous!
     /// ```
-    pub unsafe fn get_unchecked(&self, key: Key) -> &T {
+    pub unsafe fn get_unchecked(&self, key: K) -> &V {
+        let key = key.into();
         if let Some(value) = self.slots.get_unchecked(key.idx as usize).value.as_ref() {
             value
         } else {
@@ -471,7 +480,8 @@ impl<T> SecondaryMap<T> {
     /// }
     /// assert_eq!(sec[key], 6.5);
     /// ```
-    pub fn get_mut(&mut self, key: Key) -> Option<&mut T> {
+    pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
+        let key = key.into();
         self.slots
             .get_mut(key.idx as usize)
             .filter(|slot| slot.version == key.version.get())
@@ -499,7 +509,8 @@ impl<T> SecondaryMap<T> {
     /// sec.remove(key);
     /// // sec.get_unchecked_mut(key) is now dangerous!
     /// ```
-    pub unsafe fn get_unchecked_mut(&mut self, key: Key) -> &mut T {
+    pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
+        let key = key.into();
         if let Some(value) = self
             .slots
             .get_unchecked_mut(key.idx as usize)
@@ -513,7 +524,7 @@ impl<T> SecondaryMap<T> {
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The
-    /// iterator element type is `(Key, &'a T)`.
+    /// iterator element type is `(K, &'a V)`.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -535,16 +546,17 @@ impl<T> SecondaryMap<T> {
     /// assert_eq!(it.next(), Some((k2, &12)));
     /// assert_eq!(it.next(), None);
     /// ```
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<K, V> {
         Iter {
             num_left: self.num_elems,
             slots: self.slots.iter().enumerate(),
+            _k: PhantomData,
         }
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order, with
     /// mutable references to the values. The iterator element type is
-    /// `(Key, &'a mut T)`.
+    /// `(K, &'a mut V)`.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -568,15 +580,16 @@ impl<T> SecondaryMap<T> {
     ///
     /// assert_eq!(Vec::from_iter(sec.values()), vec![&-10, &20, &-30]);
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<T> {
+    pub fn iter_mut(&mut self) -> IterMut<K, V> {
         IterMut {
             num_left: self.num_elems,
             slots: self.slots.iter_mut().enumerate(),
+            _k: PhantomData,
         }
     }
 
     /// An iterator visiting all keys in arbitrary order. The iterator element
-    /// type is `Key`.
+    /// type is `K`.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -593,12 +606,12 @@ impl<T> SecondaryMap<T> {
     /// let v: Vec<_> = sec.keys().collect();
     /// assert_eq!(v, vec![k0, k1, k2]);
     /// ```
-    pub fn keys(&self) -> Keys<T> {
-        Keys::<T> { inner: self.iter() }
+    pub fn keys(&self) -> Keys<K, V> {
+        Keys { inner: self.iter() }
     }
 
     /// An iterator visiting all values in arbitrary order. The iterator element
-    /// type is `&'a T`.
+    /// type is `&'a V`.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -615,12 +628,12 @@ impl<T> SecondaryMap<T> {
     /// let v: Vec<_> = sec.values().collect();
     /// assert_eq!(v, vec![&10, &20, &30]);
     /// ```
-    pub fn values(&self) -> Values<T> {
-        Values::<T> { inner: self.iter() }
+    pub fn values(&self) -> Values<K, V> {
+        Values { inner: self.iter() }
     }
 
     /// An iterator visiting all values mutably in arbitrary order. The iterator
-    /// element type is `&'a mut T`.
+    /// element type is `&'a mut V`.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -638,23 +651,23 @@ impl<T> SecondaryMap<T> {
     /// let v: Vec<_> = sec.into_iter().map(|(_k, v)| v).collect();
     /// assert_eq!(v, vec![30, 60, 90]);
     /// ```
-    pub fn values_mut(&mut self) -> ValuesMut<T> {
-        ValuesMut::<T> {
+    pub fn values_mut(&mut self) -> ValuesMut<K, V> {
+        ValuesMut {
             inner: self.iter_mut(),
         }
     }
 }
 
-impl<T> Default for SecondaryMap<T> {
+impl<K: Key, V> Default for SecondaryMap<K, V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T> Index<Key> for SecondaryMap<T> {
-    type Output = T;
+impl<K: Key, V> Index<K> for SecondaryMap<K, V> {
+    type Output = V;
 
-    fn index(&self, key: Key) -> &T {
+    fn index(&self, key: K) -> &V {
         match self.get(key) {
             Some(r) => r,
             None => panic!("invalid SecondaryMap key used"),
@@ -662,8 +675,8 @@ impl<T> Index<Key> for SecondaryMap<T> {
     }
 }
 
-impl<T> IndexMut<Key> for SecondaryMap<T> {
-    fn index_mut(&mut self, key: Key) -> &mut T {
+impl<K: Key, V> IndexMut<K> for SecondaryMap<K, V> {
+    fn index_mut(&mut self, key: K) -> &mut V {
         match self.get_mut(key) {
             Some(r) => r,
             None => panic!("invalid SecondaryMap key used"),
@@ -671,7 +684,7 @@ impl<T> IndexMut<Key> for SecondaryMap<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for SecondaryMap<T> {
+impl<K: Key, V: PartialEq> PartialEq for SecondaryMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
             return false;
@@ -685,18 +698,18 @@ impl<T: PartialEq> PartialEq for SecondaryMap<T> {
     }
 }
 
-impl<T: Eq> Eq for SecondaryMap<T> {}
+impl<K: Key, V: Eq> Eq for SecondaryMap<K, V> {}
 
-impl<T> FromIterator<(Key, T)> for SecondaryMap<T> {
-    fn from_iter<I: IntoIterator<Item = (Key, T)>>(iter: I) -> Self {
+impl<K: Key, V> FromIterator<(K, V)> for SecondaryMap<K, V> {
+    fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
         let mut sec = Self::new();
         sec.extend(iter);
         sec
     }
 }
 
-impl<T> Extend<(Key, T)> for SecondaryMap<T> {
-    fn extend<I: IntoIterator<Item = (Key, T)>>(&mut self, iter: I) {
+impl<K: Key, V> Extend<(K, V)> for SecondaryMap<K, V> {
+    fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
         let iter = iter.into_iter();
         for (k, v) in iter {
             self.insert(k, v);
@@ -704,8 +717,8 @@ impl<T> Extend<(Key, T)> for SecondaryMap<T> {
     }
 }
 
-impl<'a, T: 'a + Copy> Extend<(Key, &'a T)> for SecondaryMap<T> {
-    fn extend<I: IntoIterator<Item = (Key, &'a T)>>(&mut self, iter: I) {
+impl<'a, K: Key, V: 'a + Copy> Extend<(K, &'a V)> for SecondaryMap<K, V> {
+    fn extend<I: IntoIterator<Item = (K, &'a V)>>(&mut self, iter: I) {
         let iter = iter.into_iter();
         for (k, v) in iter {
             self.insert(k, *v);
@@ -716,66 +729,69 @@ impl<'a, T: 'a + Copy> Extend<(Key, &'a T)> for SecondaryMap<T> {
 // Iterators.
 /// A draining iterator for `SecondaryMap`.
 #[derive(Debug)]
-pub struct Drain<'a, T: 'a> {
+pub struct Drain<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
-    sm: &'a mut SecondaryMap<T>,
+    sm: &'a mut SecondaryMap<K, V>,
     cur: usize,
 }
 
 /// An iterator that moves key-value pairs out of a `SecondaryMap`.
 #[derive(Debug)]
-pub struct IntoIter<T> {
+pub struct IntoIter<K: Key, V> {
     num_left: usize,
-    slots: Enumerate<std::vec::IntoIter<Slot<T>>>,
+    slots: Enumerate<std::vec::IntoIter<Slot<V>>>,
+    _k: PhantomData<fn(K) -> K>,
 }
 
 /// An iterator over the key-value pairs in a `SecondaryMap`.
 #[derive(Debug)]
-pub struct Iter<'a, T: 'a> {
+pub struct Iter<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
-    slots: Enumerate<std::slice::Iter<'a, Slot<T>>>,
+    slots: Enumerate<std::slice::Iter<'a, Slot<V>>>,
+    _k: PhantomData<fn(K) -> K>,
 }
 
 /// A mutable iterator over the key-value pairs in a `SecondaryMap`.
 #[derive(Debug)]
-pub struct IterMut<'a, T: 'a> {
+pub struct IterMut<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
-    slots: Enumerate<std::slice::IterMut<'a, Slot<T>>>,
+    slots: Enumerate<std::slice::IterMut<'a, Slot<V>>>,
+    _k: PhantomData<fn(K) -> K>,
 }
 
 /// An iterator over the keys in a `SecondaryMap`.
 #[derive(Debug)]
-pub struct Keys<'a, T: 'a> {
-    inner: Iter<'a, T>,
+pub struct Keys<'a, K: Key + 'a, V: 'a> {
+    inner: Iter<'a, K, V>,
 }
 
 /// An iterator over the values in a `SecondaryMap`.
 #[derive(Debug)]
-pub struct Values<'a, T: 'a> {
-    inner: Iter<'a, T>,
+pub struct Values<'a, K: Key + 'a, V: 'a> {
+    inner: Iter<'a, K, V>,
 }
 
 /// A mutable iterator over the values in a `SecondaryMap`.
 #[derive(Debug)]
-pub struct ValuesMut<'a, T: 'a> {
-    inner: IterMut<'a, T>,
+pub struct ValuesMut<'a, K: Key + 'a, V: 'a> {
+    inner: IterMut<'a, K, V>,
 }
 
-impl<'a, T> Iterator for Drain<'a, T> {
-    type Item = (Key, T);
+impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
+    type Item = (K, V);
 
-    fn next(&mut self) -> Option<(Key, T)> {
+    fn next(&mut self) -> Option<(K, V)> {
         let len = self.sm.slots.len();
         while self.cur < len {
             let idx = self.cur;
             self.cur += 1;
 
             if let Some(value) = std::mem::replace(&mut self.sm.slots[idx].value, None) {
-                let key = Key::new(idx as u32, self.sm.slots[idx].version);
+                let key = KeyData::new(idx as u32, self.sm.slots[idx].version);
                 self.sm.slots[idx].version -= 1;
                 self.sm.num_elems -= 1;
                 self.num_left -= 1;
-                return Some((key, value));
+                return Some((key.into(), value));
             }
         }
 
@@ -787,21 +803,21 @@ impl<'a, T> Iterator for Drain<'a, T> {
     }
 }
 
-impl<'a, T> Drop for Drain<'a, T> {
+impl<'a, K: Key, V> Drop for Drain<'a, K, V> {
     fn drop(&mut self) {
         self.for_each(|_drop| {});
     }
 }
 
-impl<T> Iterator for IntoIter<T> {
-    type Item = (Key, T);
+impl<K: Key, V> Iterator for IntoIter<K, V> {
+    type Item = (K, V);
 
-    fn next(&mut self) -> Option<(Key, T)> {
+    fn next(&mut self) -> Option<(K, V)> {
         while let Some((idx, mut slot)) = self.slots.next() {
             if let Some(value) = std::mem::replace(&mut slot.value, None) {
-                let key = Key::new(idx as u32, slot.version);
+                let key = KeyData::new(idx as u32, slot.version);
                 self.num_left -= 1;
-                return Some((key, value));
+                return Some((key.into(), value));
             }
         }
 
@@ -813,15 +829,15 @@ impl<T> Iterator for IntoIter<T> {
     }
 }
 
-impl<'a, T> Iterator for Iter<'a, T> {
-    type Item = (Key, &'a T);
+impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
+    type Item = (K, &'a V);
 
-    fn next(&mut self) -> Option<(Key, &'a T)> {
+    fn next(&mut self) -> Option<(K, &'a V)> {
         while let Some((idx, slot)) = self.slots.next() {
             if let Some(value) = &slot.value {
-                let key = Key::new(idx as u32, slot.version);
+                let key = KeyData::new(idx as u32, slot.version);
                 self.num_left -= 1;
-                return Some((key, value));
+                return Some((key.into(), value));
             }
         }
 
@@ -833,15 +849,15 @@ impl<'a, T> Iterator for Iter<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for IterMut<'a, T> {
-    type Item = (Key, &'a mut T);
+impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
+    type Item = (K, &'a mut V);
 
-    fn next(&mut self) -> Option<(Key, &'a mut T)> {
+    fn next(&mut self) -> Option<(K, &'a mut V)> {
         while let Some((idx, slot)) = self.slots.next() {
             if let Some(value) = &mut slot.value {
-                let key = Key::new(idx as u32, slot.version);
+                let key = KeyData::new(idx as u32, slot.version);
                 self.num_left -= 1;
-                return Some((key, value));
+                return Some((key.into(), value));
             }
         }
 
@@ -853,10 +869,10 @@ impl<'a, T> Iterator for IterMut<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for Keys<'a, T> {
-    type Item = Key;
+impl<'a, K: Key, V> Iterator for Keys<'a, K, V> {
+    type Item = K;
 
-    fn next(&mut self) -> Option<Key> {
+    fn next(&mut self) -> Option<K> {
         self.inner.next().map(|(key, _)| key)
     }
 
@@ -865,10 +881,10 @@ impl<'a, T> Iterator for Keys<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for Values<'a, T> {
-    type Item = &'a T;
+impl<'a, K: Key, V> Iterator for Values<'a, K, V> {
+    type Item = &'a V;
 
-    fn next(&mut self) -> Option<&'a T> {
+    fn next(&mut self) -> Option<&'a V> {
         self.inner.next().map(|(_, value)| value)
     }
 
@@ -877,10 +893,10 @@ impl<'a, T> Iterator for Values<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for ValuesMut<'a, T> {
-    type Item = &'a mut T;
+impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
+    type Item = &'a mut V;
 
-    fn next(&mut self) -> Option<&'a mut T> {
+    fn next(&mut self) -> Option<&'a mut V> {
         self.inner.next().map(|(_, value)| value)
     }
 
@@ -889,27 +905,27 @@ impl<'a, T> Iterator for ValuesMut<'a, T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a SecondaryMap<T> {
-    type Item = (Key, &'a T);
-    type IntoIter = Iter<'a, T>;
+impl<'a, K: Key, V> IntoIterator for &'a SecondaryMap<K, V> {
+    type Item = (K, &'a V);
+    type IntoIter = Iter<'a, K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut SecondaryMap<T> {
-    type Item = (Key, &'a mut T);
-    type IntoIter = IterMut<'a, T>;
+impl<'a, K: Key, V> IntoIterator for &'a mut SecondaryMap<K, V> {
+    type Item = (K, &'a mut V);
+    type IntoIter = IterMut<'a, K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
 }
 
-impl<T> IntoIterator for SecondaryMap<T> {
-    type Item = (Key, T);
-    type IntoIter = IntoIter<T>;
+impl<K: Key, V> IntoIterator for SecondaryMap<K, V> {
+    type Item = (K, V);
+    type IntoIter = IntoIter<K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         let len = self.len();
@@ -918,25 +934,26 @@ impl<T> IntoIterator for SecondaryMap<T> {
         IntoIter {
             num_left: len,
             slots: it,
+            _k: PhantomData,
         }
     }
 }
 
-impl<'a, T> FusedIterator for Iter<'a, T> {}
-impl<'a, T> FusedIterator for IterMut<'a, T> {}
-impl<'a, T> FusedIterator for Keys<'a, T> {}
-impl<'a, T> FusedIterator for Values<'a, T> {}
-impl<'a, T> FusedIterator for ValuesMut<'a, T> {}
-impl<'a, T> FusedIterator for Drain<'a, T> {}
-impl<T> FusedIterator for IntoIter<T> {}
+impl<'a, K: Key, V> FusedIterator for Iter<'a, K, V> {}
+impl<'a, K: Key, V> FusedIterator for IterMut<'a, K, V> {}
+impl<'a, K: Key, V> FusedIterator for Keys<'a, K, V> {}
+impl<'a, K: Key, V> FusedIterator for Values<'a, K, V> {}
+impl<'a, K: Key, V> FusedIterator for ValuesMut<'a, K, V> {}
+impl<'a, K: Key, V> FusedIterator for Drain<'a, K, V> {}
+impl<K: Key, V> FusedIterator for IntoIter<K, V> {}
 
-impl<'a, T> ExactSizeIterator for Iter<'a, T> {}
-impl<'a, T> ExactSizeIterator for IterMut<'a, T> {}
-impl<'a, T> ExactSizeIterator for Keys<'a, T> {}
-impl<'a, T> ExactSizeIterator for Values<'a, T> {}
-impl<'a, T> ExactSizeIterator for ValuesMut<'a, T> {}
-impl<'a, T> ExactSizeIterator for Drain<'a, T> {}
-impl<T> ExactSizeIterator for IntoIter<T> {}
+impl<'a, K: Key, V> ExactSizeIterator for Iter<'a, K, V> {}
+impl<'a, K: Key, V> ExactSizeIterator for IterMut<'a, K, V> {}
+impl<'a, K: Key, V> ExactSizeIterator for Keys<'a, K, V> {}
+impl<'a, K: Key, V> ExactSizeIterator for Values<'a, K, V> {}
+impl<'a, K: Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {}
+impl<'a, K: Key, V> ExactSizeIterator for Drain<'a, K, V> {}
+impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 
 // Serialization with serde.
 #[cfg(feature = "serde")]
@@ -984,7 +1001,7 @@ mod serialize {
         }
     }
 
-    impl<T: Serialize> Serialize for SecondaryMap<T> {
+    impl<K: Key, V: Serialize> Serialize for SecondaryMap<K, V> {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
@@ -993,12 +1010,12 @@ mod serialize {
         }
     }
 
-    impl<'de, T: Deserialize<'de>> Deserialize<'de> for SecondaryMap<T> {
+    impl<'de, K: Key, V: Deserialize<'de>> Deserialize<'de> for SecondaryMap<K, V> {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
         {
-            let mut slots: Vec<Slot<T>> = Deserialize::deserialize(deserializer)?;
+            let mut slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
             if slots.len() >= (1 << 32) - 1 {
                 return Err(de::Error::custom(&"too many slots"));
             }
@@ -1015,7 +1032,11 @@ mod serialize {
 
             let num_elems = slots.iter().map(|s| s.value.is_some() as usize).sum();
 
-            Ok(SecondaryMap { num_elems, slots })
+            Ok(SecondaryMap {
+                num_elems,
+                slots,
+                _k: PhantomData,
+            })
         }
     }
 }

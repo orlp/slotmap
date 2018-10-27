@@ -14,11 +14,12 @@
 
 use std;
 use std::iter::FusedIterator;
+use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
 
-use super::{Key, Slottable};
+use super::{DefaultKey, Key, KeyData, Slottable};
 
 // Metadata to maintain the freelist.
 #[derive(Clone, Copy, Debug)]
@@ -123,22 +124,23 @@ impl<T: fmt::Debug + Slottable> fmt::Debug for Slot<T> {
 ///
 /// See [crate documentation](index.html) for more details.
 #[derive(Debug, Clone)]
-pub struct HopSlotMap<T: Slottable> {
-    slots: Vec<Slot<T>>,
+pub struct HopSlotMap<K: Key, V: Slottable> {
+    slots: Vec<Slot<V>>,
     num_elems: u32,
+    _k: PhantomData<fn(K) -> K>,
 }
 
-impl<T: Slottable> HopSlotMap<T> {
-    /// Construct a new, empty `HopSlotMap`.
+impl<V: Slottable> HopSlotMap<DefaultKey, V> {
+    /// Constructs a new, empty `HopSlotMap`.
     ///
     /// # Examples
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm: HopSlotMap<i32> = HopSlotMap::new();
+    /// let mut sm: HopSlotMap<_, i32> = HopSlotMap::new();
     /// ```
     pub fn new() -> Self {
-        Self::with_capacity(0)
+        Self::with_capacity_and_key(0)
     }
 
     /// Creates an empty `HopSlotMap` with the given capacity.
@@ -150,9 +152,48 @@ impl<T: Slottable> HopSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm: HopSlotMap<i32> = HopSlotMap::with_capacity(10);
+    /// let mut sm: HopSlotMap<_, i32> = HopSlotMap::with_capacity(10);
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_capacity_and_key(capacity)
+    }
+}
+
+impl<K: Key, V: Slottable> HopSlotMap<K, V> {
+    /// Constructs a new, empty `HopSlotMap` with a custom key type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// new_key_type! {
+    ///     struct PositionKey;
+    /// }
+    /// let mut positions: HopSlotMap<PositionKey, i32> = HopSlotMap::with_key();
+    /// ```
+    pub fn with_key() -> Self {
+        Self::with_capacity_and_key(0)
+    }
+
+    /// Creates an empty `HopSlotMap` with the given capacity and a custom key
+    /// type.
+    ///
+    /// The slot map will not reallocate until it holds at least `capacity`
+    /// elements.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// new_key_type! {
+    ///     struct MessageKey;
+    /// }
+    /// let mut messages = HopSlotMap::with_capacity_and_key(3);
+    /// let welcome: MessageKey = messages.insert("Welcome");
+    /// let good_day = messages.insert("Good day");
+    /// let hello = messages.insert("Hello");
+    /// ```
+    pub fn with_capacity_and_key(capacity: usize) -> Self {
         // Create slots with sentinel at index 0.
         let mut slots = Vec::with_capacity(capacity + 1);
         slots.push(Slot {
@@ -169,6 +210,7 @@ impl<T: Slottable> HopSlotMap<T> {
         Self {
             slots,
             num_elems: 0,
+            _k: PhantomData,
         }
     }
 
@@ -211,7 +253,7 @@ impl<T: Slottable> HopSlotMap<T> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let sm: HopSlotMap<f64> = HopSlotMap::with_capacity(10);
+    /// let sm: HopSlotMap<_, f64> = HopSlotMap::with_capacity(10);
     /// assert_eq!(sm.capacity(), 10);
     /// ```
     pub fn capacity(&self) -> usize {
@@ -254,13 +296,14 @@ impl<T: Slottable> HopSlotMap<T> {
     /// sm.remove(key);
     /// assert_eq!(sm.contains_key(key), false);
     /// ```
-    pub fn contains_key(&self, key: Key) -> bool {
+    pub fn contains_key(&self, key: K) -> bool {
+        let key = key.into();
         self.slots
             .get(key.idx as usize)
             .map_or(false, |slot| slot.version == key.version.get())
     }
 
-    /// Inserts a value into the slot map. Returns a unique `Key` that can be
+    /// Inserts a value into the slot map. Returns a unique key that can be
     /// used to access this value.
     ///
     /// # Panics
@@ -276,7 +319,7 @@ impl<T: Slottable> HopSlotMap<T> {
     /// let key = sm.insert(42);
     /// assert_eq!(sm[key], 42);
     /// ```
-    pub fn insert(&mut self, value: T) -> Key {
+    pub fn insert(&mut self, value: V) -> K {
         self.insert_with_key(|_| value)
     }
 
@@ -287,7 +330,7 @@ impl<T: Slottable> HopSlotMap<T> {
         &mut self.slots.get_unchecked_mut(idx as usize).u.free
     }
 
-    /// Inserts a value given by `f` into the slot map. The `Key` where the
+    /// Inserts a value given by `f` into the slot map. The key where the
     /// value will be stored is passed into `f`. This is useful to store values
     /// that contain their own key.
     ///
@@ -304,9 +347,9 @@ impl<T: Slottable> HopSlotMap<T> {
     /// let key = sm.insert_with_key(|k| (k, 20));
     /// assert_eq!(sm[key], (key, 20));
     /// ```
-    pub fn insert_with_key<F>(&mut self, f: F) -> Key
+    pub fn insert_with_key<F>(&mut self, f: F) -> K
     where
-        F: FnOnce(Key) -> T,
+        F: FnOnce(K) -> V,
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
@@ -327,16 +370,16 @@ impl<T: Slottable> HopSlotMap<T> {
 
             // Freelist is empty.
             if slot_idx == 0 {
-                let key = Key::new(self.slots.len() as u32, 1);
+                let key = KeyData::new(self.slots.len() as u32, 1);
 
                 self.slots.push(Slot {
                     u: SlotUnion {
-                        value: ManuallyDrop::new(f(key)),
+                        value: ManuallyDrop::new(f(key.into())),
                     },
                     version: 1,
                 });
                 self.num_elems = new_num_elems;
-                return key;
+                return key.into();
             }
 
             // Compute value first in case f panics.
@@ -344,8 +387,8 @@ impl<T: Slottable> HopSlotMap<T> {
             {
                 let slot = &mut self.slots[slot_idx];
                 occupied_version = slot.version | 1;
-                key = Key::new(slot_idx as u32, occupied_version);
-                value = f(key);
+                key = KeyData::new(slot_idx as u32, occupied_version);
+                value = f(key.into());
             }
 
             // Update freelist.
@@ -366,14 +409,14 @@ impl<T: Slottable> HopSlotMap<T> {
             slot.version = occupied_version;
             slot.u.value = ManuallyDrop::new(value);
             self.num_elems = new_num_elems;
-            key
+            key.into()
         }
     }
 
     // Helper function to remove a value from a slot. Safe iff the slot is
     // occupied. Returns the value removed.
     #[inline(always)]
-    unsafe fn remove_from_slot(&mut self, idx: usize) -> T {
+    unsafe fn remove_from_slot(&mut self, idx: usize) -> V {
         // Remove value from slot.
         let value = {
             let slot = self.slots.get_unchecked_mut(idx);
@@ -456,8 +499,9 @@ impl<T: Slottable> HopSlotMap<T> {
     /// assert_eq!(sm.remove(key), Some(42));
     /// assert_eq!(sm.remove(key), None);
     /// ```
-    pub fn remove(&mut self, key: Key) -> Option<T> {
-        if self.contains_key(key) {
+    pub fn remove(&mut self, key: K) -> Option<V> {
+        let key = key.into();
+        if self.contains_key(key.into()) {
             // This is safe because we know that the slot is occupied.
             Some(unsafe { self.remove_from_slot(key.idx as usize) })
         } else {
@@ -491,7 +535,7 @@ impl<T: Slottable> HopSlotMap<T> {
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
-        F: FnMut(Key, &mut T) -> bool,
+        F: FnMut(K, &mut V) -> bool,
     {
         let len = self.slots.len();
         let mut i = 0;
@@ -503,8 +547,8 @@ impl<T: Slottable> HopSlotMap<T> {
 
                 match slot.get_mut() {
                     OccupiedMut(value) => {
-                        let key = Key::new(i as u32, version);
-                        !f(key, value)
+                        let key = KeyData::new(i as u32, version);
+                        !f(key.into(), value)
                     }
                     VacantMut(free) => {
                         i = free.other_end as usize;
@@ -556,7 +600,7 @@ impl<T: Slottable> HopSlotMap<T> {
     /// assert_eq!(sm.len(), 0);
     /// assert_eq!(v, vec![(k, 0)]);
     /// ```
-    pub fn drain(&mut self) -> Drain<T> {
+    pub fn drain(&mut self) -> Drain<K, V> {
         Drain {
             cur: 0,
             num_left: self.len(),
@@ -576,8 +620,9 @@ impl<T: Slottable> HopSlotMap<T> {
     /// sm.remove(key);
     /// assert_eq!(sm.get(key), None);
     /// ```
-    pub fn get(&self, key: Key) -> Option<&T> {
-        // This is safe because we check version first and Key always contains
+    pub fn get(&self, key: K) -> Option<&V> {
+        let key = key.into();
+        // This is safe because we check version first and a key always contains
         // an odd version, thus we are occupied.
         self.slots
             .get(key.idx as usize)
@@ -603,7 +648,8 @@ impl<T: Slottable> HopSlotMap<T> {
     /// sm.remove(key);
     /// // sm.get_unchecked(key) is now dangerous!
     /// ```
-    pub unsafe fn get_unchecked(&self, key: Key) -> &T {
+    pub unsafe fn get_unchecked(&self, key: K) -> &V {
+        let key = key.into();
         &self.slots.get_unchecked(key.idx as usize).u.value
     }
 
@@ -620,8 +666,9 @@ impl<T: Slottable> HopSlotMap<T> {
     /// }
     /// assert_eq!(sm[key], 6.5);
     /// ```
-    pub fn get_mut(&mut self, key: Key) -> Option<&mut T> {
-        // This is safe because we check version first and Key always contains
+    pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
+        let key = key.into();
+        // This is safe because we check version first and a key always contains
         // an odd version, thus we are occupied.
         self.slots
             .get_mut(key.idx as usize)
@@ -648,12 +695,13 @@ impl<T: Slottable> HopSlotMap<T> {
     /// sm.remove(key);
     /// // sm.get_unchecked_mut(key) is now dangerous!
     /// ```
-    pub unsafe fn get_unchecked_mut(&mut self, key: Key) -> &mut T {
+    pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
+        let key = key.into();
         &mut self.slots.get_unchecked_mut(key.idx as usize).u.value
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The
-    /// iterator element type is `(Key, &'a T)`.
+    /// iterator element type is `(K, &'a V)`.
     ///
     /// # Examples
     ///
@@ -671,17 +719,18 @@ impl<T: Slottable> HopSlotMap<T> {
     /// assert_eq!(it.next(), Some((k2, &2)));
     /// assert_eq!(it.next(), None);
     /// ```
-    pub fn iter(&self) -> Iter<T> {
-        Iter::<T> {
+    pub fn iter(&self) -> Iter<K, V> {
+        Iter {
             cur: unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 },
             num_left: self.len(),
             slots: &self.slots[..],
+            _k: PhantomData,
         }
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order, with
     /// mutable references to the values. The iterator element type is
-    /// `(Key, &'a mut T)`.
+    /// `(K, &'a mut V)`.
     ///
     /// # Examples
     ///
@@ -700,16 +749,17 @@ impl<T: Slottable> HopSlotMap<T> {
     ///
     /// assert_eq!(sm.values().collect::<Vec<_>>(), vec![&-10, &20, &-30]);
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<T> {
-        IterMut::<T> {
+    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+        IterMut {
             cur: 0,
             num_left: self.len(),
             slots: &mut self.slots[..],
+            _k: PhantomData,
         }
     }
 
     /// An iterator visiting all keys in arbitrary order. The iterator element
-    /// type is `Key`.
+    /// type is `K`.
     ///
     /// # Examples
     ///
@@ -722,12 +772,12 @@ impl<T: Slottable> HopSlotMap<T> {
     /// let v: Vec<_> = sm.keys().collect();
     /// assert_eq!(v, vec![k0, k1, k2]);
     /// ```
-    pub fn keys(&self) -> Keys<T> {
-        Keys::<T> { inner: self.iter() }
+    pub fn keys(&self) -> Keys<K, V> {
+        Keys { inner: self.iter() }
     }
 
     /// An iterator visiting all values in arbitrary order. The iterator element
-    /// type is `&'a T`.
+    /// type is `&'a V`.
     ///
     /// # Examples
     ///
@@ -740,12 +790,12 @@ impl<T: Slottable> HopSlotMap<T> {
     /// let v: Vec<_> = sm.values().collect();
     /// assert_eq!(v, vec![&10, &20, &30]);
     /// ```
-    pub fn values(&self) -> Values<T> {
-        Values::<T> { inner: self.iter() }
+    pub fn values(&self) -> Values<K, V> {
+        Values { inner: self.iter() }
     }
 
     /// An iterator visiting all values mutably in arbitrary order. The iterator
-    /// element type is `&'a mut T`.
+    /// element type is `&'a mut V`.
     ///
     /// # Examples
     ///
@@ -759,23 +809,23 @@ impl<T: Slottable> HopSlotMap<T> {
     /// let v: Vec<_> = sm.into_iter().map(|(_k, v)| v).collect();
     /// assert_eq!(v, vec![30, 60, 90]);
     /// ```
-    pub fn values_mut(&mut self) -> ValuesMut<T> {
-        ValuesMut::<T> {
+    pub fn values_mut(&mut self) -> ValuesMut<K, V> {
+        ValuesMut {
             inner: self.iter_mut(),
         }
     }
 }
 
-impl<T: Slottable> Default for HopSlotMap<T> {
+impl<K: Key, V: Slottable> Default for HopSlotMap<K, V> {
     fn default() -> Self {
-        Self::new()
+        Self::with_key()
     }
 }
 
-impl<T: Slottable> Index<Key> for HopSlotMap<T> {
-    type Output = T;
+impl<K: Key, V: Slottable> Index<K> for HopSlotMap<K, V> {
+    type Output = V;
 
-    fn index(&self, key: Key) -> &T {
+    fn index(&self, key: K) -> &V {
         match self.get(key) {
             Some(r) => r,
             None => panic!("invalid HopSlotMap key used"),
@@ -783,8 +833,8 @@ impl<T: Slottable> Index<Key> for HopSlotMap<T> {
     }
 }
 
-impl<T: Slottable> IndexMut<Key> for HopSlotMap<T> {
-    fn index_mut(&mut self, key: Key) -> &mut T {
+impl<K: Key, V: Slottable> IndexMut<K> for HopSlotMap<K, V> {
+    fn index_mut(&mut self, key: K) -> &mut V {
         match self.get_mut(key) {
             Some(r) => r,
             None => panic!("invalid HopSlotMap key used"),
@@ -795,58 +845,61 @@ impl<T: Slottable> IndexMut<Key> for HopSlotMap<T> {
 // Iterators.
 /// A draining iterator for `HopSlotMap`.
 #[derive(Debug)]
-pub struct Drain<'a, T: 'a + Slottable> {
+pub struct Drain<'a, K: Key + 'a, V: Slottable + 'a> {
     cur: usize,
     num_left: usize,
-    sm: &'a mut HopSlotMap<T>,
+    sm: &'a mut HopSlotMap<K, V>,
 }
 
 /// An iterator that moves key-value pairs out of a `HopSlotMap`.
 #[derive(Debug)]
-pub struct IntoIter<T: Slottable> {
+pub struct IntoIter<K: Key, V: Slottable> {
     cur: usize,
     num_left: usize,
-    slots: Vec<Slot<T>>,
+    slots: Vec<Slot<V>>,
+    _k: PhantomData<fn(K) -> K>,
 }
 
 /// An iterator over the key-value pairs in a `HopSlotMap`.
 #[derive(Debug)]
-pub struct Iter<'a, T: 'a + Slottable> {
+pub struct Iter<'a, K: Key + 'a, V: Slottable + 'a> {
     cur: usize,
     num_left: usize,
-    slots: &'a [Slot<T>],
+    slots: &'a [Slot<V>],
+    _k: PhantomData<fn(K) -> K>,
 }
 
 /// A mutable iterator over the key-value pairs in a `HopSlotMap`.
 #[derive(Debug)]
-pub struct IterMut<'a, T: 'a + Slottable> {
+pub struct IterMut<'a, K: Key + 'a, V: Slottable + 'a> {
     cur: usize,
     num_left: usize,
-    slots: &'a mut [Slot<T>],
+    slots: &'a mut [Slot<V>],
+    _k: PhantomData<fn(K) -> K>,
 }
 
 /// An iterator over the keys in a `HopSlotMap`.
 #[derive(Debug)]
-pub struct Keys<'a, T: 'a + Slottable> {
-    inner: Iter<'a, T>,
+pub struct Keys<'a, K: Key + 'a, V: Slottable + 'a> {
+    inner: Iter<'a, K, V>,
 }
 
 /// An iterator over the values in a `HopSlotMap`.
 #[derive(Debug)]
-pub struct Values<'a, T: 'a + Slottable> {
-    inner: Iter<'a, T>,
+pub struct Values<'a, K: Key + 'a, V: Slottable + 'a> {
+    inner: Iter<'a, K, V>,
 }
 
 /// A mutable iterator over the values in a `HopSlotMap`.
 #[derive(Debug)]
-pub struct ValuesMut<'a, T: 'a + Slottable> {
-    inner: IterMut<'a, T>,
+pub struct ValuesMut<'a, K: Key + 'a, V: Slottable + 'a> {
+    inner: IterMut<'a, K, V>,
 }
 
-impl<'a, T: Slottable> Iterator for Drain<'a, T> {
-    type Item = (Key, T);
+impl<'a, K: Key, V: Slottable> Iterator for Drain<'a, K, V> {
+    type Item = (K, V);
 
-    fn next(&mut self) -> Option<(Key, T)> {
+    fn next(&mut self) -> Option<(K, V)> {
         if self.cur >= self.sm.slots.len() {
             return None;
         }
@@ -868,7 +921,7 @@ impl<'a, T: Slottable> Iterator for Drain<'a, T> {
 
         self.cur = idx + 1;
         self.num_left -= 1;
-        Some((Key::new(idx as u32, version), unsafe {
+        Some((KeyData::new(idx as u32, version).into(), unsafe {
             self.sm.remove_from_slot(idx)
         }))
     }
@@ -878,16 +931,16 @@ impl<'a, T: Slottable> Iterator for Drain<'a, T> {
     }
 }
 
-impl<'a, T: Slottable> Drop for Drain<'a, T> {
+impl<'a, K: Key, V: Slottable> Drop for Drain<'a, K, V> {
     fn drop(&mut self) {
         self.for_each(|_drop| {});
     }
 }
 
-impl<T: Slottable> Iterator for IntoIter<T> {
-    type Item = (Key, T);
+impl<K: Key, V: Slottable> Iterator for IntoIter<K, V> {
+    type Item = (K, V);
 
-    fn next(&mut self) -> Option<(Key, T)> {
+    fn next(&mut self) -> Option<(K, V)> {
         if self.cur >= self.slots.len() {
             return None;
         }
@@ -907,9 +960,9 @@ impl<T: Slottable> Iterator for IntoIter<T> {
         self.cur = idx + 1;
         self.num_left -= 1;
         let slot = &mut self.slots[idx];
-        let key = Key::new(idx as u32, slot.version);
+        let key = KeyData::new(idx as u32, slot.version);
         slot.version = 0; // Prevent dropping after extracting the value.
-        Some((key, unsafe { ptr::read(&*slot.u.value) }))
+        Some((key.into(), unsafe { ptr::read(&*slot.u.value) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -917,10 +970,10 @@ impl<T: Slottable> Iterator for IntoIter<T> {
     }
 }
 
-impl<'a, T: Slottable> Iterator for Iter<'a, T> {
-    type Item = (Key, &'a T);
+impl<'a, K: Key, V: Slottable> Iterator for Iter<'a, K, V> {
+    type Item = (K, &'a V);
 
-    fn next(&mut self) -> Option<(Key, &'a T)> {
+    fn next(&mut self) -> Option<(K, &'a V)> {
         // All unchecked indices are safe due to the invariants of the freelist
         // and that num_left guarantees there is another element.
         if self.num_left == 0 {
@@ -935,9 +988,8 @@ impl<'a, T: Slottable> Iterator for Iter<'a, T> {
 
         self.cur = idx + 1;
         let slot = unsafe { self.slots.get_unchecked(idx) };
-        Some((Key::new(idx as u32, slot.version), unsafe {
-            &*slot.u.value
-        }))
+        let key = KeyData::new(idx as u32, slot.version).into();
+        Some((key, unsafe { &*slot.u.value }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -945,10 +997,10 @@ impl<'a, T: Slottable> Iterator for Iter<'a, T> {
     }
 }
 
-impl<'a, T: Slottable> Iterator for IterMut<'a, T> {
-    type Item = (Key, &'a mut T);
+impl<'a, K: Key, V: Slottable> Iterator for IterMut<'a, K, V> {
+    type Item = (K, &'a mut V);
 
-    fn next(&mut self) -> Option<(Key, &'a mut T)> {
+    fn next(&mut self) -> Option<(K, &'a mut V)> {
         if self.cur >= self.slots.len() {
             return None;
         }
@@ -972,8 +1024,8 @@ impl<'a, T: Slottable> Iterator for IterMut<'a, T> {
         // the same value.
         let slot = &mut self.slots[idx];
         let version = slot.version;
-        let value_ref = unsafe { &mut *(&mut *slot.u.value as *mut T) };
-        Some((Key::new(idx as u32, version), value_ref))
+        let value_ref = unsafe { &mut *(&mut *slot.u.value as *mut V) };
+        Some((KeyData::new(idx as u32, version).into(), value_ref))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -981,10 +1033,10 @@ impl<'a, T: Slottable> Iterator for IterMut<'a, T> {
     }
 }
 
-impl<'a, T: Slottable> Iterator for Keys<'a, T> {
-    type Item = Key;
+impl<'a, K: Key, V: Slottable> Iterator for Keys<'a, K, V> {
+    type Item = K;
 
-    fn next(&mut self) -> Option<Key> {
+    fn next(&mut self) -> Option<K> {
         self.inner.next().map(|(key, _)| key)
     }
 
@@ -993,10 +1045,10 @@ impl<'a, T: Slottable> Iterator for Keys<'a, T> {
     }
 }
 
-impl<'a, T: Slottable> Iterator for Values<'a, T> {
-    type Item = &'a T;
+impl<'a, K: Key, V: Slottable> Iterator for Values<'a, K, V> {
+    type Item = &'a V;
 
-    fn next(&mut self) -> Option<&'a T> {
+    fn next(&mut self) -> Option<&'a V> {
         self.inner.next().map(|(_, value)| value)
     }
 
@@ -1005,10 +1057,10 @@ impl<'a, T: Slottable> Iterator for Values<'a, T> {
     }
 }
 
-impl<'a, T: Slottable> Iterator for ValuesMut<'a, T> {
-    type Item = &'a mut T;
+impl<'a, K: Key, V: Slottable> Iterator for ValuesMut<'a, K, V> {
+    type Item = &'a mut V;
 
-    fn next(&mut self) -> Option<&'a mut T> {
+    fn next(&mut self) -> Option<&'a mut V> {
         self.inner.next().map(|(_, value)| value)
     }
 
@@ -1017,52 +1069,53 @@ impl<'a, T: Slottable> Iterator for ValuesMut<'a, T> {
     }
 }
 
-impl<'a, T: Slottable> IntoIterator for &'a HopSlotMap<T> {
-    type Item = (Key, &'a T);
-    type IntoIter = Iter<'a, T>;
+impl<'a, K: Key, V: Slottable> IntoIterator for &'a HopSlotMap<K, V> {
+    type Item = (K, &'a V);
+    type IntoIter = Iter<'a, K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<'a, T: Slottable> IntoIterator for &'a mut HopSlotMap<T> {
-    type Item = (Key, &'a mut T);
-    type IntoIter = IterMut<'a, T>;
+impl<'a, K: Key, V: Slottable> IntoIterator for &'a mut HopSlotMap<K, V> {
+    type Item = (K, &'a mut V);
+    type IntoIter = IterMut<'a, K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
 }
 
-impl<T: Slottable> IntoIterator for HopSlotMap<T> {
-    type Item = (Key, T);
-    type IntoIter = IntoIter<T>;
+impl<K: Key, V: Slottable> IntoIterator for HopSlotMap<K, V> {
+    type Item = (K, V);
+    type IntoIter = IntoIter<K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         IntoIter {
             cur: 0,
             num_left: self.len(),
             slots: self.slots,
+            _k: PhantomData,
         }
     }
 }
 
-impl<'a, T: Slottable> FusedIterator for Iter<'a, T> {}
-impl<'a, T: Slottable> FusedIterator for IterMut<'a, T> {}
-impl<'a, T: Slottable> FusedIterator for Keys<'a, T> {}
-impl<'a, T: Slottable> FusedIterator for Values<'a, T> {}
-impl<'a, T: Slottable> FusedIterator for ValuesMut<'a, T> {}
-impl<'a, T: Slottable> FusedIterator for Drain<'a, T> {}
-impl<T: Slottable> FusedIterator for IntoIter<T> {}
+impl<'a, K: Key, V: Slottable> FusedIterator for Iter<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> FusedIterator for IterMut<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> FusedIterator for Keys<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> FusedIterator for Values<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> FusedIterator for ValuesMut<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> FusedIterator for Drain<'a, K, V> {}
+impl<K: Key, V: Slottable> FusedIterator for IntoIter<K, V> {}
 
-impl<'a, T: Slottable> ExactSizeIterator for Iter<'a, T> {}
-impl<'a, T: Slottable> ExactSizeIterator for IterMut<'a, T> {}
-impl<'a, T: Slottable> ExactSizeIterator for Keys<'a, T> {}
-impl<'a, T: Slottable> ExactSizeIterator for Values<'a, T> {}
-impl<'a, T: Slottable> ExactSizeIterator for ValuesMut<'a, T> {}
-impl<'a, T: Slottable> ExactSizeIterator for Drain<'a, T> {}
-impl<T: Slottable> ExactSizeIterator for IntoIter<T> {}
+impl<'a, K: Key, V: Slottable> ExactSizeIterator for Iter<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> ExactSizeIterator for IterMut<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> ExactSizeIterator for Keys<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> ExactSizeIterator for Values<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> ExactSizeIterator for ValuesMut<'a, K, V> {}
+impl<'a, K: Key, V: Slottable> ExactSizeIterator for Drain<'a, K, V> {}
+impl<K: Key, V: Slottable> ExactSizeIterator for IntoIter<K, V> {}
 
 // Serialization with serde.
 #[cfg(feature = "serde")]
@@ -1124,7 +1177,7 @@ mod serialize {
         }
     }
 
-    impl<T: Serialize + Slottable> Serialize for HopSlotMap<T> {
+    impl<K: Key, V: Serialize + Slottable> Serialize for HopSlotMap<K, V> {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
@@ -1133,12 +1186,12 @@ mod serialize {
         }
     }
 
-    impl<'de, T: Deserialize<'de> + Slottable> Deserialize<'de> for HopSlotMap<T> {
+    impl<'de, K: Key, V: Deserialize<'de> + Slottable> Deserialize<'de> for HopSlotMap<K, V> {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
         {
-            let mut slots: Vec<Slot<T>> = Deserialize::deserialize(deserializer)?;
+            let mut slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
             if slots.len() >= (1 << 32) - 1 {
                 return Err(de::Error::custom(&"too many slots"));
             }
@@ -1186,7 +1239,11 @@ mod serialize {
                 }
             }
 
-            Ok(HopSlotMap { num_elems, slots })
+            Ok(HopSlotMap {
+                num_elems,
+                slots,
+                _k: PhantomData,
+            })
         }
     }
 }
@@ -1328,7 +1385,7 @@ mod tests {
         sm[first].0 = third;
 
         let ser = serde_json::to_string(&sm).unwrap();
-        let de: HopSlotMap<(Key, i32)> = serde_json::from_str(&ser).unwrap();
+        let de: HopSlotMap<DefaultKey, (DefaultKey, i32)> = serde_json::from_str(&ser).unwrap();
         assert_eq!(de.len(), sm.len());
 
         let mut smkv: Vec<_> = sm.iter().collect();
@@ -1346,7 +1403,7 @@ mod tests {
         sm.remove(k);
 
         let ser = serde_json::to_string(&sm).unwrap();
-        let mut de: HopSlotMap<i32> = serde_json::from_str(&ser).unwrap();
+        let mut de: HopSlotMap<DefaultKey, i32> = serde_json::from_str(&ser).unwrap();
 
         de.insert(0);
         de.insert(1);

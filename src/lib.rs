@@ -48,7 +48,7 @@
 //!
 //! # Serialization through [`serde`]
 //!
-//! Both [`Key`] and the slot maps have full (de)seralization support through
+//! Both keys and the slot maps have full (de)seralization support through
 //! the [`serde`] library. A key remains valid for a slot map even after one or
 //! both have been serialized and deserialized! This makes storing or
 //! transferring complicated referential structures and graphs a breeze. Care has
@@ -59,7 +59,7 @@
 //!
 //! Unlike [`slab`], the keys returned by [`SlotMap`] are versioned. This means
 //! that once a key is removed, it stays removed, even if the physical storage
-//! inside the slotmap is reused for new elements. The [`Key`] is a
+//! inside the slotmap is reused for new elements. The key is a
 //! permanently unique<sup>*</sup> reference to the inserted value. Despite
 //! supporting versioning, a [`SlotMap`] is not slower than [`slab`], by
 //! internally using carefully checked unsafe code. A [`HopSlotMap`]
@@ -87,10 +87,10 @@
 //!
 //! # Choosing `SlotMap` or `HopSlotMap`
 //!
-//! A [`SlotMap`] can never shrink the size of its underlying storage, because for
-//! each storage slot it must remember what the latest stored version was, even
-//! if the slot is empty now. This means that iteration can be slow as it must
-//! iterate over potentially a lot of empty slots.
+//! A [`SlotMap`] can never shrink the size of its underlying storage, because
+//! for each storage slot it must remember what the latest stored version was,
+//! even if the slot is empty now. This means that iteration can be slow as it
+//! must iterate over potentially a lot of empty slots.
 //!
 //! [`HopSlotMap`] solves this by maintaining more information on
 //! insertion/removal, allowing it to iterate only over filled slots by 'hopping
@@ -119,7 +119,6 @@
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 //! [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
 //! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-//! [`Key`]: struct.Key.html
 //! [`SlotMap`]: struct.SlotMap.html
 //! [`HopSlotMap`]: hop/struct.HopSlotMap.html
 //! [`SecondaryMap`]: secondary/struct.SecondaryMap.html
@@ -131,6 +130,13 @@
 #[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
+
+// So our macros can refer to these.
+#[cfg(feature = "serde")]
+#[doc(hidden)]
+pub mod __impl {
+    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
+}
 
 #[cfg(test)]
 #[macro_use]
@@ -149,8 +155,6 @@ pub mod secondary;
 pub use secondary::SecondaryMap;
 
 use std::num::NonZeroU32;
-
-// Duplicated docs.
 
 /// A trait for items that can go in a slot map. Due to current stable Rust
 /// restrictions a type must be [`Copy`] to be placed in a slot map. If you must
@@ -180,7 +184,8 @@ pub trait Slottable: Copy {}
 /// ```
 ///
 /// This trait should already be automatically implemented for any type that is
-/// slottable.
+/// slottable. If you can't use unstable Rust and still want to store [`Copy`]
+/// data, store that as associated data in a [`SecondaryMap`].
 ///
 /// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
 #[cfg(feature = "unstable")]
@@ -192,30 +197,85 @@ impl<T: Copy> Slottable for T {}
 #[cfg(feature = "unstable")]
 impl<T> Slottable for T {}
 
-/// Key used to access stored values in a slot map.
+/// The actual data stored in a [`Key`].
 ///
-/// Do not use a key from one slot map in another. The behavior is safe but
-/// non-sensical (and might panic in case of out-of-bounds). Keys implement
-/// `Ord` so they can be used in e.g.
-/// [`BTreeMap`](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html)
-/// but their order is arbitrary.
+/// This implements `Ord` so keys can be stored in e.g. [`BTreeMap`], but the
+/// order of keys is unspecified.
+///
+/// [`Key`]: trait.Key.html
+/// [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Key {
+pub struct KeyData {
     idx: u32,
     version: NonZeroU32,
 }
 
-impl Key {
+impl KeyData {
     fn new(idx: u32, version: u32) -> Self {
         Self {
             idx,
-            version: NonZeroU32::new(version).unwrap(),
+            version: NonZeroU32::new(version).expect("KeyData constructed with zero version"),
         }
     }
 
+    fn null() -> Self {
+        Self::new(std::u32::MAX, 1)
+    }
+
+    fn is_null(self) -> bool {
+        self.idx == std::u32::MAX
+    }
+
+    /// Returns the key data as a 64-bit integer. No guarantees about its value
+    /// are made other than that passing it to `from_ffi` will return a key
+    /// equal to the original.
+    ///
+    /// With this you can easily pass slot map keys as opaque handles to foreign
+    /// code. After you get them back you can confidently use them in your slot
+    /// map without worrying about unsafe behavior as you would with passing and
+    /// receiving back references or pointers.
+    ///
+    /// This is not a substitute for proper serialization, use [`serde`] for
+    /// that. If you are not doing FFI, you almost surely do not need this
+    /// function.
+    ///
+    /// [`serde`]: index.html#serialization-through-serde
+    pub fn as_ffi(self) -> u64 {
+        let kd: KeyData = self.into();
+        ((kd.version.get() as u64) << 32) | kd.idx as u64
+    }
+
+    /// Iff `value` is a value received from `k.as_ffi()`, returns a key equal
+    /// to `k`. Otherwise the behavior is safe but unspecified.
+    pub fn from_ffi(value: u64) -> Self {
+        let idx = value & 0xffffffff;
+        let version = (value >> 32) | 1; // Ensure version is odd.
+        KeyData::new(idx as u32, version as u32).into()
+    }
+}
+
+impl Default for KeyData {
+    fn default() -> Self {
+        Self::null()
+    }
+}
+
+/// Key used to access stored values in a slot map.
+///
+/// Do not use a key from one slot map in another. The behavior is safe but
+/// non-sensical (and might panic in case of out-of-bounds).
+///
+/// To prevent this, it is suggested to have a unique key type for each slot
+/// map. The easiest way to do this is through [`new_key_type!`], which
+/// makes a new type identical to [`DefaultKey`], just with a different name.
+///
+/// [`new_key_type!`]: macro.new_key_type.html
+/// [`DefaultKey`]: struct.DefaultKey.html
+pub trait Key: From<KeyData> + Into<KeyData> {
     /// Creates a new key that is always invalid and distinct from any non-null
-    /// key. A null key can only be created through this method, or default
-    /// initialization of `Key`.
+    /// key. A null key can only be created through this method (or default
+    /// initialization of keys made with [`new_key_type!`], which calls this
+    /// method).
     ///
     /// A null key is always invalid, but an invalid key (that is, a key that
     /// has been removed from the slot map) does not become a null key. A null
@@ -225,13 +285,17 @@ impl Key {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sm = SlotMap::<i32>::new();
-    /// let nk = Key::null();
+    /// let mut sm = SlotMap::new();
+    /// let k = sm.insert(42);
+    /// let nk = DefaultKey::null();
     /// assert!(nk.is_null());
+    /// assert!(k != nk);
     /// assert_eq!(sm.get(nk), None);
     /// ```
-    pub fn null() -> Self {
-        Self::new(std::u32::MAX, 1)
+    ///
+    /// [`new_key_type!`]: macro.new_key_type.html
+    fn null() -> Self {
+        KeyData::null().into()
     }
 
     /// Checks if a key is null. There is only a single null key, that is
@@ -241,19 +305,115 @@ impl Key {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let a = Key::null();
-    /// let b = Key::default();
+    /// new_key_type! { struct MyKey; }
+    /// let a = MyKey::null();
+    /// let b = MyKey::default();
     /// assert_eq!(a, b);
+    /// assert!(a.is_null());
     /// ```
-    pub fn is_null(self) -> bool {
-        self.idx == std::u32::MAX
+    fn is_null(self) -> bool {
+        self.into().is_null()
     }
 }
 
-impl Default for Key {
-    fn default() -> Self {
-        Self::null()
-    }
+/// A helper macro to conveniently create new key types. If you use a new key
+/// type for each slot map you create you can entirely prevent using the wrong
+/// key on the wrong slot map.
+///
+/// The type constructed by this macro is identical to [`DefaultKey`], just with
+/// a different name.
+///
+/// [`DefaultKey`]: struct.DefaultKey.html
+///
+/// # Examples
+///
+/// ```
+/// # extern crate slotmap;
+/// # use slotmap::*;
+/// new_key_type! {
+///     struct EntityKey;
+///
+///     /// Key for the Player slot map.
+///     pub struct PlayerKey;
+/// }
+///
+/// fn main() {
+///     let mut players = SlotMap::with_key();
+///     let mut entities: SlotMap<EntityKey, (f64, f64)> = SlotMap::with_key();
+///     let bob: PlayerKey = players.insert("bobby");
+///     // Now this is a type error because entities.get expects an EntityKey:
+///     // entities.get(bob);
+/// }
+/// ```
+#[macro_export(local_inner_macros)]
+macro_rules! new_key_type {
+    ( $(#[$outer:meta])* $vis:vis struct $name:ident; $($rest:tt)* ) => {
+        $(#[$outer])*
+        #[derive(Copy, Clone, Default,
+                 Eq, PartialEq, Ord, PartialOrd,
+                 Hash, Debug)]
+        #[repr(transparent)]
+        $vis struct $name($crate::KeyData);
+
+        impl From<$crate::KeyData> for $name {
+            fn from(k: $crate::KeyData) -> Self {
+                $name(k)
+            }
+        }
+
+        impl From<$name> for $crate::KeyData {
+            fn from(k: $name) -> Self {
+                k.0
+            }
+        }
+
+        impl $crate::Key for $name { }
+
+        $crate::__serialize_key!($name);
+
+        $crate::new_key_type!($($rest)*);
+    };
+
+    () => {}
+}
+
+#[cfg(feature = "serde")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __serialize_key {
+    ( $name:ty ) => {
+        impl $crate::__impl::Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: $crate::__impl::Serializer,
+            {
+                $crate::KeyData::from(*self).serialize(serializer)
+            }
+        }
+
+        impl<'de> $crate::__impl::Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: $crate::__impl::Deserializer<'de>,
+            {
+                let key_data: $crate::KeyData =
+                    $crate::__impl::Deserialize::deserialize(deserializer)?;
+                Ok(key_data.into())
+            }
+        }
+    };
+}
+
+#[cfg(not(feature = "serde"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __serialize_key {
+    ( $name:ty ) => {};
+}
+
+new_key_type! {
+    /// The default slot map key type.
+    pub struct DefaultKey;
 }
 
 // Returns if a is an older version than b, taking into account wrapping of
@@ -275,7 +435,7 @@ mod serialize {
         version: u32,
     }
 
-    impl Serialize for Key {
+    impl Serialize for KeyData {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
@@ -288,7 +448,7 @@ mod serialize {
         }
     }
 
-    impl<'de> Deserialize<'de> for Key {
+    impl<'de> Deserialize<'de> for KeyData {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
@@ -301,7 +461,7 @@ mod serialize {
             }
 
             ser_key.version |= 1; // Ensure version is odd.
-            Ok(Key::new(ser_key.idx, ser_key.version))
+            Ok(KeyData::new(ser_key.idx, ser_key.version))
         }
     }
 }
@@ -327,12 +487,12 @@ mod tests {
         let mut sm = SlotMap::new();
         let k = sm.insert(42);
         let ser = serde_json::to_string(&k).unwrap();
-        let de: Key = serde_json::from_str(&ser).unwrap();
+        let de: DefaultKey = serde_json::from_str(&ser).unwrap();
         assert_eq!(k, de);
 
         // Even if a malicious entity sends up even (unoccupied) versions in the
         // key, we make the version point to the occupied version.
-        let malicious = serde_json::from_str::<Key>(&r#"{"idx":0,"version":4}"#).unwrap();
+        let malicious: KeyData = serde_json::from_str(&r#"{"idx":0,"version":4}"#).unwrap();
         assert_eq!(malicious.version.get(), 5);
     }
 }

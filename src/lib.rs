@@ -154,6 +154,9 @@ pub use hop::HopSlotMap;
 pub mod secondary;
 pub use secondary::SecondaryMap;
 
+pub mod sparse_secondary;
+pub use sparse_secondary::SparseSecondaryMap;
+
 use std::num::NonZeroU32;
 
 /// A trait for items that can go in a slot map. Due to current stable Rust

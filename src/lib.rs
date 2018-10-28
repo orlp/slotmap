@@ -244,16 +244,15 @@ impl KeyData {
     ///
     /// [`serde`]: index.html#serialization-through-serde
     pub fn as_ffi(self) -> u64 {
-        let kd: KeyData = self.into();
-        ((kd.version.get() as u64) << 32) | kd.idx as u64
+        (u64::from(self.version.get()) << 32) | u64::from(self.idx)
     }
 
     /// Iff `value` is a value received from `k.as_ffi()`, returns a key equal
     /// to `k`. Otherwise the behavior is safe but unspecified.
     pub fn from_ffi(value: u64) -> Self {
-        let idx = value & 0xffffffff;
+        let idx = value & 0xffff_ffff;
         let version = (value >> 32) | 1; // Ensure version is odd.
-        KeyData::new(idx as u32, version as u32).into()
+        Self::new(idx as u32, version as u32)
     }
 }
 
@@ -464,7 +463,7 @@ mod serialize {
             }
 
             ser_key.version |= 1; // Ensure version is odd.
-            Ok(KeyData::new(ser_key.idx, ser_key.version))
+            Ok(Self::new(ser_key.idx, ser_key.version))
         }
     }
 }

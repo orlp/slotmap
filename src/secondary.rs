@@ -998,7 +998,7 @@ mod serialize {
                 return Err(de::Error::custom(&"inconsistent occupation in Slot"));
             }
 
-            Ok(Slot {
+            Ok(Self {
                 value: serde_slot.value,
                 version: serde_slot.version,
             })
@@ -1036,7 +1036,7 @@ mod serialize {
 
             let num_elems = slots.iter().map(|s| s.value.is_some() as usize).sum();
 
-            Ok(SecondaryMap {
+            Ok(Self {
                 num_elems,
                 slots,
                 _k: PhantomData,

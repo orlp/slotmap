@@ -74,7 +74,7 @@ struct Slot<T> {
 #[derive(Debug)]
 pub struct SparseSecondaryMap<K: Key, V> {
     slots: HashMap<u32, Slot<V>>,
-    _k: PhantomData<fn(K) -> K>
+    _k: PhantomData<fn(K) -> K>,
 }
 
 impl<K: Key, V> SparseSecondaryMap<K, V> {
@@ -221,7 +221,7 @@ impl<K: Key, V> SparseSecondaryMap<K, V> {
             if slot.version == key.version.get() {
                 return Some(std::mem::replace(&mut slot.value, value));
             }
-            
+
             // Don't replace existing newer values.
             if is_older_version(key.version.get(), slot.version) {
                 return None;
@@ -235,10 +235,13 @@ impl<K: Key, V> SparseSecondaryMap<K, V> {
             return None;
         }
 
-        self.slots.insert(key.idx, Slot {
-            version: key.version.get(),
-            value,
-        });
+        self.slots.insert(
+            key.idx,
+            Slot {
+                version: key.version.get(),
+                value,
+            },
+        );
 
         None
     }
@@ -806,54 +809,20 @@ impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 #[cfg(feature = "serde")]
 mod serialize {
     use super::*;
-    use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-
-    #[derive(Serialize, Deserialize)]
-    struct SerdeSlot<T> {
-        value: Option<T>,
-        version: u32,
-    }
-
-    impl<T: Serialize> Serialize for Slot<T> {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            let serde_slot = SerdeSlot {
-                version: self.version,
-                value: self.value.as_ref(),
-            };
-            serde_slot.serialize(serializer)
-        }
-    }
-
-    impl<'de, T> Deserialize<'de> for Slot<T>
-    where
-        T: Deserialize<'de>,
-    {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let serde_slot: SerdeSlot<T> = Deserialize::deserialize(deserializer)?;
-            let occupied = serde_slot.version % 2 > 0;
-            if occupied ^ serde_slot.value.is_some() {
-                return Err(de::Error::custom(&"inconsistent occupation in Slot"));
-            }
-
-            Ok(Slot {
-                value: serde_slot.value,
-                version: serde_slot.version,
-            })
-        }
-    }
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use SecondaryMap;
 
     impl<K: Key, V: Serialize> Serialize for SparseSecondaryMap<K, V> {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
-            self.slots.serialize(serializer)
+            let mut serde_sec = SecondaryMap::new();
+            for (k, v) in self {
+                serde_sec.insert(k, v);
+            }
+
+            serde_sec.serialize(serializer)
         }
     }
 
@@ -862,28 +831,14 @@ mod serialize {
         where
             D: Deserializer<'de>,
         {
-            let mut slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
-            if slots.len() >= (1 << 32) - 1 {
-                return Err(de::Error::custom(&"too many slots"));
+            let serde_sec: SecondaryMap<K, V> = Deserialize::deserialize(deserializer)?;
+            let mut sec = Self::new();
+
+            for (k, v) in serde_sec {
+                sec.insert(k, v);
             }
 
-            // Ensure the first slot exists and is empty for the sentinel.
-            if slots.get(0).map_or(true, |slot| slot.version % 2 > 0) {
-                return Err(de::Error::custom(&"first slot not empty"));
-            }
-
-            slots[0] = Slot {
-                value: None,
-                version: 0,
-            };
-
-            let num_elems = slots.iter().map(|s| s.value.is_some() as usize).sum();
-
-            Ok(SparseSecondaryMap {
-                num_elems,
-                slots,
-                _k: PhantomData,
-            })
+            Ok(sec)
         }
     }
 }

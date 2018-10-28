@@ -1163,7 +1163,7 @@ mod serialize {
                 return Err(de::Error::custom(&"inconsistent occupation in Slot"));
             }
 
-            Ok(Slot {
+            Ok(Self {
                 u: match serde_slot.value {
                     Some(value) => SlotUnion {
                         value: ManuallyDrop::new(value),
@@ -1243,7 +1243,7 @@ mod serialize {
                 }
             }
 
-            Ok(HopSlotMap {
+            Ok(Self {
                 num_elems,
                 slots,
                 _k: PhantomData,

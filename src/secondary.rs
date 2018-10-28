@@ -296,6 +296,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert!(squared.contains_key(k)); // Slot has not been reused in squared yet.
     /// squared.insert(new_k, 4);
     /// assert!(!squared.contains_key(k)); // Old key is no longer available.
+    /// ```
     pub fn remove(&mut self, key: K) -> Option<V> {
         let key = key.into();
         if let Some(slot) = self.slots.get_mut(key.idx as usize) {
@@ -315,8 +316,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// Retains only the elements specified by the predicate.
     ///
     /// In other words, remove all key-value pairs `(k, v)` such that
-    /// `f(k, &mut v)` returns false. This method operates in place and
-    /// invalidates any removed keys.
+    /// `f(k, &mut v)` returns false. This method invalidates any removed keys.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -387,8 +387,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
         self.drain();
     }
 
-    /// Clears the secondary map, returning all key-value pairs as an iterator.
-    /// Keeps the allocated memory for reuse.
+    /// Clears the slot map, returning all key-value pairs in arbitrary order as
+    /// an iterator. Keeps the allocated memory for reuse.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -539,12 +539,9 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// let k1 = sm.insert(1); sec.insert(k1, 11);
     /// let k2 = sm.insert(2); sec.insert(k2, 12);
     ///
-    /// let mut it = sec.iter();
-    /// assert_eq!(it.next(), Some((k0, &10)));
-    /// assert_eq!(it.len(), 2);
-    /// assert_eq!(it.next(), Some((k1, &11)));
-    /// assert_eq!(it.next(), Some((k2, &12)));
-    /// assert_eq!(it.next(), None);
+    /// for (k, v) in sm.iter() {
+    ///     println!("key: {:?}, val: {}", k, v);
+    /// }
     /// ```
     pub fn iter(&self) -> Iter<K, V> {
         Iter {
@@ -565,7 +562,6 @@ impl<K: Key, V> SecondaryMap<K, V> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// # use std::iter::FromIterator;
     /// let mut sm = SlotMap::new();
     /// let mut sec = SecondaryMap::new();
     /// let k0 = sm.insert(1); sec.insert(k0, 10);
@@ -578,7 +574,9 @@ impl<K: Key, V> SecondaryMap<K, V> {
     ///     }
     /// }
     ///
-    /// assert_eq!(Vec::from_iter(sec.values()), vec![&-10, &20, &-30]);
+    /// assert_eq!(sec[k0], -10);
+    /// assert_eq!(sec[k1], 20);
+    /// assert_eq!(sec[k2], -30);
     /// ```
     pub fn iter_mut(&mut self) -> IterMut<K, V> {
         IterMut {
@@ -598,13 +596,15 @@ impl<K: Key, V> SecondaryMap<K, V> {
     ///
     /// ```
     /// # use slotmap::*;
+    /// # use std::collections::HashSet;
     /// let mut sm = SlotMap::new();
     /// let mut sec = SecondaryMap::new();
     /// let k0 = sm.insert(1); sec.insert(k0, 10);
     /// let k1 = sm.insert(2); sec.insert(k1, 20);
     /// let k2 = sm.insert(3); sec.insert(k2, 30);
-    /// let v: Vec<_> = sec.keys().collect();
-    /// assert_eq!(v, vec![k0, k1, k2]);
+    /// let keys: HashSet<_> = sec.keys().collect();
+    /// let check: HashSet<_> = vec![k0, k1, k2].into_iter().collect();
+    /// assert_eq!(keys, check);
     /// ```
     pub fn keys(&self) -> Keys<K, V> {
         Keys { inner: self.iter() }
@@ -620,13 +620,15 @@ impl<K: Key, V> SecondaryMap<K, V> {
     ///
     /// ```
     /// # use slotmap::*;
+    /// # use std::collections::HashSet;
     /// let mut sm = SlotMap::new();
     /// let mut sec = SecondaryMap::new();
     /// let k0 = sm.insert(1); sec.insert(k0, 10);
     /// let k1 = sm.insert(2); sec.insert(k1, 20);
     /// let k2 = sm.insert(3); sec.insert(k2, 30);
-    /// let v: Vec<_> = sec.values().collect();
-    /// assert_eq!(v, vec![&10, &20, &30]);
+    /// let values: HashSet<_> = sec.values().collect();
+    /// let check: HashSet<_> = vec![&10, &20, &30].into_iter().collect();
+    /// assert_eq!(values, check);
     /// ```
     pub fn values(&self) -> Values<K, V> {
         Values { inner: self.iter() }
@@ -642,14 +644,16 @@ impl<K: Key, V> SecondaryMap<K, V> {
     ///
     /// ```
     /// # use slotmap::*;
+    /// # use std::collections::HashSet;
     /// let mut sm = SlotMap::new();
     /// let mut sec = SecondaryMap::new();
     /// sec.insert(sm.insert(1), 10);
     /// sec.insert(sm.insert(2), 20);
     /// sec.insert(sm.insert(3), 30);
     /// sec.values_mut().for_each(|n| { *n *= 3 });
-    /// let v: Vec<_> = sec.into_iter().map(|(_k, v)| v).collect();
-    /// assert_eq!(v, vec![30, 60, 90]);
+    /// let values: HashSet<_> = sec.into_iter().map(|(_k, v)| v).collect();
+    /// let check: HashSet<_> = vec![30, 60, 90].into_iter().collect();
+    /// assert_eq!(values, check);
     /// ```
     pub fn values_mut(&mut self) -> ValuesMut<K, V> {
         ValuesMut {

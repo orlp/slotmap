@@ -1,5 +1,5 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
-#![doc(html_root_url = "https://docs.rs/slotmap/0.2.1")]
+#![doc(html_root_url = "https://docs.rs/slotmap/0.3.0")]
 #![crate_name = "slotmap"]
 #![cfg_attr(feature = "unstable", feature(untagged_unions))]
 
@@ -53,7 +53,12 @@
 //! both have been serialized and deserialized! This makes storing or
 //! transferring complicated referential structures and graphs a breeze. Care has
 //! been taken such that deserializing keys and slot maps from untrusted sources
-//! is safe.
+//! is safe. If you wish to use these features you must enable the `serde`
+//! feature flag for `slotmap` in your `Cargo.toml`.
+//!
+//! ```text
+//! slotmap = { version = "...", features = ["serde"] }
+//! ```
 //!
 //! # Why not [`slab`]?
 //!
@@ -116,6 +121,26 @@
 //! reused. You should use this variant if you expect to store some associated
 //! data for only a small portion of the primary slot map.
 //!
+//! # Custom key types
+//!
+//! If you have multiple slot maps it's an error to use the key of one slot map
+//! on another slot map. The result is safe, but unspecified, and can not be
+//! detected at runtime, so it can lead to a hard to find bug.
+//!
+//! To prevent this, slot maps allow you to specify what the type is of the key
+//! they return, as long as that type implements the [`Key`] trait. To aid with
+//! this, the [`new_key_type!`] macro is provided that builds such a type for
+//! you. The resulting type is exactly like [`DefaultKey`]. So instead of simply
+//! using `SlotMap<DefaultKey, Player>` you would use:
+//!
+//! ```
+//! # use slotmap::*;
+//! # #[derive(Copy, Clone)]
+//! # struct Player;
+//! new_key_type! { struct PlayerKey; }
+//! let sm: SlotMap<PlayerKey, Player> = SlotMap::with_key();
+//! ```
+//!
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 //! [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
 //! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
@@ -124,8 +149,11 @@
 //! [`SecondaryMap`]: secondary/struct.SecondaryMap.html
 //! [`SparseSecondaryMap`]: sparse_secondary/struct.SparseSecondaryMap.html
 //! [`HopSlotMap`]: hop/struct.HopSlotMap.html
+//! [`Key`]: trait.Key.html
+//! [`new_key_type!`]: macro.new_key_type.html
 //! [`serde`]: https://github.com/serde-rs/serde
 //! [`slab`]: https://github.com/carllerche/slab
+//! [`DefaultKey`]: struct.DefaultKey.html
 
 #[cfg(feature = "serde")]
 #[macro_use]
@@ -164,7 +192,7 @@ use std::num::NonZeroU32;
 /// store a type that is not [`Copy`] you must use nightly Rust and enable the
 /// `unstable` feature for `slotmap` by editing your `Cargo.toml`.
 ///
-/// ```norun
+/// ```text
 /// slotmap = { version = "...", features = ["unstable"] }
 /// ```
 ///

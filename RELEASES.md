@@ -6,6 +6,10 @@ Version 0.3.0
 
  - Removed `DenseSlotMap` in favour of `HopSlotMap` as the latter performs
    better when secondary maps are in use.
+   
+ - Unfortunately due to the redesign the first slot in a slot map must now
+   always be empty. This means some deserializations of slot maps serialized
+   with a version before 0.3.0 can fail.
 
  - Added `SecondaryMap` and `SparseSecondaryMap`, which allows you to associate
    extra data with keys given by a slot map. 

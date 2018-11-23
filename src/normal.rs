@@ -270,6 +270,30 @@ impl<K: Key, V: Slottable> SlotMap<K, V> {
         self.slots.reserve(needed);
     }
 
+    /// Tries to reserve capacity for at least `additional` more elements to be
+    /// inserted in the `SlotMap`. The collection may reserve more space to
+    /// avoid frequent reallocations.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the new allocation size overflows `usize`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// sm.insert("foo");
+    /// sm.try_reserve(32).unwrap();
+    /// assert!(sm.capacity() >= 33);
+    /// ```
+    #[cfg(feature = "unstable")]
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), CollectionAllocErr> {
+        // One slot is reserved for the sentinel.
+        let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
+        self.slots.try_reserve(needed)
+    }
+
     /// Returns `true` if the slot map contains `key`.
     ///
     /// # Examples

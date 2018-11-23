@@ -179,6 +179,28 @@ impl<K: Key, V> SparseSecondaryMap<K, V> {
         self.slots.reserve(additional);
     }
 
+    /// Tries to reserve capacity for at least `additional` more elements to be
+    /// inserted in the `SlotMap`. The collection may reserve more space to
+    /// avoid frequent reallocations.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the new allocation size overflows `usize`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// sm.insert("foo");
+    /// sm.try_reserve(32).unwrap();
+    /// assert!(sm.capacity() >= 33);
+    /// ```
+    #[cfg(feature = "unstable")]
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), CollectionAllocErr> {
+        self.slots.try_reserve(additional)
+    }
+
     /// Returns `true` if the secondary map contains `key`.
     ///
     /// # Examples

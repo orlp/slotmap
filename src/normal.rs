@@ -1,14 +1,18 @@
 // Necessary for the union differing on stable/nightly.
-#![allow(unused_unsafe)]
+#![cfg_attr(not(feature = "unstable"), allow(unused_unsafe))]
 
 //! Contains the slot map implementation.
 
-use std;
-use std::iter::{Enumerate, FusedIterator};
-use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
-use std::ops::{Index, IndexMut};
-use std::{fmt, ptr};
+use core::iter::{Enumerate, FusedIterator};
+use core::marker::PhantomData;
+use core::mem::ManuallyDrop;
+use core::ops::{Index, IndexMut};
+use core::{fmt, ptr};
+
+#[cfg(feature = "no_std")]
+use crate::alloc::vec::Vec;
+#[cfg(feature = "unstable")]
+use crate::alloc::collections::CollectionAllocErr;
 
 use super::{DefaultKey, Key, KeyData, Slottable};
 
@@ -69,7 +73,7 @@ impl<T: Slottable> Slot<T> {
 
 impl<T: Slottable> Drop for Slot<T> {
     fn drop(&mut self) {
-        if std::mem::needs_drop::<T>() && self.occupied() {
+        if core::mem::needs_drop::<T>() && self.occupied() {
             // This is safe because we checked that we're occupied.
             unsafe {
                 ManuallyDrop::drop(&mut self.u.value);
@@ -328,7 +332,7 @@ impl<K: Key, V: Slottable> SlotMap<K, V> {
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
-        if new_num_elems == std::u32::MAX {
+        if new_num_elems == core::u32::MAX {
             panic!("SlotMap number of elements overflow");
         }
 
@@ -769,7 +773,7 @@ pub struct Drain<'a, K: 'a + Key, V: 'a + Slottable> {
 #[derive(Debug)]
 pub struct IntoIter<K: Key, V: Slottable> {
     num_left: usize,
-    slots: Enumerate<std::vec::IntoIter<Slot<V>>>,
+    slots: Enumerate<crate::alloc::vec::IntoIter<Slot<V>>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
@@ -777,7 +781,7 @@ pub struct IntoIter<K: Key, V: Slottable> {
 #[derive(Debug)]
 pub struct Iter<'a, K: 'a + Key, V: 'a + Slottable> {
     num_left: usize,
-    slots: Enumerate<std::slice::Iter<'a, Slot<V>>>,
+    slots: Enumerate<core::slice::Iter<'a, Slot<V>>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
@@ -785,7 +789,7 @@ pub struct Iter<'a, K: 'a + Key, V: 'a + Slottable> {
 #[derive(Debug)]
 pub struct IterMut<'a, K: 'a + Key, V: 'a + Slottable> {
     num_left: usize,
-    slots: Enumerate<std::slice::IterMut<'a, Slot<V>>>,
+    slots: Enumerate<core::slice::IterMut<'a, Slot<V>>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
@@ -1101,8 +1105,8 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashMap;
+    use super::*;
 
     #[cfg(feature = "serde")]
     use serde_json;
@@ -1110,9 +1114,9 @@ mod tests {
     #[cfg(feature = "unstable")]
     #[test]
     fn check_drops() {
-        let drops = std::cell::RefCell::new(0usize);
+        let drops = core::cell::RefCell::new(0usize);
         #[derive(Clone)]
-        struct CountDrop<'a>(&'a std::cell::RefCell<usize>);
+        struct CountDrop<'a>(&'a core::cell::RefCell<usize>);
         impl<'a> Drop for CountDrop<'a> {
             fn drop(&mut self) {
                 *self.0.borrow_mut() += 1;

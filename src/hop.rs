@@ -1,6 +1,3 @@
-// Necessary for the union differing on stable/nightly.
-#![allow(unused_unsafe)]
-
 //! Contains the faster iteration, slower insertion/removal slot map
 //! implementation.
 //!
@@ -12,12 +9,16 @@
 //! The trade-off is that compared to a regular `SlotMap` insertion/removal is
 //! roughly twice as slow. Random indexing has identical performance for both.
 
-use std;
-use std::iter::FusedIterator;
-use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
-use std::ops::{Index, IndexMut};
-use std::{fmt, ptr};
+use core::iter::FusedIterator;
+use core::marker::PhantomData;
+use core::mem::ManuallyDrop;
+use core::ops::{Index, IndexMut};
+use core::{fmt, ptr};
+
+#[cfg(feature = "no_std")]
+use crate::alloc::prelude::*;
+#[cfg(feature = "unstable")]
+use crate::alloc::collections::CollectionAllocErr;
 
 use super::{DefaultKey, Key, KeyData, Slottable};
 
@@ -86,7 +87,7 @@ impl<T: Slottable> Slot<T> {
 
 impl<T: Slottable> Drop for Slot<T> {
     fn drop(&mut self) {
-        if std::mem::needs_drop::<T>() && self.occupied() {
+        if core::mem::needs_drop::<T>() && self.occupied() {
             // This is safe because we checked that we're occupied.
             unsafe {
                 ManuallyDrop::drop(&mut self.u.value);
@@ -353,7 +354,7 @@ impl<K: Key, V: Slottable> HopSlotMap<K, V> {
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
-        if new_num_elems == std::u32::MAX {
+        if new_num_elems == core::u32::MAX {
             panic!("HopSlotMap number of elements overflow");
         }
 
@@ -433,7 +434,7 @@ impl<K: Key, V: Slottable> HopSlotMap<K, V> {
         // contiguous block to the left or right, merging the two blocks to the
         // left and right or inserting a new block.
         let i = idx as u32;
-        // use std::hint::unreachable_unchecked;
+        // use core::hint::unreachable_unchecked;
 
         match (left_vacant, right_vacant) {
             (false, false) => {
@@ -1263,9 +1264,9 @@ mod tests {
     #[cfg(feature = "unstable")]
     #[test]
     fn check_drops() {
-        let drops = std::cell::RefCell::new(0usize);
+        let drops = core::cell::RefCell::new(0usize);
         #[derive(Clone)]
-        struct CountDrop<'a>(&'a std::cell::RefCell<usize>);
+        struct CountDrop<'a>(&'a core::cell::RefCell<usize>);
         impl<'a> Drop for CountDrop<'a> {
             fn drop(&mut self) {
                 *self.0.borrow_mut() += 1;

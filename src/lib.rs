@@ -1,7 +1,8 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
 #![doc(html_root_url = "https://docs.rs/slotmap/0.3.0")]
 #![crate_name = "slotmap"]
-#![cfg_attr(feature = "unstable", feature(untagged_unions))]
+#![cfg_attr(feature = "unstable", feature(untagged_unions, alloc))]
+#![cfg_attr(all(feature = "no_std", not(test)), no_std)]
 
 //! # slotmap
 //!
@@ -37,6 +38,8 @@
 //! let reuse = sm.insert("reuse");  // Space from bar reused.
 //! assert_eq!(sm.contains_key(bar), false);  // After deletion a key stays invalid.
 //!
+//! # #[cfg(not(feature = "no_std"))]
+//! # {
 //! let mut sec = SecondaryMap::new();
 //! sec.insert(foo, "noun");  // We provide the key for secondary maps.
 //! sec.insert(reuse, "verb");
@@ -44,6 +47,7 @@
 //! for (key, val) in sm {
 //!     println!("{} is a {}", val, sec[key]);
 //! }
+//! # }
 //! ```
 //!
 //! # Serialization through [`serde`]
@@ -155,6 +159,15 @@
 //! [`slab`]: https://github.com/carllerche/slab
 //! [`DefaultKey`]: struct.DefaultKey.html
 
+#[cfg(feature = "no_std")]
+extern crate alloc;
+
+#[cfg(not(feature = "no_std"))]
+mod alloc {
+    pub use std::collections;
+    pub use std::vec;
+}
+
 #[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
@@ -174,18 +187,20 @@ extern crate quickcheck;
 extern crate serde_json;
 
 pub(crate) mod normal;
-pub use normal::*;
+pub use crate::normal::*;
 
 pub mod hop;
-pub use hop::HopSlotMap;
+pub use crate::hop::HopSlotMap;
 
 pub mod secondary;
-pub use secondary::SecondaryMap;
+pub use crate::secondary::SecondaryMap;
 
+#[cfg(not(feature = "no_std"))]
 pub mod sparse_secondary;
-pub use sparse_secondary::SparseSecondaryMap;
+#[cfg(not(feature = "no_std"))]
+pub use crate::sparse_secondary::SparseSecondaryMap;
 
-use std::num::NonZeroU32;
+use core::num::NonZeroU32;
 
 /// A trait for items that can go in a slot map. Due to current stable Rust
 /// restrictions a type must be [`Copy`] to be placed in a slot map. If you must
@@ -250,11 +265,11 @@ impl KeyData {
     }
 
     fn null() -> Self {
-        Self::new(std::u32::MAX, 1)
+        Self::new(core::u32::MAX, 1)
     }
 
     fn is_null(self) -> bool {
-        self.idx == std::u32::MAX
+        self.idx == core::u32::MAX
     }
 
     /// Returns the key data as a 64-bit integer. No guarantees about its value
@@ -448,6 +463,7 @@ new_key_type! {
 
 // Returns if a is an older version than b, taking into account wrapping of
 // versions.
+#[cfg(any(not(feature = "no_std"), test))]
 fn is_older_version(a: u32, b: u32) -> bool {
     let diff = a.wrapping_sub(b);
     diff >= (1 << 31)
@@ -486,7 +502,7 @@ mod serialize {
             let mut ser_key: SerKey = Deserialize::deserialize(deserializer)?;
 
             // Ensure a.is_null() && b.is_null() implies a == b.
-            if ser_key.idx == std::u32::MAX {
+            if ser_key.idx == core::u32::MAX {
                 ser_key.version = 1;
             }
 

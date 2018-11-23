@@ -8,9 +8,11 @@ repository = "https://github.com/orlp/slotmap"
 readme = "README.md"
 keywords = ["slotmap", "storage", "allocator", "stable", "reference"]
 categories = ["data-structures", "memory-management", "caching"]
+edition = "2018"
 
 [features]
 unstable = []
+no_std = ["unstable"]
 
 [dependencies]
 serde = { version = "1.0", optional = true, features = ["derive"] }

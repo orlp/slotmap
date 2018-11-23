@@ -1,12 +1,16 @@
 //! Contains the sparse secondary map implementation.
 
 use super::{is_older_version, Key, KeyData};
-use std;
-use std::collections::hash_map;
-use std::collections::hash_map::HashMap;
-use std::iter::{Extend, FromIterator, FusedIterator};
-use std::marker::PhantomData;
-use std::ops::{Index, IndexMut};
+use core::iter::{Extend, FromIterator, FusedIterator};
+use core::marker::PhantomData;
+use core::ops::{Index, IndexMut};
+
+use crate::alloc::collections::hash_map;
+use crate::alloc::collections::hash_map::HashMap;
+#[cfg(feature = "no_std")]
+use crate::alloc::prelude::*;
+#[cfg(feature = "unstable")]
+use crate::alloc::collections::CollectionAllocErr;
 
 #[derive(Debug)]
 struct Slot<T> {
@@ -219,7 +223,7 @@ impl<K: Key, V> SparseSecondaryMap<K, V> {
 
         if let Some(slot) = self.slots.get_mut(&key.idx) {
             if slot.version == key.version.get() {
-                return Some(std::mem::replace(&mut slot.value, value));
+                return Some(core::mem::replace(&mut slot.value, value));
             }
 
             // Don't replace existing newer values.
@@ -344,7 +348,7 @@ impl<K: Key, V> SparseSecondaryMap<K, V> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// # use std::iter::FromIterator;
+    /// # use core::iter::FromIterator;
     /// let mut sm = SlotMap::new();
     /// let k = sm.insert(0);
     /// let mut sec = SparseSecondaryMap::new();
@@ -845,8 +849,8 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use *;
+    use crate::alloc::collections::HashMap;
+    use crate::*;
 
     #[cfg(feature = "serde")]
     use serde_json;

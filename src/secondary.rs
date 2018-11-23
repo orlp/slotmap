@@ -6,6 +6,8 @@ use std::hint::unreachable_unchecked;
 use std::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
+#[cfg(feature = "unstable")]
+use std::collections::CollectionAllocErr;
 
 // We could use unions to remove the memory overhead of Option here as well, but
 // until non-Copy elements inside unions stabilize it's better to give users at
@@ -198,6 +200,34 @@ impl<K: Key, V> SecondaryMap<K, V> {
         if new_capacity > self.slots.capacity() {
             let needed = new_capacity - self.slots.len();
             self.slots.reserve(needed);
+        }
+    }
+
+    /// Tries to set the capacity of the `SecondaryMap` to `new_capacity`, if it
+    /// is bigger than the current capacity.
+    ///
+    /// It is recommended to set the capacity of a `SecondaryMap` to the
+    /// capacity of its corresponding slot map before inserting many new
+    /// elements to prevent frequent reallocations. The collection may reserve
+    /// more space than requested.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sec: SecondaryMap<DefaultKey, i32> = SecondaryMap::with_capacity(10);
+    /// assert!(sec.capacity() >= 10);
+    /// sec.try_set_capacity(1000).unwrap();
+    /// assert!(sec.capacity() >= 1000);
+    /// ```
+    #[cfg(feature = "unstable")]
+    pub fn try_set_capacity(&mut self, new_capacity: usize) -> Result<(), CollectionAllocErr> {
+        let new_capacity = new_capacity + 1; // Sentinel.
+        if new_capacity > self.slots.capacity() {
+            let needed = new_capacity - self.slots.len();
+            self.slots.try_reserve(needed)
+        } else {
+            Ok(())
         }
     }
 

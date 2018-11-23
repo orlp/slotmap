@@ -2,8 +2,9 @@
 
 use super::{is_older_version, Key, KeyData};
 use std;
-use std::collections::hash_map;
-use std::collections::hash_map::HashMap;
+use std::collections::hash_map::{self, HashMap};
+#[cfg(feature = "unstable")]
+use std::collections::CollectionAllocErr;
 use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
@@ -173,6 +174,24 @@ impl<K: Key, V> SparseSecondaryMap<K, V> {
     /// ```
     pub fn reserve(&mut self, additional: usize) {
         self.slots.reserve(additional);
+    }
+
+    /// Tries to reserve capacity for at least `additional` more slots in the
+    /// `SparseSecondaryMap`.  The collection may reserve more space to avoid
+    /// frequent reallocations.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sec: SparseSecondaryMap<DefaultKey, i32> = SparseSecondaryMap::with_capacity(10);
+    /// assert!(sec.capacity() >= 10);
+    /// sec.try_reserve(10).unwrap();
+    /// assert!(sec.capacity() >= 20);
+    /// ```
+    #[cfg(feature = "unstable")]
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), CollectionAllocErr> {
+        self.slots.try_reserve(additional)
     }
 
     /// Returns `true` if the secondary map contains `key`.

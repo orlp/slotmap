@@ -361,6 +361,11 @@ pub trait Key: From<KeyData> + Into<KeyData> {
     }
 }
 
+impl<T> Key for T
+where
+    T: From<KeyData> + Into<KeyData>
+{ }
+
 /// A helper macro to conveniently create new key types. If you use a new key
 /// type for each slot map you create you can entirely prevent using the wrong
 /// key on the wrong slot map.
@@ -411,8 +416,6 @@ macro_rules! new_key_type {
                 k.0
             }
         }
-
-        impl $crate::Key for $name { }
 
         $crate::__serialize_key!($name);
 

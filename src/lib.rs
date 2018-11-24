@@ -156,7 +156,6 @@
 //! [`DefaultKey`]: struct.DefaultKey.html
 
 #[cfg(feature = "serde")]
-#[macro_use]
 extern crate serde;
 
 // So our macros can refer to these.
@@ -174,16 +173,16 @@ extern crate quickcheck;
 extern crate serde_json;
 
 pub(crate) mod normal;
-pub use normal::*;
+pub use crate::normal::*;
 
 pub mod hop;
-pub use hop::HopSlotMap;
+pub use crate::hop::HopSlotMap;
 
 pub mod secondary;
-pub use secondary::SecondaryMap;
+pub use crate::secondary::SecondaryMap;
 
 pub mod sparse_secondary;
-pub use sparse_secondary::SparseSecondaryMap;
+pub use crate::sparse_secondary::SparseSecondaryMap;
 
 use std::num::NonZeroU32;
 

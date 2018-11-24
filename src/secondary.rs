@@ -1048,7 +1048,7 @@ mod serialize {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use *;
+    use crate::*;
 
     #[cfg(feature = "serde")]
     use serde_json;

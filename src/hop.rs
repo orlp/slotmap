@@ -19,7 +19,7 @@ use std::mem::ManuallyDrop;
 use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
 
-use super::{DefaultKey, Key, KeyData, Slottable};
+use crate::{DefaultKey, Key, KeyData, Slottable};
 
 // Metadata to maintain the freelist.
 #[derive(Clone, Copy, Debug)]

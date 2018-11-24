@@ -10,7 +10,7 @@ use std::mem::ManuallyDrop;
 use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
 
-use super::{DefaultKey, Key, KeyData, Slottable};
+use crate::{DefaultKey, Key, KeyData, Slottable};
 
 // Storage inside a slot or metadata for the freelist when vacant.
 union SlotUnion<T: Slottable> {

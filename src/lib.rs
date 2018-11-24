@@ -257,6 +257,11 @@ impl KeyData {
         self.idx == std::u32::MAX
     }
 
+    /// Returns the index. If you also need the version, use `KeyData::as_ffi`.
+    pub fn get_index(&self) -> u32 {
+        self.idx
+    }
+
     /// Returns the key data as a 64-bit integer. No guarantees about its value
     /// are made other than that passing it to `from_ffi` will return a key
     /// equal to the original.

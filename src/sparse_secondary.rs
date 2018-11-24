@@ -114,7 +114,8 @@ impl<K: Key, V> SparseSecondaryMap<K, V, hash_map::RandomState> {
 }
 
 impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
-    /// Creates an empty `SparseSecondaryMap`.
+    /// Creates an empty `SparseSecondaryMap` which will use the given hash
+    /// builder to hash keys.
     ///
     /// The secondary map will not reallocate until it holds at least `capacity`
     /// slots.
@@ -128,14 +129,15 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// let mut sec: SparseSecondaryMap<DefaultKey, i32, _> =
     ///     SparseSecondaryMap::with_hasher(RandomState::new());
     /// ```
-    pub fn with_hasher(hasher: S) -> Self {
+    pub fn with_hasher(hash_builder: S) -> Self {
         Self {
-            slots: HashMap::with_hasher(hasher),
+            slots: HashMap::with_hasher(hash_builder),
             _k: PhantomData,
         }
     }
 
-    /// Creates an empty `SparseSecondaryMap` with the given capacity of slots.
+    /// Creates an empty `SparseSecondaryMap` with the given capacity of slots,
+    /// using `hash_builder` to hash the keys.
     ///
     /// The secondary map will not reallocate until it holds at least `capacity`
     /// slots.
@@ -149,9 +151,9 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// let mut sec: SparseSecondaryMap<DefaultKey, i32, _> =
     ///     SparseSecondaryMap::with_capacity_and_hasher(10, RandomState::new());
     /// ```
-    pub fn with_capacity_and_hasher(capacity: usize, hasher: S) -> Self {
+    pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
         Self {
-            slots: HashMap::with_capacity_and_hasher(capacity, hasher),
+            slots: HashMap::with_capacity_and_hasher(capacity, hash_builder),
             _k: PhantomData,
         }
     }

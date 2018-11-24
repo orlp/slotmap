@@ -1,13 +1,14 @@
 //! Contains the sparse secondary map implementation.
 
 use super::{is_older_version, Key, KeyData};
-use std;
+use std::hash;
 use std::collections::hash_map::{self, HashMap};
-#[cfg(feature = "unstable")]
-use std::collections::CollectionAllocErr;
 use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
+
+#[cfg(feature = "unstable")]
+use std::collections::CollectionAllocErr;
 
 #[derive(Debug)]
 struct Slot<T> {
@@ -73,12 +74,12 @@ struct Slot<T> {
 /// ```
 
 #[derive(Debug)]
-pub struct SparseSecondaryMap<K: Key, V> {
-    slots: HashMap<u32, Slot<V>>,
+pub struct SparseSecondaryMap<K: Key, V, S: hash::BuildHasher = hash_map::RandomState> {
+    slots: HashMap<u32, Slot<V>, S>,
     _k: PhantomData<fn(K) -> K>,
 }
 
-impl<K: Key, V> SparseSecondaryMap<K, V> {
+impl<K: Key, V> SparseSecondaryMap<K, V, hash_map::RandomState> {
     /// Constructs a new, empty `SparseSecondaryMap`.
     ///
     /// # Examples
@@ -107,6 +108,50 @@ impl<K: Key, V> SparseSecondaryMap<K, V> {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             slots: HashMap::with_capacity(capacity),
+            _k: PhantomData,
+        }
+    }
+}
+
+impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
+    /// Creates an empty `SparseSecondaryMap`.
+    ///
+    /// The secondary map will not reallocate until it holds at least `capacity`
+    /// slots.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::collections::hash_map::RandomState;
+    /// # use slotmap::*;
+    /// let mut sm: SlotMap<_, i32> = SlotMap::with_capacity(10);
+    /// let mut sec: SparseSecondaryMap<DefaultKey, i32, _> =
+    ///     SparseSecondaryMap::with_hasher(RandomState::new());
+    /// ```
+    pub fn with_hasher(hasher: S) -> Self {
+        Self {
+            slots: HashMap::with_hasher(hasher),
+            _k: PhantomData,
+        }
+    }
+
+    /// Creates an empty `SparseSecondaryMap` with the given capacity of slots.
+    ///
+    /// The secondary map will not reallocate until it holds at least `capacity`
+    /// slots.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::collections::hash_map::RandomState;
+    /// # use slotmap::*;
+    /// let mut sm: SlotMap<_, i32> = SlotMap::with_capacity(10);
+    /// let mut sec: SparseSecondaryMap<DefaultKey, i32, _> =
+    ///     SparseSecondaryMap::with_capacity_and_hasher(10, RandomState::new());
+    /// ```
+    pub fn with_capacity_and_hasher(capacity: usize, hasher: S) -> Self {
+        Self {
+            slots: HashMap::with_capacity_and_hasher(capacity, hasher),
             _k: PhantomData,
         }
     }

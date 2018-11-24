@@ -156,7 +156,6 @@
 //! [`DefaultKey`]: struct.DefaultKey.html
 
 #[cfg(feature = "serde")]
-#[macro_use]
 extern crate serde;
 
 // So our macros can refer to these.

@@ -810,7 +810,7 @@ impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 mod serialize {
     use super::*;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use SecondaryMap;
+    use crate::SecondaryMap;
 
     impl<K: Key, V: Serialize> Serialize for SparseSecondaryMap<K, V> {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -846,7 +846,7 @@ mod serialize {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use *;
+    use crate::*;
 
     #[cfg(feature = "serde")]
     use serde_json;

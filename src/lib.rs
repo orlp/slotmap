@@ -2,6 +2,8 @@
 #![doc(html_root_url = "https://docs.rs/slotmap/0.3.0")]
 #![crate_name = "slotmap"]
 #![cfg_attr(feature = "unstable", feature(untagged_unions, try_reserve))]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+#![cfg_attr(any(test, not(feature = "std")), no_std)]
 
 //! # slotmap
 //!
@@ -155,6 +157,18 @@
 //! [`slab`]: https://github.com/carllerche/slab
 //! [`DefaultKey`]: struct.DefaultKey.html
 
+#[cfg(all(feature = "serde", feature = "std", not(feature = "serde-std")))]
+compile_error!("features 'serde' and 'std' are enabled but you also need 'serde-std'!");
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+mod alloc {
+    pub use std::collections;
+    pub use std::vec;
+}
+
 #[cfg(feature = "serde")]
 extern crate serde;
 
@@ -181,10 +195,12 @@ pub use crate::hop::HopSlotMap;
 pub mod secondary;
 pub use crate::secondary::SecondaryMap;
 
+#[cfg(feature = "std")]
 pub mod sparse_secondary;
+#[cfg(feature = "std")]
 pub use crate::sparse_secondary::SparseSecondaryMap;
 
-use std::num::NonZeroU32;
+use core::num::NonZeroU32;
 
 /// A trait for items that can go in a slot map. Due to current stable Rust
 /// restrictions a type must be [`Copy`] to be placed in a slot map. If you must
@@ -249,11 +265,11 @@ impl KeyData {
     }
 
     fn null() -> Self {
-        Self::new(std::u32::MAX, 1)
+        Self::new(core::u32::MAX, 1)
     }
 
     fn is_null(self) -> bool {
-        self.idx == std::u32::MAX
+        self.idx == core::u32::MAX
     }
 
     /// Returns the key data as a 64-bit integer. No guarantees about its value
@@ -485,7 +501,7 @@ mod serialize {
             let mut ser_key: SerKey = Deserialize::deserialize(deserializer)?;
 
             // Ensure a.is_null() && b.is_null() implies a == b.
-            if ser_key.idx == std::u32::MAX {
+            if ser_key.idx == core::u32::MAX {
                 ser_key.version = 1;
             }
 

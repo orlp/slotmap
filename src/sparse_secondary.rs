@@ -1,14 +1,16 @@
 //! Contains the sparse secondary map implementation.
 
 use super::{is_older_version, Key, KeyData};
-use std::hash;
-use std::collections::hash_map::{self, HashMap};
-use std::iter::{Extend, FromIterator, FusedIterator};
-use std::marker::PhantomData;
-use std::ops::{Index, IndexMut};
+
+use core::iter::{Extend, FromIterator, FusedIterator};
+use core::marker::PhantomData;
+use core::ops::{Index, IndexMut};
+use core::hash;
+
+use crate::alloc::collections::hash_map::{self, HashMap};
 
 #[cfg(feature = "unstable")]
-use std::collections::CollectionAllocErr;
+use crate::alloc::collections::CollectionAllocErr;
 
 #[derive(Debug)]
 struct Slot<T> {
@@ -283,7 +285,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
 
         if let Some(slot) = self.slots.get_mut(&key.idx) {
             if slot.version == key.version.get() {
-                return Some(std::mem::replace(&mut slot.value, value));
+                return Some(core::mem::replace(&mut slot.value, value));
             }
 
             // Don't replace existing newer values.

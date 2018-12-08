@@ -517,6 +517,56 @@ impl<K: Key, V> SecondaryMap<K, V> {
             .map(|slot| slot.value.as_mut().unwrap())
     }
 
+    /// Returns mutable references to two **distinct** keys.
+    ///
+    /// If any of the two keys cannot be found the function returns `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let key1 = sm.insert("test");
+    /// let key2 = sm.insert("another one");
+    /// let mut sec = SecondaryMap::new();
+    /// sec.insert(key1, "hi".to_string());
+    /// sec.insert(key2, "hello".to_string());
+    /// if let Some((x1, x2)) = sec.get_distinct_mut(key1, key2) {
+    ///     x1.push_str(" there");
+    ///     x2.push_str("!!");
+    /// }
+    /// assert_eq!(sec[key1], "hi there");
+    /// assert_eq!(sec[key2], "hello!!");
+    ///
+    /// // Cannot get two mutable references to same element, obviously:
+    /// assert!(sec.get_distinct_mut(key1, key1).is_none());
+    /// ```
+    pub fn get_distinct_mut(&mut self, key1: K, key2: K) -> Option<(&mut V, &mut V)> {
+        let key1 = key1.into();
+        let key2 = key2.into();
+        if key1.idx == key2.idx {
+            return None;
+        } else if key1.idx > key2.idx {
+            return self
+                .get_distinct_mut(key2.into(), key1.into())
+                .map(|(v2, v1)| (v1, v2));
+        }
+        debug_assert!(key1.idx < key2.idx);
+        if key2.idx as usize >= self.slots.len() {
+            return None;
+        }
+        let (left_slots, right_slots) = self.slots.split_at_mut(key2.idx as usize);
+        let slot1 = &mut left_slots[key1.idx as usize];
+        let slot2 = &mut right_slots[0];
+        if slot1.version == key1.version.get() && slot2.version == key2.version.get() {
+            let value1 = slot1.value.as_mut().unwrap();
+            let value2 = slot2.value.as_mut().unwrap();
+            Some((value1, value2))
+        } else {
+            None
+        }
+    }
+
     /// Returns a mutable reference to the value corresponding to the key
     /// without version or bounds checking.
     ///

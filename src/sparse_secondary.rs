@@ -10,7 +10,7 @@ use std::ops::{Index, IndexMut};
 #[cfg(feature = "unstable")]
 use std::collections::CollectionAllocErr;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Slot<T> {
     version: u32,
     value: T,
@@ -73,7 +73,7 @@ struct Slot<T> {
 /// ammo[alice] = 0;
 /// ```
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SparseSecondaryMap<K: Key, V, S: hash::BuildHasher = hash_map::RandomState> {
     slots: HashMap<u32, Slot<V>, S>,
     _k: PhantomData<fn(K) -> K>,
@@ -927,9 +927,9 @@ mod tests {
             let mut sm_keys = Vec::new();
 
             #[cfg(not(feature = "serde"))]
-            let num_ops = 3;
-            #[cfg(feature = "serde")]
             let num_ops = 4;
+            #[cfg(feature = "serde")]
+            let num_ops = 5;
 
             for (op, val) in operations {
                 match op % num_ops {
@@ -967,9 +967,14 @@ mod tests {
                         }
                     }
 
+                    // Clone.
+                    3 => {
+                        sec = sec.clone();
+                    }
+
                     // Serde round-trip.
                     #[cfg(feature = "serde")]
-                    3 => {
+                    4 => {
                         let ser = serde_json::to_string(&sec).unwrap();
                         sec = serde_json::from_str(&ser).unwrap();
                     }

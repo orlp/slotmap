@@ -112,6 +112,7 @@ impl<T: fmt::Debug + Slottable> fmt::Debug for Slot<T> {
 pub struct SlotMap<K: Key, V: Slottable> {
     slots: Vec<Slot<V>>,
     free_head: usize,
+    free_tail: usize,
     num_elems: u32,
     _k: PhantomData<fn(K) -> K>,
 }
@@ -193,6 +194,7 @@ impl<K: Key, V: Slottable> SlotMap<K, V> {
         Self {
             slots,
             free_head: 1,
+            free_tail: 1,
             num_elems: 0,
             _k: PhantomData,
         }
@@ -365,6 +367,9 @@ impl<K: Key, V: Slottable> SlotMap<K, V> {
 
             // Update. Make sure to extract next_free before overwriting the
             // union.
+            if self.free_head == self.free_tail {
+                self.free_tail = unsafe { slot.u.next_free as usize };
+            }
             self.free_head = unsafe { slot.u.next_free as usize };
             self.num_elems = new_num_elems;
             unsafe {
@@ -385,6 +390,7 @@ impl<K: Key, V: Slottable> SlotMap<K, V> {
         });
 
         self.free_head = self.slots.len();
+        self.free_tail = self.free_head;
         self.num_elems = new_num_elems;
 
         key.into()
@@ -395,12 +401,26 @@ impl<K: Key, V: Slottable> SlotMap<K, V> {
     #[inline(always)]
     unsafe fn remove_from_slot(&mut self, idx: usize) -> V {
         // Remove value from slot before overwriting union.
-        let slot = self.slots.get_unchecked_mut(idx);
+        unsafe fn forge_mut<'a, 'b, T>(x: &'a mut T) -> &'b mut T {
+            &mut *(x as *mut T)
+        }
+        let slot = forge_mut(self.slots.get_unchecked_mut(idx));
         let value = ptr::read(&*slot.u.value);
 
         // Maintain freelist.
-        slot.u.next_free = self.free_head as u32;
-        self.free_head = idx;
+        if let Some(original_tail) = self
+            .slots
+            .get_mut(self.free_tail)
+        {
+            slot.u.next_free = original_tail.u.next_free;
+            original_tail.u.next_free = idx as u32;
+            self.free_tail = idx;
+        } else {
+            slot.u.next_free = self.free_head as u32;
+            self.free_head = idx;
+            self.free_tail = idx;
+        };
+
         self.num_elems -= 1;
         slot.version = slot.version.wrapping_add(1);
 

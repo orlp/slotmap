@@ -196,8 +196,8 @@ use std::num::NonZeroU32;
 /// ```
 ///
 /// This trait should already be automatically implemented for any type that is
-/// slottable. If you can't use unstable Rust and still want to store [`Copy`]
-/// data, store that as associated data in a [`SecondaryMap`].
+/// slottable. If you can't use unstable Rust and still want to store
+///  non-[`Copy`] data, store that as associated data in a [`SecondaryMap`].
 ///
 /// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
 /// [`SecondaryMap`]: secondary/struct.SecondaryMap.html
@@ -214,8 +214,8 @@ pub trait Slottable: Copy {}
 /// ```
 ///
 /// This trait should already be automatically implemented for any type that is
-/// slottable. If you can't use unstable Rust and still want to store [`Copy`]
-/// data, store that as associated data in a [`SecondaryMap`].
+/// slottable. If you can't use unstable Rust and still want to store
+/// non-[`Copy`] data, store that as associated data in a [`SecondaryMap`].
 ///
 /// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
 #[cfg(feature = "unstable")]

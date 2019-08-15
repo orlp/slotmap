@@ -391,17 +391,6 @@ macro_rules! new_key_type {
         #[repr(transparent)]
         $vis struct $name($crate::KeyData);
 
-        impl $name {
-            /// Gets the opaque data for this key.
-            ///
-            /// Keys implement `From`, but using conversion traits may require
-            /// additional imports and type annotations. This function provides
-            /// an explicit conversion that can be used for debugging.
-            pub fn into_key_data(self) -> $crate::KeyData {
-                self.0
-            }
-        }
-
         impl From<$crate::KeyData> for $name {
             fn from(k: $crate::KeyData) -> Self {
                 $name(k)

@@ -184,6 +184,7 @@ pub use crate::secondary::SecondaryMap;
 pub mod sparse_secondary;
 pub use crate::sparse_secondary::SparseSecondaryMap;
 
+use std::fmt::{self, Debug, Formatter};
 use std::num::NonZeroU32;
 
 /// A trait for items that can go in a slot map. Due to current stable Rust
@@ -234,7 +235,7 @@ impl<T> Slottable for T {}
 ///
 /// [`Key`]: trait.Key.html
 /// [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KeyData {
     idx: u32,
     version: NonZeroU32,
@@ -280,6 +281,12 @@ impl KeyData {
         let idx = value & 0xffff_ffff;
         let version = (value >> 32) | 1; // Ensure version is odd.
         Self::new(idx as u32, version as u32)
+    }
+}
+
+impl Debug for KeyData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}v{}", self.idx, self.version.get())
     }
 }
 
@@ -383,6 +390,17 @@ macro_rules! new_key_type {
                  Hash, Debug)]
         #[repr(transparent)]
         $vis struct $name($crate::KeyData);
+
+        impl $name {
+            /// Gets the opaque data for this key.
+            ///
+            /// Keys implement `From`, but using conversion traits may require
+            /// additional imports and type annotations. This function provides
+            /// an explicit conversion that can be used for debugging.
+            pub fn into_key_data(self) -> $crate::KeyData {
+                self.0
+            }
+        }
 
         impl From<$crate::KeyData> for $name {
             fn from(k: $crate::KeyData) -> Self {

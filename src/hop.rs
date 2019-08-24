@@ -1218,7 +1218,7 @@ mod serialize {
             D: Deserializer<'de>,
         {
             let mut slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
-            if slots.len() >= (1 << 32) - 1 {
+            if slots.len() >= u32::max_value() as usize {
                 return Err(de::Error::custom(&"too many slots"));
             }
 

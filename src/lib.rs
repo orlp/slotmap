@@ -175,6 +175,9 @@ extern crate serde_json;
 pub(crate) mod normal;
 pub use crate::normal::*;
 
+pub mod dense;
+pub use crate::dense::DenseSlotMap;
+
 pub mod hop;
 pub use crate::hop::HopSlotMap;
 
@@ -307,7 +310,7 @@ impl Default for KeyData {
 ///
 /// [`new_key_type!`]: macro.new_key_type.html
 /// [`DefaultKey`]: struct.DefaultKey.html
-pub trait Key: From<KeyData> + Into<KeyData> {
+pub trait Key: From<KeyData> + Into<KeyData> + Clone {
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method (or default
     /// initialization of keys made with [`new_key_type!`], which calls this

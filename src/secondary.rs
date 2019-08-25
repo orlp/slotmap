@@ -272,12 +272,11 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let key = key.into();
-        for _ in self.slots.len()..=key.idx as usize {
-            self.slots.push(Slot {
-                version: 0,
-                value: None,
-            });
-        }
+        self.slots.extend(
+            (self.slots.len()..=key.idx as usize)
+                .into_iter()
+                .map(|_| Slot { version: 0, value: None, })
+        );
 
         let slot = &mut self.slots[key.idx as usize];
         if slot.version == key.version.get() {

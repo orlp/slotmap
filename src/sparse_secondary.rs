@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
 #[cfg(feature = "unstable")]
-use std::collections::CollectionAllocErr;
+use std::collections::TryReserveError;
 
 #[derive(Debug, Clone)]
 struct Slot<T> {
@@ -214,10 +214,9 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sec: SparseSecondaryMap<DefaultKey, i32> = SparseSecondaryMap::with_capacity(10);
-    /// assert!(sec.capacity() >= 10);
+    /// let mut sec: SparseSecondaryMap<DefaultKey, i32> = SparseSecondaryMap::new();
     /// sec.reserve(10);
-    /// assert!(sec.capacity() >= 20);
+    /// assert!(sec.capacity() >= 10);
     /// ```
     pub fn reserve(&mut self, additional: usize) {
         self.slots.reserve(additional);
@@ -231,13 +230,12 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     ///
     /// ```
     /// # use slotmap::*;
-    /// let mut sec: SparseSecondaryMap<DefaultKey, i32> = SparseSecondaryMap::with_capacity(10);
-    /// assert!(sec.capacity() >= 10);
+    /// let mut sec: SparseSecondaryMap<DefaultKey, i32> = SparseSecondaryMap::new();
     /// sec.try_reserve(10).unwrap();
-    /// assert!(sec.capacity() >= 20);
+    /// assert!(sec.capacity() >= 10);
     /// ```
     #[cfg(feature = "unstable")]
-    pub fn try_reserve(&mut self, additional: usize) -> Result<(), CollectionAllocErr> {
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.slots.try_reserve(additional)
     }
 

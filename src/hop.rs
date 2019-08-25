@@ -19,7 +19,7 @@ use std::mem::ManuallyDrop;
 use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
 #[cfg(feature = "unstable")]
-use std::collections::CollectionAllocErr;
+use std::collections::TryReserveError;
 
 use crate::{DefaultKey, Key, KeyData, Slottable};
 
@@ -300,7 +300,7 @@ impl<K: Key, V: Slottable> HopSlotMap<K, V> {
     /// assert!(sm.capacity() >= 33);
     /// ```
     #[cfg(feature = "unstable")]
-    pub fn try_reserve(&mut self, additional: usize) -> Result<(), CollectionAllocErr> {
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         // One slot is reserved for the freelist sentinel.
         let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
         self.slots.try_reserve(needed)

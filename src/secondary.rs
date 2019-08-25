@@ -7,7 +7,7 @@ use std::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 #[cfg(feature = "unstable")]
-use std::collections::CollectionAllocErr;
+use std::collections::TryReserveError;
 
 // We could use unions to remove the memory overhead of Option here as well, but
 // until non-Copy elements inside unions stabilize it's better to give users at
@@ -221,7 +221,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert!(sec.capacity() >= 1000);
     /// ```
     #[cfg(feature = "unstable")]
-    pub fn try_set_capacity(&mut self, new_capacity: usize) -> Result<(), CollectionAllocErr> {
+    pub fn try_set_capacity(&mut self, new_capacity: usize) -> Result<(), TryReserveError> {
         let new_capacity = new_capacity + 1; // Sentinel.
         if new_capacity > self.slots.capacity() {
             let needed = new_capacity - self.slots.len();

@@ -1,3 +1,21 @@
+Version 0.4.0
+=============
+
+ - Codebase moved to 2018 Edition.
+
+ - Reintroduce `DenseSlotMap` - an overzealous removal in 0.3.0.
+ 
+ - Added support for `try_reserve`.
+
+ - Added support for custom hashers in `SparseSecondaryMap`.
+
+ - `SparseSecondaryMap` and `SecondaryMap` can now be cloned.
+
+ - Keys have a more terse debug output.
+
+ - Fixed a bug that caused an overflowing left shift on 32-bit targets.
+
+
 Version 0.3.0
 =============
 

@@ -68,8 +68,9 @@
 //! permanently unique<sup>*</sup> reference to the inserted value. Despite
 //! supporting versioning, a [`SlotMap`] is not slower than [`slab`], by
 //! internally using carefully checked unsafe code. A [`HopSlotMap`]
-//! also provides faster iteration than [`slab`] does. Additionally, at the time
-//! of writing [`slab`] does not support serialization.
+//! also provides faster iteration than [`slab`] does, and [`DenseSlotMap`] even
+//! faster still. Additionally, at the time of writing [`slab`] does not support
+//! serialization.
 //!
 //! # Performance characteristics and implementation details
 //!
@@ -88,9 +89,10 @@
 //!
 //! The memory usage for each slot in [`SlotMap`] is `4 + max(sizeof(T), 4)`
 //! rounded up to the alignment of `T`. Similarly it is `4 + max(sizeof(T), 12)`
-//! for [`HopSlotMap`].
+//! for [`HopSlotMap`]. [`DenseSlotMap`] has an overhead of 8 bytes per element
+//! and 8 bytes per slot.
 //!
-//! # Choosing `SlotMap` or `HopSlotMap`
+//! # Choosing `SlotMap`, `HopSlotMap` or `DenseSlotMap`
 //!
 //! A [`SlotMap`] can never shrink the size of its underlying storage, because
 //! for each storage slot it must remember what the latest stored version was,
@@ -103,6 +105,13 @@
 //! better iteration speed.  If you expect to iterate over all elements in a
 //! [`SlotMap`] a lot, choose [`HopSlotMap`]. The downside is that insertion and
 //! removal is roughly twice as slow. Random access is the same speed for both.
+//!
+//! [`DenseSlotMap`] goes even further and stores all elements on a contiguous
+//! block of memory. It uses two indirects per random access; the slots contain
+//! indices used to access the contiguous memory. This means random access is
+//! slower than both [`SlotMap`] and [`HopSlotMap`], but iteration is
+//! significantly faster. Finally, there is no trait requirement on the value
+//! type of a [`DenseSlotMap`], see [`Slottable`] for more details.
 //!
 //! # Choosing `SecondaryMap` or `SparseSecondaryMap`
 //!
@@ -146,9 +155,10 @@
 //! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
 //! [`SlotMap`]: struct.SlotMap.html
 //! [`HopSlotMap`]: hop/struct.HopSlotMap.html
+//! [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
 //! [`SecondaryMap`]: secondary/struct.SecondaryMap.html
 //! [`SparseSecondaryMap`]: sparse_secondary/struct.SparseSecondaryMap.html
-//! [`HopSlotMap`]: hop/struct.HopSlotMap.html
+//! [`Slottable`]: trait.Slottable.html
 //! [`Key`]: trait.Key.html
 //! [`new_key_type!`]: macro.new_key_type.html
 //! [`serde`]: https://github.com/serde-rs/serde
@@ -190,38 +200,49 @@ pub use crate::sparse_secondary::SparseSecondaryMap;
 use std::fmt::{self, Debug, Formatter};
 use std::num::NonZeroU32;
 
-/// A trait for items that can go in a slot map. Due to current stable Rust
-/// restrictions a type must be [`Copy`] to be placed in a slot map. If you must
-/// store a type that is not [`Copy`] you must use nightly Rust and enable the
-/// `unstable` feature for `slotmap` by editing your `Cargo.toml`.
+/// A trait for items that can go in a [`SlotMap`] or [`HopSlotMap`]. Due to
+/// current stable Rust restrictions a type must be [`Copy`] to be placed in one
+/// of those slot maps. This restriction does not apply to [`DenseSlotMap`],
+/// [`SecondaryMap`] or [`SparseSecondaryMap`]. It also does not apply if you
+/// use nightly Rust and enable the `unstable` feature for `slotmap` by editing
+/// your `Cargo.toml`:
 ///
 /// ```text
 /// slotmap = { version = "...", features = ["unstable"] }
 /// ```
 ///
 /// This trait should already be automatically implemented for any type that is
-/// slottable. If you can't use unstable Rust and still want to store
-///  non-[`Copy`] data, store that as associated data in a [`SecondaryMap`].
+/// slottable.
 ///
 /// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
 /// [`SecondaryMap`]: secondary/struct.SecondaryMap.html
+/// [`SparseSecondaryMap`]: sparse_secondary/struct.SparseSecondaryMap.html
+/// [`SlotMap`]: struct.SlotMap.html
+/// [`HopSlotMap`]: hop/struct.HopSlotMap.html
+/// [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
 #[cfg(not(feature = "unstable"))]
 pub trait Slottable: Copy {}
 
-/// A trait for items that can go in a slot map. Due to current stable Rust
-/// restrictions a type must be [`Copy`] to be placed in a slot map. If you must
-/// store a type that is not [`Copy`] you must use nightly Rust and enable the
-/// `unstable` feature for `slotmap` by editing your `Cargo.toml`.
+/// A trait for items that can go in a [`SlotMap`] or [`HopSlotMap`]. Due to
+/// current stable Rust restrictions a type must be [`Copy`] to be placed in one
+/// of those slot maps. This restriction does not apply to [`DenseSlotMap`],
+/// [`SecondaryMap`] or [`SparseSecondaryMap`]. It also does not apply if you
+/// use nightly Rust and enable the `unstable` feature for `slotmap` by editing
+/// your `Cargo.toml`:
 ///
-/// ```norun
+/// ```text
 /// slotmap = { version = "...", features = ["unstable"] }
 /// ```
 ///
 /// This trait should already be automatically implemented for any type that is
-/// slottable. If you can't use unstable Rust and still want to store
-/// non-[`Copy`] data, store that as associated data in a [`SecondaryMap`].
+/// slottable.
 ///
 /// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
+/// [`SecondaryMap`]: secondary/struct.SecondaryMap.html
+/// [`SparseSecondaryMap`]: sparse_secondary/struct.SparseSecondaryMap.html
+/// [`SlotMap`]: struct.SlotMap.html
+/// [`HopSlotMap`]: hop/struct.HopSlotMap.html
+/// [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
 #[cfg(feature = "unstable")]
 pub trait Slottable {}
 

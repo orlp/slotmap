@@ -606,13 +606,21 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     }
 }
 
-impl<K: Key, V> Default for SparseSecondaryMap<K, V> {
+impl<K, V, S> Default for SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    S: hash::BuildHasher + Default,
+{
     fn default() -> Self {
-        Self::new()
+        Self::with_hasher(Default::default())
     }
 }
 
-impl<K: Key, V> Index<K> for SparseSecondaryMap<K, V> {
+impl<K, V, S> Index<K> for SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    S: hash::BuildHasher,
+{
     type Output = V;
 
     fn index(&self, key: K) -> &V {
@@ -623,7 +631,11 @@ impl<K: Key, V> Index<K> for SparseSecondaryMap<K, V> {
     }
 }
 
-impl<K: Key, V> IndexMut<K> for SparseSecondaryMap<K, V> {
+impl<K, V, S> IndexMut<K> for SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    S: hash::BuildHasher,
+{
     fn index_mut(&mut self, key: K) -> &mut V {
         match self.get_mut(key) {
             Some(r) => r,
@@ -632,7 +644,12 @@ impl<K: Key, V> IndexMut<K> for SparseSecondaryMap<K, V> {
     }
 }
 
-impl<K: Key, V: PartialEq> PartialEq for SparseSecondaryMap<K, V> {
+impl<K, V, S> PartialEq for SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    V: PartialEq,
+    S: hash::BuildHasher,
+{
     fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
             return false;
@@ -646,17 +663,31 @@ impl<K: Key, V: PartialEq> PartialEq for SparseSecondaryMap<K, V> {
     }
 }
 
-impl<K: Key, V: Eq> Eq for SparseSecondaryMap<K, V> {}
+impl<K, V, S> Eq for SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    V: Eq,
+    S: hash::BuildHasher,
+{
+}
 
-impl<K: Key, V> FromIterator<(K, V)> for SparseSecondaryMap<K, V> {
+impl<K, V, S> FromIterator<(K, V)> for SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    S: hash::BuildHasher + Default,
+{
     fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
-        let mut sec = Self::new();
+        let mut sec = Self::default();
         sec.extend(iter);
         sec
     }
 }
 
-impl<K: Key, V> Extend<(K, V)> for SparseSecondaryMap<K, V> {
+impl<K, V, S> Extend<(K, V)> for SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    S: hash::BuildHasher,
+{
     fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
         let iter = iter.into_iter();
         for (k, v) in iter {
@@ -665,7 +696,12 @@ impl<K: Key, V> Extend<(K, V)> for SparseSecondaryMap<K, V> {
     }
 }
 
-impl<'a, K: Key, V: 'a + Copy> Extend<(K, &'a V)> for SparseSecondaryMap<K, V> {
+impl<'a, K, V, S> Extend<(K, &'a V)> for SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    V: 'a + Copy,
+    S: hash::BuildHasher,
+{
     fn extend<I: IntoIterator<Item = (K, &'a V)>>(&mut self, iter: I) {
         let iter = iter.into_iter();
         for (k, v) in iter {
@@ -823,7 +859,11 @@ impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
     }
 }
 
-impl<'a, K: Key, V> IntoIterator for &'a SparseSecondaryMap<K, V> {
+impl<'a, K, V, S> IntoIterator for &'a SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    S: hash::BuildHasher,
+{
     type Item = (K, &'a V);
     type IntoIter = Iter<'a, K, V>;
 
@@ -832,7 +872,11 @@ impl<'a, K: Key, V> IntoIterator for &'a SparseSecondaryMap<K, V> {
     }
 }
 
-impl<'a, K: Key, V> IntoIterator for &'a mut SparseSecondaryMap<K, V> {
+impl<'a, K, V, S> IntoIterator for &'a mut SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    S: hash::BuildHasher,
+{
     type Item = (K, &'a mut V);
     type IntoIter = IterMut<'a, K, V>;
 
@@ -841,7 +885,11 @@ impl<'a, K: Key, V> IntoIterator for &'a mut SparseSecondaryMap<K, V> {
     }
 }
 
-impl<K: Key, V> IntoIterator for SparseSecondaryMap<K, V> {
+impl<K, V, S> IntoIterator for SparseSecondaryMap<K, V, S>
+where
+    K: Key,
+    S: hash::BuildHasher,
+{
     type Item = (K, V);
     type IntoIter = IntoIter<K, V>;
 
@@ -876,7 +924,12 @@ mod serialize {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use crate::SecondaryMap;
 
-    impl<K: Key, V: Serialize> Serialize for SparseSecondaryMap<K, V> {
+    impl<K, V, H> Serialize for SparseSecondaryMap<K, V, H>
+    where
+        K: Key,
+        V: Serialize,
+        H: hash::BuildHasher,
+    {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
@@ -890,13 +943,18 @@ mod serialize {
         }
     }
 
-    impl<'de, K: Key, V: Deserialize<'de>> Deserialize<'de> for SparseSecondaryMap<K, V> {
+    impl<'de, K, V, S> Deserialize<'de> for SparseSecondaryMap<K, V, S>
+    where
+        K: Key,
+        V: Deserialize<'de>,
+        S: hash::BuildHasher + Default,
+    {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
         {
             let serde_sec: SecondaryMap<K, V> = Deserialize::deserialize(deserializer)?;
-            let mut sec = Self::new();
+            let mut sec = Self::default();
 
             for (k, v) in serde_sec {
                 sec.insert(k, v);
@@ -914,6 +972,22 @@ mod tests {
 
     #[cfg(feature = "serde")]
     use serde_json;
+
+    #[test]
+    fn custom_hasher() {
+        type FastSparseSecondaryMap<K, V> = SparseSecondaryMap<K, V, fxhash::FxBuildHasher>;
+        let mut sm = SlotMap::new();
+        let mut sec = FastSparseSecondaryMap::default();
+        let key1 = sm.insert(42);
+        sec.insert(key1, 1234);
+        assert_eq!(sec[key1], 1234);
+        assert_eq!(sec.len(), 1);
+        let sec2 = sec
+            .iter()
+            .map(|(k, &v)| (k, v))
+            .collect::<FastSparseSecondaryMap<_, _>>();
+        assert_eq!(sec, sec2);
+    }
 
     quickcheck! {
         fn qc_secmap_equiv_hashmap(operations: Vec<(u8, u32)>) -> bool {

@@ -2,12 +2,12 @@
 
 use super::{is_older_version, Key, KeyData};
 use std;
+#[cfg(feature = "unstable")]
+use std::collections::TryReserveError;
 use std::hint::unreachable_unchecked;
 use std::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-#[cfg(feature = "unstable")]
-use std::collections::TryReserveError;
 
 // We could use unions to remove the memory overhead of Option here as well, but
 // until non-Copy elements inside unions stabilize it's better to give users at
@@ -272,11 +272,11 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let key = key.into();
-        self.slots.extend(
-            (self.slots.len()..=key.idx as usize)
-                .into_iter()
-                .map(|_| Slot { version: 0, value: None, })
-        );
+        self.slots
+            .extend((self.slots.len()..=key.idx as usize).map(|_| Slot {
+                version: 0,
+                value: None,
+            }));
 
         let slot = &mut self.slots[key.idx as usize];
         if slot.version == key.version.get() {
@@ -1076,8 +1076,8 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use crate::*;
+    use std::collections::HashMap;
 
     #[cfg(feature = "serde")]
     use serde_json;

@@ -4,13 +4,13 @@
 //! Contains the slot map implementation.
 
 use std;
+#[cfg(feature = "unstable")]
+use std::collections::TryReserveError;
 use std::iter::{Enumerate, FusedIterator};
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
-#[cfg(feature = "unstable")]
-use std::collections::TryReserveError;
 
 use crate::{DefaultKey, Key, KeyData, Slottable};
 

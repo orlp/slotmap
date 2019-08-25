@@ -13,13 +13,13 @@
 //! roughly twice as slow. Random indexing has identical performance for both.
 
 use std;
+#[cfg(feature = "unstable")]
+use std::collections::TryReserveError;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
-#[cfg(feature = "unstable")]
-use std::collections::TryReserveError;
 
 use crate::{DefaultKey, Key, KeyData, Slottable};
 

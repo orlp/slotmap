@@ -1,8 +1,8 @@
 //! Contains the sparse secondary map implementation.
 
 use super::{is_older_version, Key, KeyData};
-use std::hash;
 use std::collections::hash_map::{self, HashMap};
+use std::hash;
 use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
@@ -921,8 +921,8 @@ impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 #[cfg(feature = "serde")]
 mod serialize {
     use super::*;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use crate::SecondaryMap;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     impl<K, V, H> Serialize for SparseSecondaryMap<K, V, H>
     where
@@ -967,8 +967,8 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use crate::*;
+    use std::collections::HashMap;
 
     #[cfg(feature = "serde")]
     use serde_json;

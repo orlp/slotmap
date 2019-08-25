@@ -6,14 +6,13 @@
 // are valid. Keys that are received from the user are not trusted (as they
 // might have come from a different slot map or malicious serde deseralization).
 
-
 use std;
-use std::iter::FusedIterator;
-use std::ops::{Index, IndexMut};
 #[cfg(feature = "unstable")]
 use std::collections::TryReserveError;
+use std::iter::FusedIterator;
+use std::ops::{Index, IndexMut};
 
-use crate::{Key, DefaultKey, KeyData};
+use crate::{DefaultKey, Key, KeyData};
 
 // A slot, which represents storage for an index and a current version.
 // Can be occupied or vacant.
@@ -110,7 +109,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             idx_or_free: 0,
             version: 0,
         });
-        
+
         DenseSlotMap {
             keys: Vec::with_capacity(capacity),
             values: Vec::with_capacity(capacity),
@@ -605,9 +604,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(keys, check);
     /// ```
     pub fn keys(&self) -> Keys<K, V> {
-        Keys {
-            inner: self.iter(),
-        }
+        Keys { inner: self.iter() }
     }
 
     /// An iterator visiting all values in arbitrary order. The iterator element
@@ -627,9 +624,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(values, check);
     /// ```
     pub fn values(&self) -> Values<K, V> {
-        Values {
-            inner: self.iter(),
-        }
+        Values { inner: self.iter() }
     }
 
     /// An iterator visiting all values mutably in arbitrary order. The iterator
@@ -673,7 +668,7 @@ impl<K: Key, V> Index<K> for DenseSlotMap<K, V> {
     }
 }
 
-impl<K:Key, V> IndexMut<K> for DenseSlotMap<K, V> {
+impl<K: Key, V> IndexMut<K> for DenseSlotMap<K, V> {
     fn index_mut(&mut self, key: K) -> &mut V {
         match self.get_mut(key) {
             Some(r) => r,
@@ -922,7 +917,8 @@ mod serialize {
                         None
                     },
                     version: slot.version,
-                }).collect();
+                })
+                .collect();
             serde_slots.serialize(serializer)
         }
     }
@@ -950,7 +946,7 @@ mod serialize {
                 idx_or_free: 0,
                 version: 0,
             });
-                
+
             let mut next_free = serde_slots.len();
             for (i, serde_slot) in serde_slots.into_iter().enumerate().skip(1) {
                 let occupied = serde_slot.version % 2 > 0;

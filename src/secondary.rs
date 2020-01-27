@@ -560,16 +560,25 @@ impl<K: Key, V> SecondaryMap<K, V> {
     ///
     /// # Examples
     ///
+    /// This example shows that (1) the iteration order is arbitrary, and (2) iteration does not check for invalidated keys in the primary slot map. Use with care.
+    ///
     /// ```
     /// # use slotmap::*;
     /// let mut sm = SlotMap::new();
     /// let mut sec = SecondaryMap::new();
-    /// let k0 = sm.insert(0); sec.insert(k0, 10);
-    /// let k1 = sm.insert(1); sec.insert(k1, 11);
-    /// let k2 = sm.insert(2); sec.insert(k2, 12);
+    /// let k0 = sm.insert(0);
+    /// let k1 = sm.insert(1);
+    /// let k2 = sm.insert(2);
+    /// sec.insert(k0, 10);
+    /// sec.insert(k2, 12);
+    /// sec.insert(k1, 11);
+    /// sm.remove(k1);
     ///
     /// for (k, v) in sm.iter() {
     ///     println!("key: {:?}, val: {}", k, v);
+    /// }
+    /// for (k, v) in sec.iter() {
+    ///     println!("sec key: {:?}, val: {}", k, v);
     /// }
     /// ```
     pub fn iter(&self) -> Iter<K, V> {

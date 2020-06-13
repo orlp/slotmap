@@ -689,6 +689,43 @@ impl<K: Key, V> SecondaryMap<K, V> {
             inner: self.iter_mut(),
         }
     }
+
+    /// An entry API to access an element of the map. Returns None if the key is invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use std::collections::HashSet;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SecondaryMap::new();
+    /// let k = sm.insert(1);
+    /// let v = sec.entry(k).unwrap().or_insert(10);
+    /// assert_eq!(*v, 10);
+    /// ```
+    pub fn entry(&mut self, key: K) -> Option<Entry<K, V>> {
+        let keyd = key.clone().into();
+
+        if let Some(slot) = self.slots.get_mut(keyd.idx as usize) {
+            if is_older_version(keyd.version.get(), slot.version) {
+                return None;
+            }
+        }
+
+        Some(if self.contains_key(key.clone()) {
+            Entry::Occupied(OccupiedEntry {
+                map: self,
+                key,
+                _phantom: PhantomData,
+            })
+        } else {
+            Entry::Vacant(VacantEntry {
+                map: self,
+                key,
+                _phantom: PhantomData,
+            })
+        })
+    }
 }
 
 impl<K: Key, V> Default for SecondaryMap<K, V> {
@@ -756,6 +793,114 @@ impl<'a, K: Key, V: 'a + Copy> Extend<(K, &'a V)> for SecondaryMap<K, V> {
         for (k, v) in iter {
             self.insert(k, *v);
         }
+    }
+}
+
+/// An Entry API
+#[derive(Debug)]
+pub enum Entry<'a, K: Key, V> {
+    /// The Occupied variant
+    Occupied(OccupiedEntry<'a, K, V>),
+    /// The Vacant variant
+    Vacant(VacantEntry<'a, K, V>),
+}
+
+impl<'a, K: Key, V> Entry<'a, K, V> {
+    /// a
+    pub fn or_insert(self, default: V) -> &'a mut V {
+        match self {
+            Entry::Occupied(x) => x.into_mut(),
+            Entry::Vacant(x) => x.insert(default),
+        }
+    }
+
+    /// a
+    pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
+        match self {
+            Entry::Occupied(x) => x.into_mut(),
+            Entry::Vacant(x) => x.insert(default()),
+        }
+    }
+
+    /// a
+    pub fn and_modify<F>(self, f: F) -> Self
+        where
+            F: for<'b> FnOnce(&'b mut V) {
+        match self {
+            Entry::Occupied(x) => {
+                f(unsafe { x.map.get_unchecked_mut(x.key.clone()) });
+                Entry::Occupied(x)
+            }
+            e @ Entry::Vacant(_) => e,
+        }
+    }
+}
+
+/// a
+#[derive(Debug)]
+pub struct OccupiedEntry<'a, K: Key, V> {
+    map: &'a mut SecondaryMap<K, V>,
+    key: K,
+    _phantom: PhantomData<V>,
+}
+
+impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
+    /// a
+    pub fn remove_entry(self) -> (K, V) {
+        let v = self.map.remove(self.key.clone()).unwrap();
+        (self.key, v)
+    }
+
+    /// a
+    pub fn get(&'a self) -> &'a V {
+        unsafe { self.map.get_unchecked(self.key.clone()) }
+    }
+
+    /// a
+    pub fn get_mut(&'a mut self) -> &'a mut V {
+        unsafe { self.map.get_unchecked_mut(self.key.clone()) }
+    }
+
+    /// a
+    pub fn into_mut(self) -> &'a mut V {
+        unsafe { self.map.get_unchecked_mut(self.key.clone()) }
+    }
+
+    /// a
+    pub fn insert(&mut self, value: V) -> V {
+        let oldv = self.map.insert(self.key.clone(), value).unwrap();
+        oldv
+    }
+
+    /// a
+    pub fn remove(self) -> V {
+        self.map.remove(self.key).unwrap()
+    }
+}
+
+/// a
+#[derive(Debug)]
+pub struct VacantEntry<'a, K: Key, V> {
+    map: &'a mut SecondaryMap<K, V>,
+    key: K,
+    _phantom: PhantomData<V>,
+}
+
+impl<'a, K: Key, V> VacantEntry<'a, K, V> {
+    /// a
+    pub fn insert(self, value: V) -> &'a mut V {
+        self.map.insert(self.key.clone(), value);
+        unsafe { self.map.get_unchecked_mut(self.key) }
+    }
+
+    /// a
+    pub fn into_key(self) -> K {
+        self.key
+    }
+
+    /// a
+    pub fn key(&self) -> &K {
+        &self.key
     }
 }
 

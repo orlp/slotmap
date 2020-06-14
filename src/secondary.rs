@@ -712,17 +712,11 @@ impl<K: Key, V> SecondaryMap<K, V> {
                 return None;
             }
             if slot.version == v {
-                return Some(Entry::Occupied(OccupiedEntry {
-                    map: self,
-                    key,
-                }));
+                return Some(Entry::Occupied(OccupiedEntry { map: self, key }));
             }
         }
 
-        Some(Entry::Vacant(VacantEntry {
-            map: self,
-            key,
-        }))
+        Some(Entry::Vacant(VacantEntry { map: self, key }))
     }
 }
 
@@ -890,8 +884,9 @@ impl<'a, K: Key, V> Entry<'a, K, V> {
     /// assert_eq!(sec[k], 1)
     /// ```
     pub fn and_modify<F>(mut self, f: F) -> Self
-        where
-            F: for<'b> FnOnce(&'b mut V) {
+    where
+        F: for<'b> FnOnce(&'b mut V),
+    {
         if let Entry::Occupied(o) = &mut self {
             f(o.get_mut());
         }
@@ -949,31 +944,6 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     /// ```
     pub fn key(&self) -> &K {
         &self.key
-    }
-
-    /// Take the ownership of the key and value from the map.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use slotmap::*;
-    /// # use slotmap::secondary::Entry;
-    ///
-    /// let mut sm = SlotMap::new();
-    /// let mut sec = SecondaryMap::new();
-    ///
-    /// let k = sm.insert(1);
-    /// sec.insert(k, 10);
-    ///
-    /// if let Entry::Occupied(o) = sec.entry(k).unwrap() {
-    ///     let (k, v) = o.remove_entry();
-    ///     assert_eq!(v, 10);
-    ///     assert_eq!(sec.get(k), None);
-    /// }
-    /// ```
-    pub fn remove_entry(self) -> (K, V) {
-        let v = self.map.remove(self.key.clone()).unwrap();
-        (self.key, v)
     }
 
     /// Gets a reference to the value in the entry.
@@ -1103,7 +1073,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
         self.map.num_elems -= 1;
         match std::mem::replace(&mut slot.value, None) {
             Some(x) => x,
-            None => unsafe { unreachable_unchecked() }
+            None => unsafe { unreachable_unchecked() },
         }
     }
 }
@@ -1181,7 +1151,8 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     /// ```
     pub fn insert(self, value: V) -> &'a mut V {
         let key = self.key.into();
-        self.map.slots
+        self.map
+            .slots
             .extend((self.map.slots.len()..=key.idx as usize).map(|_| Slot {
                 version: 0,
                 value: None,
@@ -1197,7 +1168,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
 
         match slot.value.as_mut() {
             Some(x) => x,
-            None => unsafe { unreachable_unchecked() }
+            None => unsafe { unreachable_unchecked() },
         }
     }
 }

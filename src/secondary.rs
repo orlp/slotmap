@@ -794,12 +794,18 @@ impl<'a, K: Key, V: 'a + Copy> Extend<(K, &'a V)> for SecondaryMap<K, V> {
     }
 }
 
-/// An Entry API
+/// A view into a single entry in a SecondaryMap, which may either be vacant or occupied.
+///
+/// This `enum` is constructed from the [`entry`] method on [`SecondaryMap`].
+///
+/// [`SecondaryMap`]: struct.SecondaryMap.html
+/// [`entry`]: struct.SecondaryMap.html#method.entry
 #[derive(Debug)]
 pub enum Entry<'a, K: Key, V> {
-    /// The Occupied variant
+    /// An occupied entry
     Occupied(OccupiedEntry<'a, K, V>),
-    /// The Vacant variant
+
+    /// A vacant entry
     Vacant(VacantEntry<'a, K, V>),
 }
 
@@ -924,7 +930,7 @@ impl<'a, K: Key, V: Default> Entry<'a, K, V> {
 }
 
 /// A view into a occupied entry in a `SecondaryMap`.
-/// It is part of the [`Entry`] enum.
+/// It is part of the `Entry` enum.
 #[derive(Debug)]
 pub struct OccupiedEntry<'a, K: Key, V> {
     map: &'a mut SecondaryMap<K, V>,
@@ -1107,7 +1113,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
 }
 
 /// A view into a vacant entry in a `SecondaryMap`.
-/// It is part of the [`Entry`] enum.
+/// It is part of the `Entry` enum.
 #[derive(Debug)]
 pub struct VacantEntry<'a, K: Key, V> {
     map: &'a mut SecondaryMap<K, V>,

@@ -691,7 +691,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     }
 
     /// Gets the given key's corresponding entry in the map for in-place manipulation.
-    /// Returns None if the key is invalid.
+    /// May return None if the key is outdated.
     ///
     /// # Examples
     ///
@@ -826,10 +826,7 @@ impl<'a, K: Key, V> Entry<'a, K, V> {
     /// assert_eq!(v, &10);
     /// ```
     pub fn or_insert(self, default: V) -> &'a mut V {
-        match self {
-            Entry::Occupied(x) => x.into_mut(),
-            Entry::Vacant(x) => x.insert(default),
-        }
+        self.or_insert_with(|| default)
     }
 
     /// Ensures a value is in the entry by inserting the result of the default function if empty,
@@ -892,16 +889,13 @@ impl<'a, K: Key, V> Entry<'a, K, V> {
     ///
     /// assert_eq!(sec[k], 1)
     /// ```
-    pub fn and_modify<F>(self, f: F) -> Self
+    pub fn and_modify<F>(mut self, f: F) -> Self
         where
             F: for<'b> FnOnce(&'b mut V) {
-        match self {
-            Entry::Occupied(mut x) => {
-                f(x.get_mut());
-                Entry::Occupied(x)
-            }
-            e @ Entry::Vacant(_) => e,
+        if let Entry::Occupied(o) = &mut self {
+            f(o.get_mut());
         }
+        self
     }
 }
 
@@ -922,10 +916,7 @@ impl<'a, K: Key, V: Default> Entry<'a, K, V> {
     /// assert_eq!(sec[k], None)
     /// ```
     pub fn or_default(self) -> &'a mut V {
-        match self {
-            Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => entry.insert(Default::default()),
-        }
+        self.or_insert_with(|| Default::default())
     }
 }
 
@@ -1081,10 +1072,8 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     ///     assert_eq!(o.get(), &20);
     /// }
     /// ```
-    pub fn insert(&mut self, mut value: V) -> V {
-        let old_value = self.get_mut();
-        std::mem::swap(&mut value, old_value);
-        value
+    pub fn insert(&mut self, value: V) -> V {
+        std::mem::replace(self.get_mut(), value)
     }
 
     /// Takes the value out of the entry, and returns it.
@@ -1108,7 +1097,14 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     /// }
     /// ```
     pub fn remove(self) -> V {
-        self.map.remove(self.key).unwrap()
+        let keyd = self.key.into();
+        let slot = unsafe { self.map.slots.get_unchecked_mut(keyd.idx as usize) };
+        slot.version -= 1;
+        self.map.num_elems -= 1;
+        match std::mem::replace(&mut slot.value, None) {
+            Some(x) => x,
+            None => unsafe { unreachable_unchecked() }
+        }
     }
 }
 
@@ -1143,7 +1139,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
         &self.key
     }
 
-    /// Take ownership of the key
+    /// Take ownership of the key.
     ///
     /// # Examples
     ///
@@ -1184,8 +1180,25 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     /// }
     /// ```
     pub fn insert(self, value: V) -> &'a mut V {
-        self.map.insert(self.key.clone(), value);
-        unsafe { self.map.get_unchecked_mut(self.key) }
+        let key = self.key.into();
+        self.map.slots
+            .extend((self.map.slots.len()..=key.idx as usize).map(|_| Slot {
+                version: 0,
+                value: None,
+            }));
+
+        let slot = &mut self.map.slots[key.idx as usize];
+        self.map.num_elems += 1;
+
+        *slot = Slot {
+            version: key.version.get(),
+            value: Some(value),
+        };
+
+        match slot.value.as_mut() {
+            Some(x) => x,
+            None => unsafe { unreachable_unchecked() }
+        }
     }
 }
 

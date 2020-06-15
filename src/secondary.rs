@@ -1071,7 +1071,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
         let slot = unsafe { self.map.slots.get_unchecked_mut(keyd.idx as usize) };
         slot.version -= 1;
         self.map.num_elems -= 1;
-        match std::mem::replace(&mut slot.value, None) {
+        match slot.value.take() {
             Some(x) => x,
             None => unsafe { unreachable_unchecked() },
         }
@@ -1166,10 +1166,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
             value: Some(value),
         };
 
-        match slot.value.as_mut() {
-            Some(x) => x,
-            None => unsafe { unreachable_unchecked() },
-        }
+        slot.value.as_mut().unwrap()
     }
 }
 

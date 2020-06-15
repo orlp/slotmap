@@ -604,6 +604,44 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             inner: self.iter_mut(),
         }
     }
+
+    /// Gets the given key's corresponding entry in the map for in-place manipulation.
+    /// May return None if the key is outdated.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    /// let k = sm.insert(1);
+    /// let v = sec.entry(k).unwrap().or_insert(10);
+    /// assert_eq!(*v, 10);
+    /// ```
+    pub fn entry(&mut self, key: K) -> Option<Entry<K, V>> {
+        let keyd = key.clone().into();
+
+        let entry = self.slots.entry(keyd.idx as u32);
+
+        if let hash_map::Entry::Occupied(o) = entry {
+            let slot = o.get();
+            let v = keyd.version.get();
+            if is_older_version(v, slot.version) {
+                return None;
+            }
+
+            if slot.version < v {
+                o.remove();
+            }
+        }
+
+        // Tried rewriting it all and doing only one call to entry (except in the o.remove() branch)
+        // but the borrow checker wouldn't let me.
+        match self.slots.entry(keyd.idx as u32) {
+            hash_map::Entry::Occupied(o) => Some(Entry::Occupied(OccupiedEntry { entry: o, key })),
+            hash_map::Entry::Vacant(v) => Some(Entry::Vacant(VacantEntry { entry: v, key })),
+        }
+    }
 }
 
 impl<K, V, S> Default for SparseSecondaryMap<K, V, S>
@@ -707,6 +745,372 @@ where
         for (k, v) in iter {
             self.insert(k, *v);
         }
+    }
+}
+
+/// A view into a single entry in a SparseSecondaryMap, which may either be vacant or occupied.
+///
+/// This `enum` is constructed from the [`entry`] method on [`SparseSecondaryMap`].
+///
+/// [`SparseSecondaryMap`]: struct.SparseSecondaryMap.html
+/// [`entry`]: struct.SparseSecondaryMap.html#method.entry
+#[derive(Debug)]
+pub enum Entry<'a, K: Key, V> {
+    /// An occupied entry
+    Occupied(OccupiedEntry<'a, K, V>),
+
+    /// A vacant entry
+    Vacant(VacantEntry<'a, K, V>),
+}
+
+impl<'a, K: Key, V> Entry<'a, K, V> {
+    /// Ensures a value is in the entry by inserting the default if empty, and returns
+    /// a mutable reference to the value in the entry.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// let v = sec.entry(k).unwrap().or_insert(10);
+    ///
+    /// assert_eq!(v, &10);
+    /// ```
+    pub fn or_insert(self, default: V) -> &'a mut V {
+        self.or_insert_with(|| default)
+    }
+
+    /// Ensures a value is in the entry by inserting the result of the default function if empty,
+    /// and returns a mutable reference to the value in the entry.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// let v = sec.entry(k).unwrap().or_insert_with(|| "foobar".to_string());
+    ///
+    /// assert_eq!(v, &"foobar");
+    /// ```
+    pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
+        match self {
+            Entry::Occupied(x) => x.into_mut(),
+            Entry::Vacant(x) => x.insert(default()),
+        }
+    }
+
+    /// Returns a reference to this entry's key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec: SparseSecondaryMap<_, ()> = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// let entry = sec.entry(k).unwrap();
+    /// let k2 = entry.key();
+    ///
+    /// assert_eq!(k2, &k);
+    /// ```
+    pub fn key(&self) -> &K {
+        match self {
+            Entry::Occupied(ref entry) => entry.key(),
+            Entry::Vacant(ref entry) => entry.key(),
+        }
+    }
+
+    /// Provides in-place mutable access to an occupied entry before any
+    /// potential inserts into the map.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// sec.insert(k, 0);
+    /// sec.entry(k).unwrap().and_modify(|x| *x = 1);
+    ///
+    /// assert_eq!(sec[k], 1)
+    /// ```
+    pub fn and_modify<F>(mut self, f: F) -> Self
+    where
+        F: for<'b> FnOnce(&'b mut V),
+    {
+        if let Entry::Occupied(o) = &mut self {
+            f(o.get_mut());
+        }
+        self
+    }
+}
+
+impl<'a, K: Key, V: Default> Entry<'a, K, V> {
+    /// Ensures a value is in the entry by inserting the default value if empty,
+    /// and returns a mutable reference to the value in the entry.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec: SparseSecondaryMap<_, Option<i32>> = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// sec.entry(k).unwrap().or_default();
+    ///
+    /// assert_eq!(sec[k], None)
+    /// ```
+    pub fn or_default(self) -> &'a mut V {
+        self.or_insert_with(|| Default::default())
+    }
+}
+
+/// A view into a occupied entry in a `SparseSecondaryMap`.
+/// It is part of the `Entry` enum.
+#[derive(Debug)]
+pub struct OccupiedEntry<'a, K: Key, V> {
+    entry: hash_map::OccupiedEntry<'a, u32, Slot<V>>,
+    key: K,
+}
+
+impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
+    /// Gets a reference to the key in the entry.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::sparse_secondary::Entry;
+    ///
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// sec.insert(k, 10);
+    ///
+    /// if let Entry::Occupied(o) = sec.entry(k).unwrap() {
+    ///     assert_eq!(o.key(), &k);
+    /// }
+    /// ```
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
+    /// Gets a reference to the value in the entry.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::sparse_secondary::Entry;
+    ///
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// sec.insert(k, 10);
+    ///
+    /// if let Entry::Occupied(o) = sec.entry(k).unwrap() {
+    ///     assert_eq!(o.get(), &10);
+    /// }
+    /// ```
+    pub fn get(&self) -> &V {
+        &self.entry.get().value
+    }
+
+    /// Gets a mutable reference to the value in the entry.
+    ///
+    /// If you need a reference to the OccupiedEntry which may outlive the destruction of the Entry value, see into_mut.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::sparse_secondary::Entry;
+    ///
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// sec.insert(k, 10);
+    ///
+    /// if let Entry::Occupied(mut o) = sec.entry(k).unwrap() {
+    ///     *o.get_mut() = 20;
+    ///     assert_eq!(o.get(), &20);
+    /// }
+    /// ```
+    pub fn get_mut(&mut self) -> &mut V {
+        &mut self.entry.get_mut().value
+    }
+
+    /// Converts the OccupiedEntry into a mutable reference to the value in the entry with a lifetime bound to the map itself.
+    ///
+    /// If you need multiple references to the OccupiedEntry, see get_mut.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::sparse_secondary::Entry;
+    ///
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(2);
+    /// sec.insert(k, 0);
+    ///
+    /// let mut v = &mut 3;
+    /// if let Entry::Occupied(o) = sec.entry(k).unwrap() {
+    ///     v = o.into_mut(); // v outlives the entry
+    /// }
+    ///
+    /// *v = 1;
+    ///
+    /// assert_eq!(sec[k], 1);
+    /// ```
+    pub fn into_mut(self) -> &'a mut V {
+        &mut self.entry.into_mut().value
+    }
+
+    /// Sets the value of the entry, and returns the entry's old value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::sparse_secondary::Entry;
+    ///
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// sec.insert(k, 10);
+    ///
+    /// if let Entry::Occupied(mut o) = sec.entry(k).unwrap() {
+    ///     let v = o.insert(20);
+    ///     assert_eq!(v, 10);
+    ///     assert_eq!(o.get(), &20);
+    /// }
+    /// ```
+    pub fn insert(&mut self, value: V) -> V {
+        std::mem::replace(self.get_mut(), value)
+    }
+
+    /// Takes the value out of the entry, and returns it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::sparse_secondary::Entry;
+    ///
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    /// sec.insert(k, 10);
+    ///
+    /// if let Entry::Occupied(mut o) = sec.entry(k).unwrap() {
+    ///     let v = o.remove();
+    ///     assert_eq!(v, 10);
+    ///     assert_eq!(sec.get(k), None);
+    /// }
+    /// ```
+    pub fn remove(self) -> V {
+        self.entry.remove().value
+    }
+}
+
+/// A view into a vacant entry in a `SparseSecondaryMap`.
+/// It is part of the `Entry` enum.
+#[derive(Debug)]
+pub struct VacantEntry<'a, K: Key, V> {
+    entry: hash_map::VacantEntry<'a, u32, Slot<V>>,
+    key: K,
+}
+
+impl<'a, K: Key, V> VacantEntry<'a, K, V> {
+    /// Gets a reference to the key that would be used when inserting a value
+    /// through the `VacantEntry`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::sparse_secondary::Entry;
+    ///
+    /// let mut sm = SlotMap::new();
+    /// let mut sec: SparseSecondaryMap<_, ()> = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    ///
+    /// if let Entry::Vacant(v) = sec.entry(k).unwrap() {
+    ///     assert_eq!(v.key(), &k);
+    /// }
+    /// ```
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
+    /// Take ownership of the key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::sparse_secondary::Entry;
+    ///
+    /// let mut sm = SlotMap::new();
+    /// let mut sec: SparseSecondaryMap<_, ()> = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    ///
+    /// if let Entry::Vacant(v) = sec.entry(k).unwrap() {
+    ///     assert_eq!(v.into_key(), k);
+    /// }
+    /// ```
+    pub fn into_key(self) -> K {
+        self.key
+    }
+
+    /// Sets the value of the entry with the VacantEntry's key,
+    /// and returns a mutable reference to it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::sparse_secondary::Entry;
+    ///
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    ///
+    /// let k = sm.insert(1);
+    ///
+    /// if let Entry::Vacant(v) = sec.entry(k).unwrap() {
+    ///     let new_val = v.insert(3);
+    ///     assert_eq!(new_val, &mut 3);
+    /// }
+    /// ```
+    pub fn insert(self, value: V) -> &'a mut V {
+        let key = self.key.into();
+        &mut self
+            .entry
+            .insert(Slot {
+                version: key.version.get(),
+                value,
+            })
+            .value
     }
 }
 

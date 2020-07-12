@@ -306,6 +306,18 @@ impl KeyData {
         let version = (value >> 32) | 1; // Ensure version is odd.
         Self::new(idx as u32, version as u32)
     }
+
+    /// Returns the slot index and version.  This is useful only in
+    /// unusual situations.  At any one time, a slotmap has at most
+    /// one entry with each index.  The combination of index and
+    /// version are unique across time.  Indices are generally not
+    /// significantly bigger than thw maximum ever occupancy.  No
+    /// other guarantees are made.
+    ///
+    /// For serialisation, use `serde` or `as_ffi`.
+    pub fn get_idx_version(self) -> (u32, u32) {
+        (self.idx, self.version.get())
+    }
 }
 
 impl Debug for KeyData {

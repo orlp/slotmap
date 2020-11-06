@@ -2,7 +2,7 @@
 
 use super::{is_older_version, Key, KeyData};
 use std;
-#[cfg(feature = "unstable")]
+#[cfg(all(nightly, feature = "unstable"))]
 use std::collections::TryReserveError;
 use std::hint::unreachable_unchecked;
 use std::iter::{Enumerate, Extend, FromIterator, FusedIterator};
@@ -220,7 +220,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// sec.try_set_capacity(1000).unwrap();
     /// assert!(sec.capacity() >= 1000);
     /// ```
-    #[cfg(feature = "unstable")]
+    #[cfg(all(nightly, feature = "unstable"))]
     pub fn try_set_capacity(&mut self, new_capacity: usize) -> Result<(), TryReserveError> {
         let new_capacity = new_capacity + 1; // Sentinel.
         if new_capacity > self.slots.capacity() {

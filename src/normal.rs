@@ -4,7 +4,7 @@
 //! Contains the slot map implementation.
 
 use std;
-#[cfg(feature = "unstable")]
+#[cfg(all(nightly, feature = "unstable"))]
 use std::collections::TryReserveError;
 use std::iter::{Enumerate, FusedIterator};
 use std::marker::PhantomData;
@@ -281,7 +281,7 @@ impl<K: Key, V: Slottable> SlotMap<K, V> {
     /// sm.try_reserve(32).unwrap();
     /// assert!(sm.capacity() >= 33);
     /// ```
-    #[cfg(feature = "unstable")]
+    #[cfg(all(nightly, feature = "unstable"))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         // One slot is reserved for the sentinel.
         let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
@@ -1129,7 +1129,7 @@ mod tests {
     #[cfg(feature = "serde")]
     use serde_json;
 
-    #[cfg(feature = "unstable")]
+    #[cfg(all(nightly, feature = "unstable"))]
     #[test]
     fn check_drops() {
         let drops = std::cell::RefCell::new(0usize);

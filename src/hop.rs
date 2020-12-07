@@ -12,7 +12,6 @@
 //! The trade-off is that compared to a regular `SlotMap` insertion/removal is
 //! roughly twice as slow. Random indexing has identical performance for both.
 
-use std;
 #[cfg(feature = "unstable")]
 use std::collections::TryReserveError;
 use std::iter::FusedIterator;
@@ -1354,7 +1353,7 @@ mod tests {
 
                     // Delete.
                     1 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
 
                         let idx = val as usize % hm_keys.len();
                         if hm.remove(&hm_keys[idx]) != sm.remove(sm_keys[idx]) {
@@ -1364,7 +1363,7 @@ mod tests {
 
                     // Access.
                     2 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
                         let idx = val as usize % hm_keys.len();
                         let (hm_key, sm_key) = (&hm_keys[idx], sm_keys[idx]);
 

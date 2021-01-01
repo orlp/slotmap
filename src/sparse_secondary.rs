@@ -7,7 +7,7 @@ use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
-#[cfg(feature = "unstable")]
+#[cfg(all(nightly, feature = "unstable"))]
 use std::collections::TryReserveError;
 
 #[derive(Debug, Clone)]
@@ -234,7 +234,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// sec.try_reserve(10).unwrap();
     /// assert!(sec.capacity() >= 10);
     /// ```
-    #[cfg(feature = "unstable")]
+    #[cfg(all(nightly, feature = "unstable"))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.slots.try_reserve(additional)
     }

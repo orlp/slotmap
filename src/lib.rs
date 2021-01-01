@@ -1,7 +1,10 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
 #![doc(html_root_url = "https://docs.rs/slotmap/0.4.0")]
 #![crate_name = "slotmap"]
-#![cfg_attr(feature = "unstable", feature(untagged_unions, try_reserve))]
+#![cfg_attr(
+    all(nightly, feature = "unstable"),
+    feature(untagged_unions, try_reserve)
+)]
 
 //! # slotmap
 //!
@@ -220,7 +223,7 @@ use std::num::NonZeroU32;
 /// [`SlotMap`]: struct.SlotMap.html
 /// [`HopSlotMap`]: hop/struct.HopSlotMap.html
 /// [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
-#[cfg(not(feature = "unstable"))]
+#[cfg(not(all(nightly, feature = "unstable")))]
 pub trait Slottable: Copy {}
 
 /// A trait for items that can go in a [`SlotMap`] or [`HopSlotMap`]. Due to
@@ -243,13 +246,13 @@ pub trait Slottable: Copy {}
 /// [`SlotMap`]: struct.SlotMap.html
 /// [`HopSlotMap`]: hop/struct.HopSlotMap.html
 /// [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
-#[cfg(feature = "unstable")]
+#[cfg(all(nightly, feature = "unstable"))]
 pub trait Slottable {}
 
-#[cfg(not(feature = "unstable"))]
+#[cfg(not(all(nightly, feature = "unstable")))]
 impl<T: Copy> Slottable for T {}
 
-#[cfg(feature = "unstable")]
+#[cfg(all(nightly, feature = "unstable"))]
 impl<T> Slottable for T {}
 
 /// The actual data stored in a [`Key`].

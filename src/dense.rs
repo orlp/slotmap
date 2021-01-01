@@ -7,7 +7,7 @@
 // might have come from a different slot map or malicious serde deseralization).
 
 use std;
-#[cfg(feature = "unstable")]
+#[cfg(all(nightly, feature = "unstable"))]
 use std::collections::TryReserveError;
 use std::iter::FusedIterator;
 use std::ops::{Index, IndexMut};
@@ -202,7 +202,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// sm.try_reserve(32).unwrap();
     /// assert!(sm.capacity() >= 33);
     /// ```
-    #[cfg(feature = "unstable")]
+    #[cfg(all(nightly, feature = "unstable"))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.keys.try_reserve(additional)?;
         self.values.try_reserve(additional)?;

@@ -6,11 +6,11 @@
 // are valid. Keys that are received from the user are not trusted (as they
 // might have come from a different slot map or malicious serde deseralization).
 
-use std;
 #[cfg(all(nightly, feature = "unstable"))]
-use std::collections::TryReserveError;
-use std::iter::FusedIterator;
-use std::ops::{Index, IndexMut};
+use core::collections::TryReserveError;
+use alloc::vec::Vec;
+use core::iter::FusedIterator;
+use core::ops::{Index, IndexMut};
 
 use crate::{DefaultKey, Key, KeyData};
 
@@ -272,7 +272,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        if self.len() + 1 == std::u32::MAX as usize {
+        if self.len() + 1 == core::u32::MAX as usize {
             panic!("DenseSlotMap number of elements overflow");
         }
 
@@ -687,22 +687,22 @@ pub struct Drain<'a, K: 'a + Key, V: 'a> {
 /// An iterator that moves key-value pairs out of a `DenseSlotMap`.
 #[derive(Debug)]
 pub struct IntoIter<K, V> {
-    inner_keys: std::vec::IntoIter<K>,
-    inner_values: std::vec::IntoIter<V>,
+    inner_keys: alloc::vec::IntoIter<K>,
+    inner_values: alloc::vec::IntoIter<V>,
 }
 
 /// An iterator over the key-value pairs in a `DenseSlotMap`.
 #[derive(Debug)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
-    inner_keys: std::slice::Iter<'a, K>,
-    inner_values: std::slice::Iter<'a, V>,
+    inner_keys: core::slice::Iter<'a, K>,
+    inner_values: core::slice::Iter<'a, V>,
 }
 
 /// A mutable iterator over the key-value pairs in a `DenseSlotMap`.
 #[derive(Debug)]
 pub struct IterMut<'a, K: 'a + Key, V: 'a> {
-    inner_keys: std::slice::Iter<'a, K>,
-    inner_values: std::slice::IterMut<'a, V>,
+    inner_keys: core::slice::Iter<'a, K>,
+    inner_values: core::slice::IterMut<'a, V>,
 }
 
 /// An iterator over the keys in a `DenseSlotMap`.
@@ -991,9 +991,9 @@ mod tests {
 
     #[test]
     fn check_drops() {
-        let drops = std::cell::RefCell::new(0usize);
+        let drops = core::cell::RefCell::new(0usize);
         #[derive(Clone)]
-        struct CountDrop<'a>(&'a std::cell::RefCell<usize>);
+        struct CountDrop<'a>(&'a core::cell::RefCell<usize>);
         impl<'a> Drop for CountDrop<'a> {
             fn drop(&mut self) {
                 *self.0.borrow_mut() += 1;

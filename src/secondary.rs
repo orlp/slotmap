@@ -1,13 +1,13 @@
 //! Contains the secondary map implementation.
 
 use super::{is_older_version, Key, KeyData};
-use std;
 #[cfg(all(nightly, feature = "unstable"))]
-use std::collections::TryReserveError;
-use std::hint::unreachable_unchecked;
-use std::iter::{Enumerate, Extend, FromIterator, FusedIterator};
-use std::marker::PhantomData;
-use std::ops::{Index, IndexMut};
+use alloc::collections::TryReserveError;
+use alloc::vec::Vec;
+use core::hint::unreachable_unchecked;
+use core::iter::{Enumerate, Extend, FromIterator, FusedIterator};
+use core::marker::PhantomData;
+use core::ops::{Index, IndexMut};
 
 // TODO: Save space using MaybeUninit.
 #[derive(Debug, Clone)]
@@ -267,7 +267,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
 
         let slot = &mut self.slots[key.idx as usize];
         if slot.version == key.version.get() {
-            return std::mem::replace(&mut slot.value, Some(value));
+            return core::mem::replace(&mut slot.value, Some(value));
         }
 
         if slot.occupied() {
@@ -322,7 +322,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
                 // denied as outdated.
                 slot.version -= 1;
                 self.num_elems -= 1;
-                return Some(std::mem::replace(&mut slot.value, None).unwrap());
+                return Some(core::mem::replace(&mut slot.value, None).unwrap());
             }
         }
 
@@ -1030,7 +1030,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     /// }
     /// ```
     pub fn insert(&mut self, value: V) -> V {
-        std::mem::replace(self.get_mut(), value)
+        core::mem::replace(self.get_mut(), value)
     }
 
     /// Takes the value out of the entry, and returns it.
@@ -1170,7 +1170,7 @@ pub struct Drain<'a, K: Key + 'a, V: 'a> {
 #[derive(Debug)]
 pub struct IntoIter<K: Key, V> {
     num_left: usize,
-    slots: Enumerate<std::vec::IntoIter<Slot<V>>>,
+    slots: Enumerate<alloc::vec::IntoIter<Slot<V>>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
@@ -1178,7 +1178,7 @@ pub struct IntoIter<K: Key, V> {
 #[derive(Debug)]
 pub struct Iter<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
-    slots: Enumerate<std::slice::Iter<'a, Slot<V>>>,
+    slots: Enumerate<core::slice::Iter<'a, Slot<V>>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
@@ -1186,7 +1186,7 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
 #[derive(Debug)]
 pub struct IterMut<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
-    slots: Enumerate<std::slice::IterMut<'a, Slot<V>>>,
+    slots: Enumerate<core::slice::IterMut<'a, Slot<V>>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
@@ -1217,7 +1217,7 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
             let idx = self.cur;
             self.cur += 1;
 
-            if let Some(value) = std::mem::replace(&mut self.sm.slots[idx].value, None) {
+            if let Some(value) = core::mem::replace(&mut self.sm.slots[idx].value, None) {
                 let key = KeyData::new(idx as u32, self.sm.slots[idx].version);
                 self.sm.slots[idx].version -= 1;
                 self.sm.num_elems -= 1;
@@ -1245,7 +1245,7 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
 
     fn next(&mut self) -> Option<(K, V)> {
         while let Some((idx, mut slot)) = self.slots.next() {
-            if let Some(value) = std::mem::replace(&mut slot.value, None) {
+            if let Some(value) = core::mem::replace(&mut slot.value, None) {
                 let key = KeyData::new(idx as u32, slot.version);
                 self.num_left -= 1;
                 return Some((key.into(), value));

@@ -1,16 +1,16 @@
-// Necessary for the union differing on stable/nightly.
+// Needed because assigning to non-Copy union is unsafe in stable but not in nightly.
 #![allow(unused_unsafe)]
 
 //! Contains the slot map implementation.
 
-use std;
 #[cfg(all(nightly, feature = "unstable"))]
-use std::collections::TryReserveError;
-use std::iter::{Enumerate, FusedIterator};
-use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
-use std::ops::{Index, IndexMut};
-use std::{fmt, ptr};
+use alloc::collections::TryReserveError;
+use alloc::vec::Vec;
+use core::iter::{Enumerate, FusedIterator};
+use core::marker::PhantomData;
+use core::mem::ManuallyDrop;
+use core::ops::{Index, IndexMut};
+use core::{fmt, ptr};
 
 use crate::{DefaultKey, Key, KeyData};
 
@@ -71,7 +71,7 @@ impl<T> Slot<T> {
 
 impl<T> Drop for Slot<T> {
     fn drop(&mut self) {
-        if std::mem::needs_drop::<T>() && self.occupied() {
+        if core::mem::needs_drop::<T>() && self.occupied() {
             // This is safe because we checked that we're occupied.
             unsafe {
                 ManuallyDrop::drop(&mut self.u.value);
@@ -350,7 +350,7 @@ impl<K: Key, V> SlotMap<K, V> {
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
-        if new_num_elems == std::u32::MAX {
+        if new_num_elems == core::u32::MAX {
             panic!("SlotMap number of elements overflow");
         }
 
@@ -791,7 +791,7 @@ pub struct Drain<'a, K: 'a + Key, V: 'a> {
 #[derive(Debug)]
 pub struct IntoIter<K: Key, V> {
     num_left: usize,
-    slots: Enumerate<std::vec::IntoIter<Slot<V>>>,
+    slots: Enumerate<alloc::vec::IntoIter<Slot<V>>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
@@ -799,7 +799,7 @@ pub struct IntoIter<K: Key, V> {
 #[derive(Debug)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
     num_left: usize,
-    slots: Enumerate<std::slice::Iter<'a, Slot<V>>>,
+    slots: Enumerate<core::slice::Iter<'a, Slot<V>>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
@@ -807,7 +807,7 @@ pub struct Iter<'a, K: 'a + Key, V: 'a> {
 #[derive(Debug)]
 pub struct IterMut<'a, K: 'a + Key, V: 'a> {
     num_left: usize,
-    slots: Enumerate<std::slice::IterMut<'a, Slot<V>>>,
+    slots: Enumerate<core::slice::IterMut<'a, Slot<V>>>,
     _k: PhantomData<fn(K) -> K>,
 }
 

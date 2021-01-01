@@ -1,4 +1,4 @@
-// Necessary for the union differing on stable/nightly.
+// Needed because assigning to non-Copy union is unsafe in stable but not in nightly.
 #![allow(unused_unsafe)]
 
 //! Contains the faster iteration, slower insertion/removal slot map
@@ -12,14 +12,14 @@
 //! The trade-off is that compared to a regular `SlotMap` insertion/removal is
 //! roughly twice as slow. Random indexing has identical performance for both.
 
-use std;
 #[cfg(all(nightly, feature = "unstable"))]
-use std::collections::TryReserveError;
-use std::iter::FusedIterator;
-use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
-use std::ops::{Index, IndexMut};
-use std::{fmt, ptr};
+use core::collections::TryReserveError;
+use alloc::vec::Vec;
+use core::iter::FusedIterator;
+use core::marker::PhantomData;
+use core::mem::ManuallyDrop;
+use core::ops::{Index, IndexMut};
+use core::{fmt, ptr};
 
 use crate::{DefaultKey, Key, KeyData};
 
@@ -88,7 +88,7 @@ impl<T> Slot<T> {
 
 impl<T> Drop for Slot<T> {
     fn drop(&mut self) {
-        if std::mem::needs_drop::<T>() && self.occupied() {
+        if core::mem::needs_drop::<T>() && self.occupied() {
             // This is safe because we checked that we're occupied.
             unsafe {
                 ManuallyDrop::drop(&mut self.u.value);
@@ -375,7 +375,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
-        if new_num_elems == std::u32::MAX {
+        if new_num_elems == core::u32::MAX {
             panic!("HopSlotMap number of elements overflow");
         }
 

@@ -6,9 +6,9 @@
 // are valid. Keys that are received from the user are not trusted (as they
 // might have come from a different slot map or malicious serde deseralization).
 
+use alloc::vec::Vec;
 #[cfg(all(nightly, feature = "unstable"))]
 use core::collections::TryReserveError;
-use alloc::vec::Vec;
 use core::iter::FusedIterator;
 use core::ops::{Index, IndexMut};
 
@@ -934,7 +934,10 @@ mod serialize {
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if serde_slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
+            if serde_slots
+                .get(0)
+                .map_or(true, |slot| slot.version % 2 == 1)
+            {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 

@@ -6,11 +6,11 @@
 #[cfg(all(nightly, feature = "unstable"))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
+use core::fmt;
 use core::iter::{Enumerate, FusedIterator};
 use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ops::{Index, IndexMut};
-use core::fmt;
 
 use crate::{DefaultKey, Key, KeyData};
 

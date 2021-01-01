@@ -12,14 +12,14 @@
 //! The trade-off is that compared to a regular `SlotMap` insertion/removal is
 //! roughly twice as slow. Random indexing has identical performance for both.
 
+use alloc::vec::Vec;
 #[cfg(all(nightly, feature = "unstable"))]
 use core::collections::TryReserveError;
-use alloc::vec::Vec;
+use core::fmt;
 use core::iter::FusedIterator;
 use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ops::{Index, IndexMut};
-use core::fmt;
 
 use crate::{DefaultKey, Key, KeyData};
 

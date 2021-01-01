@@ -1,10 +1,7 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
 #![doc(html_root_url = "https://docs.rs/slotmap/0.4.0")]
 #![crate_name = "slotmap"]
-#![cfg_attr(
-    all(nightly, feature = "unstable"),
-    feature(try_reserve)
-)]
+#![cfg_attr(all(nightly, feature = "unstable"), feature(try_reserve))]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 
 //! # slotmap

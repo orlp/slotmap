@@ -685,14 +685,14 @@ pub struct Drain<'a, K: 'a + Key, V: 'a> {
 }
 
 /// An iterator that moves key-value pairs out of a `DenseSlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IntoIter<K, V> {
     inner_keys: alloc::vec::IntoIter<K>,
     inner_values: alloc::vec::IntoIter<V>,
 }
 
 /// An iterator over the key-value pairs in a `DenseSlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
     inner_keys: core::slice::Iter<'a, K>,
     inner_values: core::slice::Iter<'a, V>,
@@ -706,13 +706,13 @@ pub struct IterMut<'a, K: 'a + Key, V: 'a> {
 }
 
 /// An iterator over the keys in a `DenseSlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Keys<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
 }
 
 /// An iterator over the values in a `DenseSlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Values<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
 }

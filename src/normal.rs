@@ -784,7 +784,7 @@ pub struct Drain<'a, K: 'a + Key, V: 'a> {
 }
 
 /// An iterator that moves key-value pairs out of a `SlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IntoIter<K: Key, V> {
     num_left: usize,
     slots: Enumerate<alloc::vec::IntoIter<Slot<V>>>,
@@ -792,7 +792,7 @@ pub struct IntoIter<K: Key, V> {
 }
 
 /// An iterator over the key-value pairs in a `SlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
     num_left: usize,
     slots: Enumerate<core::slice::Iter<'a, Slot<V>>>,
@@ -808,13 +808,13 @@ pub struct IterMut<'a, K: 'a + Key, V: 'a> {
 }
 
 /// An iterator over the keys in a `SlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Keys<'a, K: 'a + Key, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
 /// An iterator over the values in a `SlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Values<'a, K: 'a + Key, V: 'a> {
     inner: Iter<'a, K, V>,
 }

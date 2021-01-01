@@ -871,7 +871,7 @@ pub struct Drain<'a, K: Key + 'a, V: 'a> {
 }
 
 /// An iterator that moves key-value pairs out of a `HopSlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IntoIter<K: Key, V> {
     cur: usize,
     num_left: usize,
@@ -880,7 +880,7 @@ pub struct IntoIter<K: Key, V> {
 }
 
 /// An iterator over the key-value pairs in a `HopSlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Iter<'a, K: Key + 'a, V: 'a> {
     cur: usize,
     num_left: usize,
@@ -898,13 +898,13 @@ pub struct IterMut<'a, K: Key + 'a, V: 'a> {
 }
 
 /// An iterator over the keys in a `HopSlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
 /// An iterator over the values in a `HopSlotMap`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }

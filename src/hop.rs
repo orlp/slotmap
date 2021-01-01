@@ -19,7 +19,7 @@ use core::iter::FusedIterator;
 use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ops::{Index, IndexMut};
-use core::{fmt, ptr};
+use core::fmt;
 
 use crate::{DefaultKey, Key, KeyData};
 
@@ -62,7 +62,7 @@ impl<T> Slot<T> {
     // Is this slot occupied?
     #[inline(always)]
     pub fn occupied(&self) -> bool {
-        self.version % 2 > 0
+        self.version % 2 == 1
     }
 
     pub fn get(&self) -> SlotContent<T> {
@@ -375,7 +375,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
-        if new_num_elems == core::u32::MAX {
+        if new_num_elems >= core::u32::MAX {
             panic!("HopSlotMap number of elements overflow");
         }
 
@@ -392,26 +392,24 @@ impl<K: Key, V> HopSlotMap<K, V> {
 
             // Freelist is empty.
             if slot_idx == 0 {
-                let key = KeyData::new(self.slots.len() as u32, 1);
+                let version = 1;
+                let key = KeyData::new(self.slots.len() as u32, version);
 
                 self.slots.push(Slot {
                     u: SlotUnion {
                         value: ManuallyDrop::new(f(key.into())),
                     },
-                    version: 1,
+                    version,
                 });
                 self.num_elems = new_num_elems;
                 return key.into();
             }
 
             // Compute value first in case f panics.
-            let (key, value, occupied_version);
-            {
-                let slot = &mut self.slots[slot_idx];
-                occupied_version = slot.version | 1;
-                key = KeyData::new(slot_idx as u32, occupied_version);
-                value = f(key.into());
-            }
+            let slot = &mut self.slots[slot_idx];
+            let occupied_version = slot.version | 1;
+            let key = KeyData::new(slot_idx as u32, occupied_version);
+            let value = f(key.into());
 
             // Update freelist.
             if front == back {
@@ -440,11 +438,9 @@ impl<K: Key, V> HopSlotMap<K, V> {
     #[inline(always)]
     unsafe fn remove_from_slot(&mut self, idx: usize) -> V {
         // Remove value from slot.
-        let value = {
-            let slot = self.slots.get_unchecked_mut(idx);
-            slot.version = slot.version.wrapping_add(1);
-            ptr::read(&*slot.u.value)
-        };
+        let slot = self.slots.get_unchecked_mut(idx);
+        slot.version = slot.version.wrapping_add(1);
+        let value = ManuallyDrop::take(&mut slot.u.value);
 
         // This is safe and can't underflow because of the sentinel element at
         // the start.
@@ -455,31 +451,28 @@ impl<K: Key, V> HopSlotMap<K, V> {
         // contiguous block to the left or right, merging the two blocks to the
         // left and right or inserting a new block.
         let i = idx as u32;
-        // use std::hint::unreachable_unchecked;
-
         match (left_vacant, right_vacant) {
             (false, false) => {
-                // New block, insert it at the head.
-                let old_head = self.freelist(0).next;
-                self.freelist(0).next = i;
-                self.freelist(old_head).prev = i;
+                // New block, insert it at the tail.
+                let old_tail = self.freelist(0).prev;
+                self.freelist(0).prev = i;
+                self.freelist(old_tail).next = i;
                 *self.freelist(i) = FreeListEntry {
                     other_end: i,
-                    next: old_head,
-                    prev: 0,
+                    next: 0,
+                    prev: old_tail,
                 };
             }
 
             (false, true) => {
                 // Prepend to vacant block on right.
                 let front_data = *self.freelist(i + 1);
-                *self.freelist(i) = front_data;
-                self.freelist(front_data.other_end).other_end = i;
 
-                // Since the start of this block moved we must update our
-                // neighbours.
+                // Since the start of this block moved we must update the pointers to it.
+                self.freelist(front_data.other_end).other_end = i;
                 self.freelist(front_data.prev).next = i;
                 self.freelist(front_data.next).prev = i;
+                *self.freelist(i) = front_data;
             }
 
             (true, false) => {
@@ -561,11 +554,11 @@ impl<K: Key, V> HopSlotMap<K, V> {
         let len = self.slots.len();
         let mut i = 0;
         while i < len {
-            let should_remove = {
-                // This is safe because removing elements does not shrink slots.
-                let slot = unsafe { self.slots.get_unchecked_mut(i) };
-                let version = slot.version;
+            // This is safe because removing elements does not shrink slots.
+            let slot = unsafe { self.slots.get_unchecked_mut(i) };
+            let version = slot.version;
 
+            let should_remove = {
                 match slot.get_mut() {
                     OccupiedMut(value) => {
                         let key = KeyData::new(i as u32, version);
@@ -988,7 +981,7 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
         let slot = &mut self.slots[idx];
         let key = KeyData::new(idx as u32, slot.version);
         slot.version = 0; // Prevent dropping after extracting the value.
-        Some((key.into(), unsafe { ptr::read(&*slot.u.value) }))
+        Some((key.into(), unsafe { ManuallyDrop::take(&mut slot.u.value) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1180,7 +1173,7 @@ mod serialize {
             D: Deserializer<'de>,
         {
             let serde_slot: SerdeSlot<T> = Deserialize::deserialize(deserializer)?;
-            let occupied = serde_slot.version % 2 > 0;
+            let occupied = serde_slot.version % 2 == 1;
             if occupied ^ serde_slot.value.is_some() {
                 return Err(de::Error::custom(&"inconsistent occupation in Slot"));
             }
@@ -1223,7 +1216,7 @@ mod serialize {
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if slots.get(0).map_or(true, |slot| slot.version % 2 > 0) {
+            if slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 

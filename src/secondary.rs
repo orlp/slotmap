@@ -20,7 +20,7 @@ impl<T> Slot<T> {
     // Is this slot occupied?
     #[inline(always)]
     pub fn occupied(&self) -> bool {
-        self.version % 2 > 0
+        self.version % 2 == 1
     }
 }
 
@@ -1420,7 +1420,7 @@ mod serialize {
             D: Deserializer<'de>,
         {
             let serde_slot: SerdeSlot<T> = Deserialize::deserialize(deserializer)?;
-            let occupied = serde_slot.version % 2 > 0;
+            let occupied = serde_slot.version % 2 == 1;
             if occupied ^ serde_slot.value.is_some() {
                 return Err(de::Error::custom(&"inconsistent occupation in Slot"));
             }
@@ -1447,12 +1447,12 @@ mod serialize {
             D: Deserializer<'de>,
         {
             let mut slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
-            if slots.len() >= u32::max_value() as usize {
+            if slots.len() >= (u32::max_value() - 1) as usize {
                 return Err(de::Error::custom(&"too many slots"));
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if slots.get(0).map_or(true, |slot| slot.version % 2 > 0) {
+            if slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 

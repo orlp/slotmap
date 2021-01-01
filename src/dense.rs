@@ -33,7 +33,7 @@ pub struct DenseSlotMap<K: Key, V> {
     keys: Vec<K>,
     values: Vec<V>,
     slots: Vec<Slot>,
-    free_head: usize,
+    free_head: u32,
 }
 
 impl<V> DenseSlotMap<DefaultKey, V> {
@@ -272,20 +272,20 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        if self.len() + 1 == core::u32::MAX as usize {
+        if self.len() >= (core::u32::MAX - 1) as usize {
             panic!("DenseSlotMap number of elements overflow");
         }
 
         let idx = self.free_head;
 
-        if let Some(slot) = self.slots.get_mut(idx) {
+        if let Some(slot) = self.slots.get_mut(idx as usize) {
             let occupied_version = slot.version | 1;
             let key = KeyData::new(idx as u32, occupied_version);
 
             // Push value before adjusting slots/freelist in case f panics.
             self.values.push(f(key.into()));
             self.keys.push(key.into());
-            self.free_head = slot.idx_or_free as usize;
+            self.free_head = slot.idx_or_free;
             slot.idx_or_free = self.keys.len() as u32 - 1;
             slot.version = occupied_version;
 
@@ -301,7 +301,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             version: 1,
             idx_or_free: self.keys.len() as u32 - 1,
         });
-        self.free_head = self.slots.len();
+        self.free_head = self.slots.len() as u32;
         key.into()
     }
 
@@ -312,8 +312,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         let slot = &mut self.slots[slot_idx];
         let value_idx = slot.idx_or_free;
         slot.version = slot.version.wrapping_add(1);
-        slot.idx_or_free = self.free_head as u32;
-        self.free_head = slot_idx;
+        slot.idx_or_free = self.free_head;
+        self.free_head = slot_idx as u32;
         value_idx
     }
 
@@ -911,7 +911,7 @@ mod serialize {
                 .slots
                 .iter()
                 .map(|slot| SerdeSlot {
-                    value: if slot.version % 2 > 0 {
+                    value: if slot.version % 2 == 1 {
                         self.values.get(slot.idx_or_free as usize)
                     } else {
                         None
@@ -929,12 +929,12 @@ mod serialize {
             D: Deserializer<'de>,
         {
             let serde_slots: Vec<SerdeSlot<V>> = Deserialize::deserialize(deserializer)?;
-            if serde_slots.len() >= u32::max_value() as usize - 1 {
+            if serde_slots.len() >= u32::max_value() as usize {
                 return Err(de::Error::custom(&"too many slots"));
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if serde_slots.get(0).map_or(true, |slot| slot.version % 2 > 0) {
+            if serde_slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 
@@ -949,7 +949,7 @@ mod serialize {
 
             let mut next_free = serde_slots.len();
             for (i, serde_slot) in serde_slots.into_iter().enumerate().skip(1) {
-                let occupied = serde_slot.version % 2 > 0;
+                let occupied = serde_slot.version % 2 == 1;
                 if occupied ^ serde_slot.value.is_some() {
                     return Err(de::Error::custom(&"inconsistent occupation in Slot"));
                 }
@@ -975,7 +975,7 @@ mod serialize {
                 keys,
                 values,
                 slots,
-                free_head: next_free,
+                free_head: next_free as u32,
             })
         }
     }

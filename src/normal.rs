@@ -10,7 +10,7 @@ use core::iter::{Enumerate, FusedIterator};
 use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ops::{Index, IndexMut};
-use core::{fmt, ptr};
+use core::fmt;
 
 use crate::{DefaultKey, Key, KeyData};
 
@@ -111,7 +111,7 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 #[derive(Debug, Clone)]
 pub struct SlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
-    free_head: usize,
+    free_head: u32,
     num_elems: u32,
     _k: PhantomData<fn(K) -> K>,
 }
@@ -350,43 +350,41 @@ impl<K: Key, V> SlotMap<K, V> {
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
-        if new_num_elems == core::u32::MAX {
+        if new_num_elems >= core::u32::MAX {
             panic!("SlotMap number of elements overflow");
         }
 
         let idx = self.free_head;
-
-        if let Some(slot) = self.slots.get_mut(idx) {
+        if let Some(slot) = self.slots.get_mut(idx as usize) {
             let occupied_version = slot.version | 1;
-            let key = KeyData::new(idx as u32, occupied_version);
+            let key = KeyData::new(idx, occupied_version);
 
             // Get value first in case f panics.
             let value = f(key.into());
 
-            // Update. Make sure to extract next_free before overwriting the
-            // union.
-            self.free_head = unsafe { slot.u.next_free as usize };
-            self.num_elems = new_num_elems;
+            // Update.
             unsafe {
+                self.free_head = slot.u.next_free;
                 slot.u.value = ManuallyDrop::new(value);
+                slot.version = occupied_version;
             }
-            slot.version = occupied_version;
+            self.num_elems = new_num_elems;
             return key.into();
         }
 
-        let key = KeyData::new(idx as u32, 1);
+        let version = 1;
+        let key = KeyData::new(idx, version);
 
-        // Create new slot before adjusting freelist in case f panics.
+        // Create new slot before adjusting freelist in case f or the allocation panics.
         self.slots.push(Slot {
             u: SlotUnion {
                 value: ManuallyDrop::new(f(key.into())),
             },
-            version: 1,
+            version,
         });
 
-        self.free_head = self.slots.len();
+        self.free_head = self.slots.len() as u32;
         self.num_elems = new_num_elems;
-
         key.into()
     }
 
@@ -396,11 +394,11 @@ impl<K: Key, V> SlotMap<K, V> {
     unsafe fn remove_from_slot(&mut self, idx: usize) -> V {
         // Remove value from slot before overwriting union.
         let slot = self.slots.get_unchecked_mut(idx);
-        let value = ptr::read(&*slot.u.value);
+        let value = ManuallyDrop::take(&mut slot.u.value);
 
         // Maintain freelist.
-        slot.u.next_free = self.free_head as u32;
-        self.free_head = idx;
+        slot.u.next_free = self.free_head;
+        self.free_head = idx as u32;
         self.num_elems -= 1;
         slot.version = slot.version.wrapping_add(1);
 
@@ -459,18 +457,16 @@ impl<K: Key, V> SlotMap<K, V> {
     where
         F: FnMut(K, &mut V) -> bool,
     {
-        let len = self.slots.len();
-        for i in 1..len {
-            let should_remove = {
-                // This is safe because removing elements does not shrink slots.
-                let slot = unsafe { self.slots.get_unchecked_mut(i) };
-                let version = slot.version;
-                if let OccupiedMut(value) = slot.get_mut() {
-                    let key = KeyData::new(i as u32, version).into();
-                    !f(key, value)
-                } else {
-                    false
-                }
+        for i in 1..self.slots.len() {
+            // This is safe because removing elements does not shrink slots.
+            let slot = unsafe { self.slots.get_unchecked_mut(i) };
+            let version = slot.version;
+
+            let should_remove = if let OccupiedMut(value) = slot.get_mut() {
+                let key = KeyData::new(i as u32, version).into();
+                !f(key, value)
+            } else {
+                false
             };
 
             if should_remove {
@@ -838,10 +834,11 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
             let idx = self.cur;
             self.cur += 1;
 
+            // This is safe because removing doesn't shrink slots.
             unsafe {
-                // This is safe because removing doesn't shrink slots.
-                if self.sm.slots.get_unchecked(idx).occupied() {
-                    let key = KeyData::new(idx as u32, self.sm.slots.get_unchecked(idx).version);
+                let slot = self.sm.slots.get_unchecked(idx);
+                if slot.occupied() {
+                    let key = KeyData::new(idx as u32, slot.version);
                     self.num_left -= 1;
                     return Some((key.into(), self.sm.remove_from_slot(idx)));
                 }
@@ -874,8 +871,10 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
                 slot.version = 0;
 
                 // This is safe because we know the slot was occupied.
+                let value = unsafe { ManuallyDrop::take(&mut slot.u.value) };
+
                 self.num_left -= 1;
-                return Some((key.into(), unsafe { ptr::read(&*slot.u.value) }));
+                return Some((key.into(), value));
             }
         }
 
@@ -1051,7 +1050,7 @@ mod serialize {
             D: Deserializer<'de>,
         {
             let serde_slot: SerdeSlot<T> = Deserialize::deserialize(deserializer)?;
-            let occupied = serde_slot.version % 2 > 0;
+            let occupied = serde_slot.version % 2 == 1;
             if occupied ^ serde_slot.value.is_some() {
                 return Err(de::Error::custom(&"inconsistent occupation in Slot"));
             }
@@ -1092,7 +1091,7 @@ mod serialize {
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if slots.get(0).map_or(true, |slot| slot.version % 2 > 0) {
+            if slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 
@@ -1114,7 +1113,7 @@ mod serialize {
             Ok(Self {
                 num_elems,
                 slots,
-                free_head: next_free,
+                free_head: next_free as u32,
                 _k: PhantomData,
             })
         }

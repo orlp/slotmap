@@ -3,7 +3,7 @@
 
 extern crate slotmap;
 
-use slotmap::{new_key_type, Key, SlotMap, Slottable};
+use slotmap::{new_key_type, Key, SlotMap};
 
 new_key_type! {
     struct HeapKey;
@@ -13,19 +13,19 @@ new_key_type! {
 struct NodeHandle(HeapKey);
 
 #[derive(Copy, Clone)]
-struct Node<T: Slottable> {
+struct Node<T> {
     value: T,
     children: [HeapKey; 2],
     parent: HeapKey,
 }
 
-struct RandMeldHeap<T: Ord + Slottable> {
+struct RandMeldHeap<T: Ord> {
     sm: SlotMap<HeapKey, Node<T>>,
     rng: std::num::Wrapping<u32>,
     root: HeapKey,
 }
 
-impl<T: Ord + std::fmt::Debug + Slottable> RandMeldHeap<T> {
+impl<T: Ord + std::fmt::Debug> RandMeldHeap<T> {
     pub fn new() -> Self {
         Self {
             sm: SlotMap::with_key(),

@@ -3,7 +3,7 @@
 #![crate_name = "slotmap"]
 #![cfg_attr(
     all(nightly, feature = "unstable"),
-    feature(untagged_unions, try_reserve)
+    feature(try_reserve)
 )]
 
 //! # slotmap
@@ -113,8 +113,7 @@
 //! block of memory. It uses two indirects per random access; the slots contain
 //! indices used to access the contiguous memory. This means random access is
 //! slower than both [`SlotMap`] and [`HopSlotMap`], but iteration is
-//! significantly faster. Finally, there is no trait requirement on the value
-//! type of a [`DenseSlotMap`], see [`Slottable`] for more details.
+//! significantly faster.
 //!
 //! # Choosing `SecondaryMap` or `SparseSecondaryMap`
 //!
@@ -161,7 +160,6 @@
 //! [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
 //! [`SecondaryMap`]: secondary/struct.SecondaryMap.html
 //! [`SparseSecondaryMap`]: sparse_secondary/struct.SparseSecondaryMap.html
-//! [`Slottable`]: trait.Slottable.html
 //! [`Key`]: trait.Key.html
 //! [`new_key_type!`]: macro.new_key_type.html
 //! [`serde`]: https://github.com/serde-rs/serde
@@ -203,56 +201,17 @@ pub use crate::sparse_secondary::SparseSecondaryMap;
 use std::fmt::{self, Debug, Formatter};
 use std::num::NonZeroU32;
 
-/// A trait for items that can go in a [`SlotMap`] or [`HopSlotMap`]. Due to
-/// current stable Rust restrictions a type must be [`Copy`] to be placed in one
-/// of those slot maps. This restriction does not apply to [`DenseSlotMap`],
-/// [`SecondaryMap`] or [`SparseSecondaryMap`]. It also does not apply if you
-/// use nightly Rust and enable the `unstable` feature for `slotmap` by editing
-/// your `Cargo.toml`:
-///
-/// ```text
-/// slotmap = { version = "...", features = ["unstable"] }
-/// ```
-///
-/// This trait should already be automatically implemented for any type that is
-/// slottable.
-///
-/// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
-/// [`SecondaryMap`]: secondary/struct.SecondaryMap.html
-/// [`SparseSecondaryMap`]: sparse_secondary/struct.SparseSecondaryMap.html
-/// [`SlotMap`]: struct.SlotMap.html
-/// [`HopSlotMap`]: hop/struct.HopSlotMap.html
-/// [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
-#[cfg(not(all(nightly, feature = "unstable")))]
-pub trait Slottable: Copy {}
-
-/// A trait for items that can go in a [`SlotMap`] or [`HopSlotMap`]. Due to
-/// current stable Rust restrictions a type must be [`Copy`] to be placed in one
-/// of those slot maps. This restriction does not apply to [`DenseSlotMap`],
-/// [`SecondaryMap`] or [`SparseSecondaryMap`]. It also does not apply if you
-/// use nightly Rust and enable the `unstable` feature for `slotmap` by editing
-/// your `Cargo.toml`:
-///
-/// ```text
-/// slotmap = { version = "...", features = ["unstable"] }
-/// ```
-///
-/// This trait should already be automatically implemented for any type that is
-/// slottable.
-///
-/// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
-/// [`SecondaryMap`]: secondary/struct.SecondaryMap.html
-/// [`SparseSecondaryMap`]: sparse_secondary/struct.SparseSecondaryMap.html
-/// [`SlotMap`]: struct.SlotMap.html
-/// [`HopSlotMap`]: hop/struct.HopSlotMap.html
-/// [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
-#[cfg(all(nightly, feature = "unstable"))]
+// Keep Slottable for backwards compatibility, but warn about deprecation
+// and hide from documentation.
+#[doc(hidden)]
+#[deprecated(
+    since = "0.5.0",
+    note = "Slottable is not necessary anymore, slotmap now supports all types on stable."
+)]
 pub trait Slottable {}
 
-#[cfg(not(all(nightly, feature = "unstable")))]
-impl<T: Copy> Slottable for T {}
-
-#[cfg(all(nightly, feature = "unstable"))]
+#[doc(hidden)]
+#[allow(deprecated)]
 impl<T> Slottable for T {}
 
 /// The actual data stored in a [`Key`].

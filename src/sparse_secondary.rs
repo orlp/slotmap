@@ -31,11 +31,6 @@ struct Slot<T> {
 /// Don't expect the values associated with a removed key to stick around after
 /// an insertion has happened!
 ///
-/// Unlike a [`SlotMap`], a `SparseSecondaryMap`s elements do not need to be
-/// [`Slottable`]. This means that if you can't or don't want to use nightly
-/// Rust, and your data is not [`Slottable`], you can store that data as
-/// secondary data.
-///
 /// Unlike [`SecondaryMap`], the `SparseSecondaryMap` is backed by a
 /// [`HashMap`]. This means its access times are higher, but it uses less memory
 /// and iterates faster if there are only a few elements of the slot map in the
@@ -43,7 +38,6 @@ struct Slot<T> {
 /// in the secondary map, use a [`SecondaryMap`] instead.
 ///
 /// [`SlotMap`]: ../struct.SlotMap.html
-/// [`Slottable`]: ../trait.Slottable.html
 /// [`SecondaryMap`]: ../secondary/struct.SecondaryMap.html
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
 ///
@@ -51,17 +45,12 @@ struct Slot<T> {
 ///
 /// ```
 /// # use slotmap::*;
-/// // Nightly Rust needed to store String which is not Copy.
-/// let mut players: SlotMap<_, &'static str> = SlotMap::new();
-/// // But not for secondary maps.
-/// let mut nicks: SparseSecondaryMap<_, String> = SparseSecondaryMap::new();
+/// let mut players = SlotMap::new();
 /// let mut health = SparseSecondaryMap::new();
 /// let mut ammo = SparseSecondaryMap::new();
 ///
 /// let alice = players.insert("alice");
-/// nicks.insert(alice, "the_dragon1".to_string());
 /// let bob = players.insert("bob");
-/// nicks.insert(bob, "bobby_".to_string());
 ///
 /// for p in players.keys() {
 ///     health.insert(p, 100);

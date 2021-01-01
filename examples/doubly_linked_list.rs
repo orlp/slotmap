@@ -2,7 +2,7 @@
 
 extern crate slotmap;
 
-use slotmap::{new_key_type, Key, SlotMap, Slottable};
+use slotmap::{new_key_type, Key, SlotMap};
 
 new_key_type! {
     struct ListKey;
@@ -15,13 +15,13 @@ struct Node<T> {
     next: ListKey,
 }
 
-struct List<T: Slottable> {
+struct List<T> {
     sm: SlotMap<ListKey, Node<T>>,
     head: ListKey,
     tail: ListKey,
 }
 
-impl<T: Slottable> List<T> {
+impl<T> List<T> {
     fn new() -> Self {
         Self {
             sm: SlotMap::with_key(),

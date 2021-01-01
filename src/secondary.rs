@@ -9,9 +9,7 @@ use std::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
-// We could use unions to remove the memory overhead of Option here as well, but
-// until non-Copy elements inside unions stabilize it's better to give users at
-// least some place to store non-Copy elements.
+// TODO: Save space using MaybeUninit.
 #[derive(Debug, Clone)]
 struct Slot<T> {
     version: u32,
@@ -40,11 +38,6 @@ impl<T> Slot<T> {
 /// the values associated with a removed key to stick around after an insertion
 /// has happened!
 ///
-/// Unlike a [`SlotMap`], a `SecondaryMap`s elements do not need to be
-/// [`Slottable`]. This means that if you can't or don't want to use nightly
-/// Rust, and your data is not [`Slottable`], you can store that data as
-/// secondary data.
-///
 /// Finally a note on memory complexity, the `SecondaryMap` can use memory for
 /// each slot in the primary slot map, and has to iterate over every slot during
 /// iteration, regardless of whether you have inserted an associative value at
@@ -53,7 +46,6 @@ impl<T> Slot<T> {
 /// [`HashMap`].
 ///
 /// [`SlotMap`]: ../struct.SlotMap.html
-/// [`Slottable`]: ../trait.Slottable.html
 /// [`SparseSecondaryMap`]: ../sparse_secondary/struct.SparseSecondaryMap.html
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
 ///
@@ -61,17 +53,12 @@ impl<T> Slot<T> {
 ///
 /// ```
 /// # use slotmap::*;
-/// // Nightly Rust needed to store String which is not Copy.
-/// let mut players: SlotMap<_, &'static str> = SlotMap::new();
-/// // But not for secondary maps.
-/// let mut nicks: SecondaryMap<_, String> = SecondaryMap::new();
+/// let mut players = SlotMap::new();
 /// let mut health = SecondaryMap::new();
 /// let mut ammo = SecondaryMap::new();
 ///
 /// let alice = players.insert("alice");
-/// nicks.insert(alice, "the_dragon1".to_string());
 /// let bob = players.insert("bob");
-/// nicks.insert(bob, "bobby_".to_string());
 ///
 /// for p in players.keys() {
 ///     health.insert(p, 100);

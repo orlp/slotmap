@@ -8,9 +8,11 @@
 
 use alloc::vec::Vec;
 #[cfg(all(nightly, feature = "unstable"))]
-use core::collections::TryReserveError;
+use alloc::collections::TryReserveError;
 use core::iter::FusedIterator;
 use core::ops::{Index, IndexMut};
+#[cfg(all(nightly, feature = "unstable"))]
+use core::mem::MaybeUninit;
 
 use crate::{DefaultKey, Key, KeyData};
 
@@ -288,7 +290,6 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             self.free_head = slot.idx_or_free;
             slot.idx_or_free = self.keys.len() as u32 - 1;
             slot.version = occupied_version;
-
             return key.into();
         }
 
@@ -531,6 +532,96 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         let key = key.into();
         let idx = self.slots.get_unchecked(key.idx as usize).idx_or_free;
         self.values.get_unchecked_mut(idx as usize)
+    }
+
+    /// Returns mutable references to the values corresponding to the given
+    /// keys. All keys must be valid and disjoint, otherwise None is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::new();
+    /// let ka = sm.insert("butter");
+    /// let kb = sm.insert("apples");
+    /// let kc = sm.insert("charlie");
+    /// sm.remove(kc); // Make key c invalid.
+    /// assert_eq!(sm.get_disjoint_mut([ka, kb, kc]), None); // Has invalid key.
+    /// assert_eq!(sm.get_disjoint_mut([ka, ka]), None); // Not disjoint.
+    /// let [a, b] = sm.get_disjoint_mut([ka, kb]).unwrap();
+    /// std::mem::swap(a, b);
+    /// assert_eq!(sm[ka], "apples");
+    /// assert_eq!(sm[kb], "butter");
+    /// ```
+    #[cfg(all(nightly, feature = "unstable"))]
+    pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
+        // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
+        // safe because the type we are claiming to have initialized here is a
+        // bunch of `MaybeUninit`s, which do not require initialization.
+        let mut ptrs: [MaybeUninit<*mut V>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+
+        let mut i = 0;
+        while i < N {
+            // We can avoid this clone after min_const_generics and array_map.
+            let k = keys[i].clone().into();
+            if !self.contains_key(k.into()) {
+                break;
+            }
+            
+            // This key is valid, and thus the slot is occupied. Temporarily
+            // mark it as unoccupied so duplicate keys would show up as invalid.
+            // This gives us a linear time disjointness check.
+            unsafe {
+                let slot = self.slots.get_unchecked_mut(k.idx as usize);
+                slot.version ^= 1;
+                let ptr = self.values.get_unchecked_mut(slot.idx_or_free as usize) as *mut V;
+                ptrs[i] = MaybeUninit::new(ptr);
+            }
+            i += 1;
+        }
+
+        // Undo temporary unoccupied markings.
+        for k in &keys[..i] {
+            let idx = k.clone().into().idx as usize;
+            unsafe { self.slots.get_unchecked_mut(idx).version ^= 1; }
+        }
+
+        if i == N {
+            // All were valid and disjoint.
+            Some(unsafe { core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs) })
+        } else {
+            None
+        }
+    }
+    
+    /// Returns mutable references to the values corresponding to the given
+    /// keys. All keys must be valid and disjoint.
+    ///
+    /// # Safety
+    ///
+    /// This should only be used if `contains_key(key)` is true for every given
+    /// key and no two keys are equal. Otherwise it is potentially unsafe.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::new();
+    /// let ka = sm.insert("butter");
+    /// let kb = sm.insert("apples");
+    /// let [a, b] = unsafe { sm.get_disjoint_unchecked_mut([ka, kb]) };
+    /// std::mem::swap(a, b);
+    /// assert_eq!(sm[ka], "apples");
+    /// assert_eq!(sm[kb], "butter");
+    /// ```
+    #[cfg(all(nightly, feature = "unstable"))]
+    pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(&mut self, keys: [K; N]) -> [&mut V; N] {
+        // Safe, see get_disjoint_mut.
+        let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
+        for i in 0..N {
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].clone()) as *mut V);
+        }
+        core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The

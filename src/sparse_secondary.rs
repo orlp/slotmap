@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
 #[cfg(all(nightly, feature = "unstable"))]
-use std::collections::TryReserveError;
+use alloc::collections::TryReserveError;
 
 #[derive(Debug, Clone)]
 struct Slot<T> {

@@ -242,10 +242,10 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// assert!(squared.contains_key(k));
     /// ```
     pub fn contains_key(&self, key: K) -> bool {
-        let key = key.into();
+        let kd = key.data();
         self.slots
-            .get(&key.idx)
-            .map_or(false, |slot| slot.version == key.version.get())
+            .get(&kd.idx)
+            .map_or(false, |slot| slot.version == kd.version.get())
     }
 
     /// Inserts a value into the secondary map at the given `key`. Can silently
@@ -268,20 +268,20 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// assert_eq!(squared[k], 16);
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        let key = key.into();
+        let kd = key.data();
 
-        if let Some(slot) = self.slots.get_mut(&key.idx) {
-            if slot.version == key.version.get() {
+        if let Some(slot) = self.slots.get_mut(&kd.idx) {
+            if slot.version == kd.version.get() {
                 return Some(std::mem::replace(&mut slot.value, value));
             }
 
             // Don't replace existing newer values.
-            if is_older_version(key.version.get(), slot.version) {
+            if is_older_version(kd.version.get(), slot.version) {
                 return None;
             }
 
             *slot = Slot {
-                version: key.version.get(),
+                version: kd.version.get(),
                 value,
             };
 
@@ -289,9 +289,9 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
         }
 
         self.slots.insert(
-            key.idx,
+            kd.idx,
             Slot {
-                version: key.version.get(),
+                version: kd.version.get(),
                 value,
             },
         );
@@ -326,10 +326,10 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// assert!(!squared.contains_key(k)); // Old key is no longer available.
     /// ```
     pub fn remove(&mut self, key: K) -> Option<V> {
-        let key = key.into();
+        let kd = key.data();
 
-        if let hash_map::Entry::Occupied(entry) = self.slots.entry(key.idx) {
-            if entry.get().version == key.version.get() {
+        if let hash_map::Entry::Occupied(entry) = self.slots.entry(kd.idx) {
+            if entry.get().version == kd.version.get() {
                 return Some(entry.remove_entry().1.value);
             }
         }
@@ -366,8 +366,8 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
         F: FnMut(K, &mut V) -> bool,
     {
         self.slots.retain(|&idx, slot| {
-            let key = KeyData::new(idx, slot.version);
-            f(key.into(), &mut slot.value)
+            let kd = KeyData::new(idx, slot.version);
+            f(kd.into(), &mut slot.value)
         })
     }
 
@@ -428,10 +428,10 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// assert_eq!(sec.get(key), None);
     /// ```
     pub fn get(&self, key: K) -> Option<&V> {
-        let key = key.into();
+        let kd = key.data();
         self.slots
-            .get(&key.idx)
-            .filter(|slot| slot.version == key.version.get())
+            .get(&kd.idx)
+            .filter(|slot| slot.version == kd.version.get())
             .map(|slot| &slot.value)
     }
 
@@ -451,10 +451,10 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// assert_eq!(sec[key], 6.5);
     /// ```
     pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
-        let key = key.into();
+        let kd = key.data();
         self.slots
-            .get_mut(&key.idx)
-            .filter(|slot| slot.version == key.version.get())
+            .get_mut(&kd.idx)
+            .filter(|slot| slot.version == kd.version.get())
             .map(|slot| &mut slot.value)
     }
 

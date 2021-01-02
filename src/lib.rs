@@ -241,7 +241,7 @@ impl KeyData {
         Self::new(core::u32::MAX, 1)
     }
 
-    fn is_null(self) -> bool {
+    fn is_null(&self) -> bool {
         self.idx == core::u32::MAX
     }
 
@@ -295,7 +295,7 @@ impl Default for KeyData {
 ///
 /// [`new_key_type!`]: macro.new_key_type.html
 /// [`DefaultKey`]: struct.DefaultKey.html
-pub trait Key: From<KeyData> + Into<KeyData> + Clone {
+pub trait Key: From<KeyData> {
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method (or default
     /// initialization of keys made with [`new_key_type!`], which calls this
@@ -335,9 +335,24 @@ pub trait Key: From<KeyData> + Into<KeyData> + Clone {
     /// assert_eq!(a, b);
     /// assert!(a.is_null());
     /// ```
-    fn is_null(self) -> bool {
-        self.into().is_null()
+    fn is_null(&self) -> bool {
+        self.data().is_null()
     }
+
+    /// Gets the [`KeyData`] stored in this key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// new_key_type! { struct MyKey; }
+    /// let dk = DefaultKey::null();
+    /// let mk = MyKey::null();
+    /// assert_eq!(dk.data(), mk.data());
+    /// ```
+    ///
+    /// [`KeyData`]: struct.KeyData.html
+    fn data(&self) -> KeyData;
 }
 
 /// A helper macro to conveniently create new key types. If you use a new key
@@ -385,13 +400,11 @@ macro_rules! new_key_type {
             }
         }
 
-        impl From<$name> for $crate::KeyData {
-            fn from(k: $name) -> Self {
-                k.0
+        impl $crate::Key for $name {
+            fn data(&self) -> $crate::KeyData {
+                self.0
             }
         }
-
-        impl $crate::Key for $name { }
 
         $crate::__serialize_key!($name);
 
@@ -411,7 +424,7 @@ macro_rules! __serialize_key {
             where
                 S: $crate::__impl::Serializer,
             {
-                $crate::KeyData::from(*self).serialize(serializer)
+                self.data().serialize(serializer)
             }
         }
 

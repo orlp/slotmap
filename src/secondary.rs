@@ -232,10 +232,10 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert!(squared.contains_key(k));
     /// ```
     pub fn contains_key(&self, key: K) -> bool {
-        let key = key.into();
+        let kd = key.data();
         self.slots
-            .get(key.idx as usize)
-            .map_or(false, |slot| slot.version == key.version.get())
+            .get(kd.idx as usize)
+            .map_or(false, |slot| slot.version == kd.version.get())
     }
 
     /// Inserts a value into the secondary map at the given `key`. Can silently
@@ -258,21 +258,21 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(squared[k], 16);
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        let key = key.into();
+        let kd = key.data();
         self.slots
-            .extend((self.slots.len()..=key.idx as usize).map(|_| Slot {
+            .extend((self.slots.len()..=kd.idx as usize).map(|_| Slot {
                 version: 0,
                 value: None,
             }));
 
-        let slot = &mut self.slots[key.idx as usize];
-        if slot.version == key.version.get() {
+        let slot = &mut self.slots[kd.idx as usize];
+        if slot.version == kd.version.get() {
             return core::mem::replace(&mut slot.value, Some(value));
         }
 
         if slot.occupied() {
             // Don't replace existing newer values.
-            if is_older_version(key.version.get(), slot.version) {
+            if is_older_version(kd.version.get(), slot.version) {
                 return None;
             }
         } else {
@@ -280,7 +280,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
         }
 
         *slot = Slot {
-            version: key.version.get(),
+            version: kd.version.get(),
             value: Some(value),
         };
 
@@ -314,9 +314,9 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert!(!squared.contains_key(k)); // Old key is no longer available.
     /// ```
     pub fn remove(&mut self, key: K) -> Option<V> {
-        let key = key.into();
-        if let Some(slot) = self.slots.get_mut(key.idx as usize) {
-            if slot.version == key.version.get() {
+        let kd = key.data();
+        if let Some(slot) = self.slots.get_mut(kd.idx as usize) {
+            if slot.version == kd.version.get() {
                 // We actually decrement version here, to ensure that if the
                 // user re-inserts a value at this key the version does not get
                 // denied as outdated.
@@ -445,10 +445,10 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec.get(key), None);
     /// ```
     pub fn get(&self, key: K) -> Option<&V> {
-        let key = key.into();
+        let kd = key.data();
         self.slots
-            .get(key.idx as usize)
-            .filter(|slot| slot.version == key.version.get())
+            .get(kd.idx as usize)
+            .filter(|slot| slot.version == kd.version.get())
             .map(|slot| slot.value.as_ref().unwrap())
     }
 
@@ -473,8 +473,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// // sec.get_unchecked(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
-        let key = key.into();
-        if let Some(value) = self.slots.get_unchecked(key.idx as usize).value.as_ref() {
+        let slot = self.slots.get_unchecked(key.data().idx as usize);
+        if let Some(value) = slot.value.as_ref() {
             value
         } else {
             unreachable_unchecked()
@@ -497,10 +497,10 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec[key], 6.5);
     /// ```
     pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
-        let key = key.into();
+        let kd = key.data();
         self.slots
-            .get_mut(key.idx as usize)
-            .filter(|slot| slot.version == key.version.get())
+            .get_mut(kd.idx as usize)
+            .filter(|slot| slot.version == kd.version.get())
             .map(|slot| slot.value.as_mut().unwrap())
     }
 
@@ -526,13 +526,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// // sec.get_unchecked_mut(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
-        let key = key.into();
-        if let Some(value) = self
-            .slots
-            .get_unchecked_mut(key.idx as usize)
-            .value
-            .as_mut()
-        {
+        let slot = self.slots.get_unchecked_mut(key.data().idx as usize);
+        if let Some(value) = slot.value.as_mut() {
             value
         } else {
             unreachable_unchecked()
@@ -691,10 +686,10 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(*v, 10);
     /// ```
     pub fn entry(&mut self, key: K) -> Option<Entry<K, V>> {
-        let keyd = key.clone().into();
+        let kd = key.data();
 
-        if let Some(slot) = self.slots.get_mut(keyd.idx as usize) {
-            let v = keyd.version.get();
+        if let Some(slot) = self.slots.get_mut(kd.idx as usize) {
+            let v = kd.version.get();
             if is_older_version(v, slot.version) {
                 return None;
             }
@@ -898,7 +893,7 @@ impl<'a, K: Key, V: Default> Entry<'a, K, V> {
     /// assert_eq!(sec[k], None)
     /// ```
     pub fn or_default(self) -> &'a mut V {
-        self.or_insert_with(|| Default::default())
+        self.or_insert_with(Default::default)
     }
 }
 
@@ -952,7 +947,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     /// }
     /// ```
     pub fn get(&self) -> &V {
-        unsafe { self.map.get_unchecked(self.key.clone()) }
+        unsafe { self.map.get_unchecked(self.key.data().into()) }
     }
 
     /// Gets a mutable reference to the value in the entry.
@@ -977,7 +972,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     /// }
     /// ```
     pub fn get_mut(&mut self) -> &mut V {
-        unsafe { self.map.get_unchecked_mut(self.key.clone()) }
+        unsafe { self.map.get_unchecked_mut(self.key.data().into()) }
     }
 
     /// Converts the OccupiedEntry into a mutable reference to the value in the entry with a lifetime bound to the map itself.
@@ -1054,8 +1049,8 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     /// }
     /// ```
     pub fn remove(self) -> V {
-        let keyd = self.key.into();
-        let slot = unsafe { self.map.slots.get_unchecked_mut(keyd.idx as usize) };
+        let kd = self.key.data();
+        let slot = unsafe { self.map.slots.get_unchecked_mut(kd.idx as usize) };
         slot.version -= 1;
         self.map.num_elems -= 1;
         match slot.value.take() {
@@ -1137,19 +1132,19 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     /// }
     /// ```
     pub fn insert(self, value: V) -> &'a mut V {
-        let key = self.key.into();
+        let kd = self.key.data();
         self.map
             .slots
-            .extend((self.map.slots.len()..=key.idx as usize).map(|_| Slot {
+            .extend((self.map.slots.len()..=kd.idx as usize).map(|_| Slot {
                 version: 0,
                 value: None,
             }));
 
-        let slot = &mut self.map.slots[key.idx as usize];
+        let slot = &mut self.map.slots[kd.idx as usize];
         self.map.num_elems += 1;
 
         *slot = Slot {
-            version: key.version.get(),
+            version: kd.version.get(),
             value: Some(value),
         };
 
@@ -1218,11 +1213,11 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
             self.cur += 1;
 
             if let Some(value) = core::mem::replace(&mut self.sm.slots[idx].value, None) {
-                let key = KeyData::new(idx as u32, self.sm.slots[idx].version);
+                let kd = KeyData::new(idx as u32, self.sm.slots[idx].version);
                 self.sm.slots[idx].version -= 1;
                 self.sm.num_elems -= 1;
                 self.num_left -= 1;
-                return Some((key.into(), value));
+                return Some((kd.into(), value));
             }
         }
 
@@ -1246,9 +1241,9 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
     fn next(&mut self) -> Option<(K, V)> {
         while let Some((idx, mut slot)) = self.slots.next() {
             if let Some(value) = core::mem::replace(&mut slot.value, None) {
-                let key = KeyData::new(idx as u32, slot.version);
+                let kd = KeyData::new(idx as u32, slot.version);
                 self.num_left -= 1;
-                return Some((key.into(), value));
+                return Some((kd.into(), value));
             }
         }
 
@@ -1266,9 +1261,9 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
     fn next(&mut self) -> Option<(K, &'a V)> {
         while let Some((idx, slot)) = self.slots.next() {
             if let Some(value) = &slot.value {
-                let key = KeyData::new(idx as u32, slot.version);
+                let kd = KeyData::new(idx as u32, slot.version);
                 self.num_left -= 1;
-                return Some((key.into(), value));
+                return Some((kd.into(), value));
             }
         }
 
@@ -1286,9 +1281,9 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
     fn next(&mut self) -> Option<(K, &'a mut V)> {
         while let Some((idx, slot)) = self.slots.next() {
             if let Some(value) = &mut slot.value {
-                let key = KeyData::new(idx as u32, slot.version);
+                let kd = KeyData::new(idx as u32, slot.version);
                 self.num_left -= 1;
-                return Some((key.into(), value));
+                return Some((kd.into(), value));
             }
         }
 

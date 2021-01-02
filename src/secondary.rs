@@ -8,21 +8,76 @@ use core::hint::unreachable_unchecked;
 use core::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
+use core::num::NonZeroU32;
+use core::mem::replace;
 
-// TODO: Save space using MaybeUninit.
+
+// This representation works because we don't have to store the versions
+// of removed elements.
 #[derive(Debug, Clone)]
-struct Slot<T> {
-    version: u32,
-    value: Option<T>,
+enum Slot<T> {
+    Occupied {
+        value: T,
+        version: NonZeroU32,
+    },
+
+    Vacant
 }
 
+use self::Slot::Occupied;
+use self::Slot::Vacant;
+
 impl<T> Slot<T> {
+    pub fn new_occupied(version: u32, value: T) -> Self {
+        Occupied {
+            value,
+            version: unsafe { NonZeroU32::new_unchecked(version | 1u32) },
+        }
+    }
+
+    pub fn new_vacant() -> Self {
+        Vacant
+    }
+
     // Is this slot occupied?
     #[inline(always)]
     pub fn occupied(&self) -> bool {
-        self.version % 2 == 1
+        match self {
+            Occupied { .. } => true,
+            Vacant => false,
+        }
+    }
+
+    #[inline(always)]
+    pub fn version(&self) -> u32 {
+        match self {
+            Occupied { version, .. } => version.get(),
+            Vacant => 0,
+        }
+    }
+
+    pub unsafe fn get_unchecked(&self) -> &T {
+        match self {
+            Occupied { value, .. } => value,
+            Vacant => unreachable_unchecked(),
+        }
+    }
+
+    pub unsafe fn get_unchecked_mut(&mut self) -> &mut T {
+        match self {
+            Occupied { value, .. } => value,
+            Vacant => unreachable_unchecked(),
+        }
+    }
+
+    pub fn to_option(self) -> Option<T> {
+        match self {
+            Occupied { value, .. } => Some(value),
+            Vacant => None,
+        }
     }
 }
+
 
 /// Secondary map, associate data with previously stored elements in a slot map.
 ///
@@ -69,7 +124,6 @@ impl<T> Slot<T> {
 /// health[bob] -= ammo[alice] * 3;
 /// ammo[alice] = 0;
 /// ```
-
 #[derive(Debug, Clone)]
 pub struct SecondaryMap<K: Key, V> {
     slots: Vec<Slot<V>>,
@@ -106,10 +160,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
         let mut slots = Vec::with_capacity(capacity + 1); // Sentinel.
-        slots.push(Slot {
-            version: 0,
-            value: None,
-        });
+        slots.push(Slot::new_vacant());
         Self {
             slots,
             num_elems: 0,
@@ -235,7 +286,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
         let kd = key.data();
         self.slots
             .get(kd.idx as usize)
-            .map_or(false, |slot| slot.version == kd.version.get())
+            .map_or(false, |slot| slot.version() == kd.version.get())
     }
 
     /// Inserts a value into the secondary map at the given `key`. Can silently
@@ -260,30 +311,24 @@ impl<K: Key, V> SecondaryMap<K, V> {
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let kd = key.data();
         self.slots
-            .extend((self.slots.len()..=kd.idx as usize).map(|_| Slot {
-                version: 0,
-                value: None,
-            }));
+            .extend((self.slots.len()..=kd.idx as usize).map(|_| Slot::new_vacant()));
 
         let slot = &mut self.slots[kd.idx as usize];
-        if slot.version == kd.version.get() {
-            return core::mem::replace(&mut slot.value, Some(value));
+        if slot.version() == kd.version.get() {
+            // Is always occupied.
+            return Some(replace(unsafe { slot.get_unchecked_mut() }, value));
         }
 
         if slot.occupied() {
             // Don't replace existing newer values.
-            if is_older_version(kd.version.get(), slot.version) {
+            if is_older_version(kd.version.get(), slot.version()) {
                 return None;
             }
         } else {
             self.num_elems += 1;
         }
 
-        *slot = Slot {
-            version: kd.version.get(),
-            value: Some(value),
-        };
-
+        *slot = Slot::new_occupied(kd.version.get(), value);
         None
     }
 
@@ -316,13 +361,9 @@ impl<K: Key, V> SecondaryMap<K, V> {
     pub fn remove(&mut self, key: K) -> Option<V> {
         let kd = key.data();
         if let Some(slot) = self.slots.get_mut(kd.idx as usize) {
-            if slot.version == kd.version.get() {
-                // We actually decrement version here, to ensure that if the
-                // user re-inserts a value at this key the version does not get
-                // denied as outdated.
-                slot.version -= 1;
+            if slot.version() == kd.version.get() {
                 self.num_elems -= 1;
-                return Some(core::mem::replace(&mut slot.value, None).unwrap());
+                return replace(slot, Slot::new_vacant()).to_option();
             }
         }
 
@@ -353,30 +394,19 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert!(sec.contains_key(k1));
     /// assert!(sec.contains_key(k2));
     /// assert!(!sec.contains_key(k3));
-    ///
-    /// assert_eq!(2, sec.len());
+    /// assert_eq!(sec.len(), 2);
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
         F: FnMut(K, &mut V) -> bool,
     {
-        let len = self.slots.len();
-        for i in 0..len {
-            // This is safe because removing elements does not shrink slots.
-            let slot = unsafe { self.slots.get_unchecked_mut(i) };
-            let should_remove = {
-                if let Some(value) = &mut slot.value {
-                    let key = KeyData::new(i as u32, slot.version).into();
-                    !f(key, value)
-                } else {
-                    false
+        for (i, slot) in self.slots.iter_mut().enumerate() {
+            if let Occupied { value, version } = slot {
+                let kd = KeyData::new(i as u32, version.get());
+                if !f(kd.into(), value) {
+                    self.num_elems -= 1;
+                    *slot = Slot::new_vacant();
                 }
-            };
-
-            if should_remove {
-                self.num_elems -= 1;
-                slot.version -= 1;
-                slot.value = None;
             }
         }
     }
@@ -448,8 +478,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
         let kd = key.data();
         self.slots
             .get(kd.idx as usize)
-            .filter(|slot| slot.version == kd.version.get())
-            .map(|slot| slot.value.as_ref().unwrap())
+            .filter(|slot| slot.version() == kd.version.get())
+            .map(|slot| unsafe { slot.get_unchecked() })
     }
 
     /// Returns a reference to the value corresponding to the key without
@@ -474,11 +504,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
         let slot = self.slots.get_unchecked(key.data().idx as usize);
-        if let Some(value) = slot.value.as_ref() {
-            value
-        } else {
-            unreachable_unchecked()
-        }
+        slot.get_unchecked()
     }
 
     /// Returns a mutable reference to the value corresponding to the key.
@@ -500,8 +526,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
         let kd = key.data();
         self.slots
             .get_mut(kd.idx as usize)
-            .filter(|slot| slot.version == kd.version.get())
-            .map(|slot| slot.value.as_mut().unwrap())
+            .filter(|slot| slot.version() == kd.version.get())
+            .map(|slot| unsafe { slot.get_unchecked_mut() })
     }
 
     /// Returns a mutable reference to the value corresponding to the key
@@ -527,11 +553,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         let slot = self.slots.get_unchecked_mut(key.data().idx as usize);
-        if let Some(value) = slot.value.as_mut() {
-            value
-        } else {
-            unreachable_unchecked()
-        }
+        slot.get_unchecked_mut()
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The
@@ -690,10 +712,10 @@ impl<K: Key, V> SecondaryMap<K, V> {
 
         if let Some(slot) = self.slots.get_mut(kd.idx as usize) {
             let v = kd.version.get();
-            if is_older_version(v, slot.version) {
+            if is_older_version(v, slot.version()) {
                 return None;
             }
-            if slot.version == v {
+            if slot.version() == v {
                 return Some(Entry::Occupied(OccupiedEntry { map: self, key }));
             }
         }
@@ -1051,12 +1073,8 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     pub fn remove(self) -> V {
         let kd = self.key.data();
         let slot = unsafe { self.map.slots.get_unchecked_mut(kd.idx as usize) };
-        slot.version -= 1;
         self.map.num_elems -= 1;
-        match slot.value.take() {
-            Some(x) => x,
-            None => unsafe { unreachable_unchecked() },
-        }
+        replace(slot, Slot::new_vacant()).to_option().unwrap()
     }
 }
 
@@ -1135,20 +1153,13 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
         let kd = self.key.data();
         self.map
             .slots
-            .extend((self.map.slots.len()..=kd.idx as usize).map(|_| Slot {
-                version: 0,
-                value: None,
-            }));
+            .extend((self.map.slots.len()..=kd.idx as usize).map(|_| Slot::new_vacant()));
 
         let slot = &mut self.map.slots[kd.idx as usize];
         self.map.num_elems += 1;
 
-        *slot = Slot {
-            version: kd.version.get(),
-            value: Some(value),
-        };
-
-        slot.value.as_mut().unwrap()
+        *slot = Slot::new_occupied(kd.version.get(), value);
+        unsafe { slot.get_unchecked_mut() }
     }
 }
 
@@ -1212,11 +1223,11 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
             let idx = self.cur;
             self.cur += 1;
 
-            if let Some(value) = core::mem::replace(&mut self.sm.slots[idx].value, None) {
-                let kd = KeyData::new(idx as u32, self.sm.slots[idx].version);
-                self.sm.slots[idx].version -= 1;
+            let slot = unsafe { self.sm.slots.get_unchecked_mut(idx) };
+            if let Occupied { value, version } = replace(slot, Slot::new_vacant()) {
                 self.sm.num_elems -= 1;
                 self.num_left -= 1;
+                let kd = KeyData::new(idx as u32, version.get());
                 return Some((kd.into(), value));
             }
         }
@@ -1240,9 +1251,9 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
 
     fn next(&mut self) -> Option<(K, V)> {
         while let Some((idx, mut slot)) = self.slots.next() {
-            if let Some(value) = core::mem::replace(&mut slot.value, None) {
-                let kd = KeyData::new(idx as u32, slot.version);
+            if let Occupied { value, version } = replace(&mut slot, Slot::new_vacant()) {
                 self.num_left -= 1;
+                let kd = KeyData::new(idx as u32, version.get());
                 return Some((kd.into(), value));
             }
         }
@@ -1260,9 +1271,9 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
 
     fn next(&mut self) -> Option<(K, &'a V)> {
         while let Some((idx, slot)) = self.slots.next() {
-            if let Some(value) = &slot.value {
-                let kd = KeyData::new(idx as u32, slot.version);
+            if let Occupied { value, version } = slot {
                 self.num_left -= 1;
+                let kd = KeyData::new(idx as u32, version.get());
                 return Some((kd.into(), value));
             }
         }
@@ -1280,8 +1291,8 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
 
     fn next(&mut self) -> Option<(K, &'a mut V)> {
         while let Some((idx, slot)) = self.slots.next() {
-            if let Some(value) = &mut slot.value {
-                let kd = KeyData::new(idx as u32, slot.version);
+            if let Occupied { value, version } = slot {
+                let kd = KeyData::new(idx as u32, version.get());
                 self.num_left -= 1;
                 return Some((kd.into(), value));
             }
@@ -1399,8 +1410,8 @@ mod serialize {
             S: Serializer,
         {
             let serde_slot = SerdeSlot {
-                version: self.version,
-                value: self.value.as_ref(),
+                version: self.version(),
+                value: self.get(),
             };
             serde_slot.serialize(serializer)
         }
@@ -1420,9 +1431,9 @@ mod serialize {
                 return Err(de::Error::custom(&"inconsistent occupation in Slot"));
             }
 
-            Ok(Self {
-                value: serde_slot.value,
-                version: serde_slot.version,
+            Ok(match serde_slot.value {
+                Some(value) => Self::new_occupied(serde_slot.version, value),
+                None => Self::new_vacant()
             })
         }
     }
@@ -1447,16 +1458,12 @@ mod serialize {
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
+            if slots.get(0).map_or(true, |slot| slot.occupied()) {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 
-            slots[0] = Slot {
-                value: None,
-                version: 0,
-            };
-
-            let num_elems = slots.iter().map(|s| s.value.is_some() as usize).sum();
+            slots[0] = Slot::new_vacant();
+            let num_elems = slots.iter().map(|s| s.occupied() as usize).sum();
 
             Ok(Self {
                 num_elems,

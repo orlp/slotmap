@@ -7,21 +7,17 @@ use alloc::vec::Vec;
 use core::hint::unreachable_unchecked;
 use core::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use core::marker::PhantomData;
-use core::ops::{Index, IndexMut};
-use core::num::NonZeroU32;
 use core::mem::replace;
-
+use core::num::NonZeroU32;
+use core::ops::{Index, IndexMut};
 
 // This representation works because we don't have to store the versions
 // of removed elements.
 #[derive(Debug, Clone)]
 enum Slot<T> {
-    Occupied {
-        value: T,
-        version: NonZeroU32,
-    },
+    Occupied { value: T, version: NonZeroU32 },
 
-    Vacant
+    Vacant,
 }
 
 use self::Slot::Occupied;
@@ -70,14 +66,13 @@ impl<T> Slot<T> {
         }
     }
 
-    pub fn to_option(self) -> Option<T> {
+    pub fn into_option(self) -> Option<T> {
         match self {
             Occupied { value, .. } => Some(value),
             Vacant => None,
         }
     }
 }
-
 
 /// Secondary map, associate data with previously stored elements in a slot map.
 ///
@@ -363,7 +358,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
         if let Some(slot) = self.slots.get_mut(kd.idx as usize) {
             if slot.version() == kd.version.get() {
                 self.num_elems -= 1;
-                return replace(slot, Slot::new_vacant()).to_option();
+                return replace(slot, Slot::new_vacant()).into_option();
             }
         }
 
@@ -1074,7 +1069,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
         let kd = self.key.data();
         let slot = unsafe { self.map.slots.get_unchecked_mut(kd.idx as usize) };
         self.map.num_elems -= 1;
-        replace(slot, Slot::new_vacant()).to_option().unwrap()
+        replace(slot, Slot::new_vacant()).into_option().unwrap()
     }
 }
 
@@ -1411,7 +1406,10 @@ mod serialize {
         {
             let serde_slot = SerdeSlot {
                 version: self.version(),
-                value: self.get(),
+                value: match self {
+                    Occupied { value, .. } => Some(value),
+                    Vacant => None,
+                },
             };
             serde_slot.serialize(serializer)
         }
@@ -1433,7 +1431,7 @@ mod serialize {
 
             Ok(match serde_slot.value {
                 Some(value) => Self::new_occupied(serde_slot.version, value),
-                None => Self::new_vacant()
+                None => Self::new_vacant(),
             })
         }
     }

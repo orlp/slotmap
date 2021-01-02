@@ -6,13 +6,13 @@
 // are valid. Keys that are received from the user are not trusted (as they
 // might have come from a different slot map or malicious serde deseralization).
 
-use alloc::vec::Vec;
 #[cfg(all(nightly, feature = "unstable"))]
 use alloc::collections::TryReserveError;
+use alloc::vec::Vec;
 use core::iter::FusedIterator;
-use core::ops::{Index, IndexMut};
 #[cfg(all(nightly, feature = "unstable"))]
 use core::mem::MaybeUninit;
+use core::ops::{Index, IndexMut};
 
 use crate::{DefaultKey, Key, KeyData};
 
@@ -479,7 +479,10 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// // sm.get_unchecked(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
-        let idx = self.slots.get_unchecked(key.data().idx as usize).idx_or_free;
+        let idx = self
+            .slots
+            .get_unchecked(key.data().idx as usize)
+            .idx_or_free;
         &self.values.get_unchecked(idx as usize)
     }
 
@@ -528,7 +531,10 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// // sm.get_unchecked_mut(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
-        let idx = self.slots.get_unchecked(key.data().idx as usize).idx_or_free;
+        let idx = self
+            .slots
+            .get_unchecked(key.data().idx as usize)
+            .idx_or_free;
         self.values.get_unchecked_mut(idx as usize)
     }
 
@@ -565,7 +571,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             if !self.contains_key(kd.into()) {
                 break;
             }
-            
+
             // This key is valid, and thus the slot is occupied. Temporarily
             // mark it as unoccupied so duplicate keys would show up as invalid.
             // This gives us a linear time disjointness check.
@@ -581,7 +587,9 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         // Undo temporary unoccupied markings.
         for k in &keys[..i] {
             let idx = k.data().idx as usize;
-            unsafe { self.slots.get_unchecked_mut(idx).version ^= 1; }
+            unsafe {
+                self.slots.get_unchecked_mut(idx).version ^= 1;
+            }
         }
 
         if i == N {
@@ -591,7 +599,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             None
         }
     }
-    
+
     /// Returns mutable references to the values corresponding to the given
     /// keys. All keys must be valid and disjoint.
     ///
@@ -613,7 +621,10 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(sm[kb], "butter");
     /// ```
     #[cfg(all(nightly, feature = "unstable"))]
-    pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(&mut self, keys: [K; N]) -> [&mut V; N] {
+    pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
+        &mut self,
+        keys: [K; N],
+    ) -> [&mut V; N] {
         // Safe, see get_disjoint_mut.
         let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
         for i in 0..N {

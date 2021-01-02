@@ -12,9 +12,9 @@
 //! The trade-off is that compared to a regular `SlotMap` insertion/removal is
 //! roughly twice as slow. Random indexing has identical performance for both.
 
-use alloc::vec::Vec;
 #[cfg(all(nightly, feature = "unstable"))]
 use alloc::collections::TryReserveError;
+use alloc::vec::Vec;
 use core::fmt;
 use core::iter::FusedIterator;
 use core::marker::PhantomData;
@@ -711,7 +711,11 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// // sm.get_unchecked_mut(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
-        &mut self.slots.get_unchecked_mut(key.data().idx as usize).u.value
+        &mut self
+            .slots
+            .get_unchecked_mut(key.data().idx as usize)
+            .u
+            .value
     }
 
     /// Returns mutable references to the values corresponding to the given
@@ -747,7 +751,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
             if !self.contains_key(kd.into()) {
                 break;
             }
-            
+
             // This key is valid, and thus the slot is occupied. Temporarily
             // mark it as unoccupied so duplicate keys would show up as invalid.
             // This gives us a linear time disjointness check.
@@ -762,7 +766,9 @@ impl<K: Key, V> HopSlotMap<K, V> {
         // Undo temporary unoccupied markings.
         for k in &keys[..i] {
             let idx = k.data().idx as usize;
-            unsafe { self.slots.get_unchecked_mut(idx).version ^= 1; }
+            unsafe {
+                self.slots.get_unchecked_mut(idx).version ^= 1;
+            }
         }
 
         if i == N {
@@ -772,7 +778,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
             None
         }
     }
-    
+
     /// Returns mutable references to the values corresponding to the given
     /// keys. All keys must be valid and disjoint.
     ///
@@ -794,7 +800,10 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// assert_eq!(sm[kb], "butter");
     /// ```
     #[cfg(all(nightly, feature = "unstable"))]
-    pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(&mut self, keys: [K; N]) -> [&mut V; N] {
+    pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
+        &mut self,
+        keys: [K; N],
+    ) -> [&mut V; N] {
         // Safe, see get_disjoint_mut.
         let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
         for i in 0..N {

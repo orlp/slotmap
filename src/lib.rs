@@ -177,8 +177,8 @@ extern crate quickcheck;
 #[cfg(test)]
 extern crate serde_json;
 
-pub(crate) mod normal;
-pub use crate::normal::*;
+pub mod basic;
+pub use crate::basic::SlotMap;
 
 pub mod dense;
 pub use crate::dense::DenseSlotMap;

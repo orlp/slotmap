@@ -244,9 +244,11 @@ pub struct KeyData {
 
 impl KeyData {
     fn new(idx: u32, version: u32) -> Self {
+        debug_assert!(version > 0);
+
         Self {
             idx,
-            version: NonZeroU32::new(version).expect("KeyData constructed with zero version"),
+            version: unsafe { NonZeroU32::new_unchecked(version | 1) },
         }
     }
 

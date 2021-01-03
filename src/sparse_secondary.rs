@@ -6,6 +6,8 @@ use std::hash;
 use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
+#[cfg(all(nightly, feature = "unstable"))]
+use core::mem::MaybeUninit;
 
 #[cfg(all(nightly, feature = "unstable"))]
 use alloc::collections::TryReserveError;
@@ -455,6 +457,71 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             .get_mut(&kd.idx)
             .filter(|slot| slot.version == kd.version.get())
             .map(|slot| &mut slot.value)
+    }
+
+    /// Returns mutable references to the values corresponding to the given
+    /// keys. All keys must be valid and disjoint, otherwise None is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    /// let ka = sm.insert(()); sec.insert(ka, "butter");
+    /// let kb = sm.insert(()); sec.insert(kb, "apples");
+    /// let kc = sm.insert(()); sec.insert(kc, "charlie");
+    /// sec.remove(kc); // Make key c invalid.
+    /// assert_eq!(sec.get_disjoint_mut([ka, kb, kc]), None); // Has invalid key.
+    /// assert_eq!(sec.get_disjoint_mut([ka, ka]), None); // Not disjoint.
+    /// let [a, b] = sec.get_disjoint_mut([ka, kb]).unwrap();
+    /// std::mem::swap(a, b);
+    /// assert_eq!(sec[ka], "apples");
+    /// assert_eq!(sec[kb], "butter");
+    /// ```
+    #[cfg(all(nightly, feature = "unstable"))]
+    pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
+        // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
+        // safe because the type we are claiming to have initialized here is a
+        // bunch of `MaybeUninit`s, which do not require initialization.
+        let mut ptrs: [MaybeUninit<*mut V>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+
+        let mut i = 0;
+        while i < N {
+            let kd = keys[i].data();
+
+            match self.slots.get_mut(&kd.idx) {
+                Some(Slot { version, value }) if *version == kd.version.get() => {
+                    // This key is valid, and the slot is occupied. Temporarily
+                    // make the version even so duplicate keys would show up as
+                    // invalid, since keys always have an odd version. This
+                    // gives us a linear time disjointness check.
+                    ptrs[i] = MaybeUninit::new(&mut *value as *mut V);
+                    *version ^= 1;
+                },
+
+                _ => break,
+            }
+
+            i += 1;
+        }
+
+        // Undo temporary even versions.
+        for j in 0..i {
+            match self.slots.get_mut(&keys[j].data().idx) {
+                Some(Slot { version, .. }) => {
+                    *version ^= 1;
+                },
+                _ => unsafe { core::hint::unreachable_unchecked() },
+            }
+        }
+
+        if i == N {
+            // All were valid and disjoint.
+            Some(unsafe { core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs) })
+        } else {
+            None
+        }
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The
@@ -1386,6 +1453,53 @@ mod tests {
             .map(|(k, &v)| (k, v))
             .collect::<FastSparseSecondaryMap<_, _>>();
         assert_eq!(sec, sec2);
+    }
+
+    #[cfg(all(nightly, feature = "unstable"))]
+    #[test]
+    fn disjoint() {
+        // Intended to be run with miri to find any potential UB.
+        let mut sm = SlotMap::new();
+        let mut sec = SparseSecondaryMap::new();
+
+        // Some churn.
+        for i in 0..20usize {
+            sm.insert(i);
+        }
+        sm.retain(|_, i| *i % 2 == 0);
+        
+        for (i, k) in sm.keys().enumerate() {
+            sec.insert(k, i);
+        }
+
+        let keys: Vec<_> = sm.keys().collect();
+        for i in 0..keys.len() {
+            for j in 0..keys.len() {
+                if let Some([r0, r1]) = sec.get_disjoint_mut([keys[i], keys[j]]) {
+                    *r0 ^= *r1;
+                    *r1 = r1.wrapping_add(*r0);
+                } else {
+                    assert!(i == j);
+                }
+            }
+        }
+
+        for i in 0..keys.len() {
+            for j in 0..keys.len() {
+                for k in 0..keys.len() {
+                    if let Some([r0, r1, r2]) = sec.get_disjoint_mut([keys[i], keys[j], keys[k]]) {
+                        *r0 ^= *r1;
+                        *r0 = r0.wrapping_add(*r2);
+                        *r1 ^= *r0;
+                        *r1 = r1.wrapping_add(*r2);
+                        *r2 ^= *r0;
+                        *r2 = r2.wrapping_add(*r1);
+                    } else {
+                        assert!(i == j || j == k || i == k);
+                    }
+                }
+            }
+        }
     }
 
     quickcheck! {

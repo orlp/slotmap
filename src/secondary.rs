@@ -8,6 +8,8 @@ use core::hint::unreachable_unchecked;
 use core::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use core::marker::PhantomData;
 use core::mem::replace;
+#[cfg(all(nightly, feature = "unstable"))]
+use core::mem::MaybeUninit;
 use core::num::NonZeroU32;
 use core::ops::{Index, IndexMut};
 
@@ -546,6 +548,112 @@ impl<K: Key, V> SecondaryMap<K, V> {
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         let slot = self.slots.get_unchecked_mut(key.data().idx as usize);
         slot.get_unchecked_mut()
+    }
+
+    /// Returns mutable references to the values corresponding to the given
+    /// keys. All keys must be valid and disjoint, otherwise None is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SecondaryMap::new();
+    /// let ka = sm.insert(()); sec.insert(ka, "butter");
+    /// let kb = sm.insert(()); sec.insert(kb, "apples");
+    /// let kc = sm.insert(()); sec.insert(kc, "charlie");
+    /// sec.remove(kc); // Make key c invalid.
+    /// assert_eq!(sec.get_disjoint_mut([ka, kb, kc]), None); // Has invalid key.
+    /// assert_eq!(sec.get_disjoint_mut([ka, ka]), None); // Not disjoint.
+    /// let [a, b] = sec.get_disjoint_mut([ka, kb]).unwrap();
+    /// std::mem::swap(a, b);
+    /// assert_eq!(sec[ka], "apples");
+    /// assert_eq!(sec[kb], "butter");
+    /// ```
+    #[cfg(all(nightly, feature = "unstable"))]
+    pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
+        // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
+        // safe because the type we are claiming to have initialized here is a
+        // bunch of `MaybeUninit`s, which do not require initialization.
+        let mut ptrs: [MaybeUninit<*mut V>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+
+        // And all bit patterns of u32 are safe, so this is also safe.
+        let mut slot_versions: [u32; N] = unsafe { MaybeUninit::uninit().assume_init() };
+
+        let mut i = 0;
+        while i < N {
+            let kd = keys[i].data();
+
+            match self.slots.get_mut(kd.idx as usize) {
+                Some(Occupied { version, value }) if *version == kd.version => {
+                    // This key is valid, and the slot is occupied. Temporarily
+                    // set the version to 2 so duplicate keys would show up as
+                    // invalid, since keys always have an odd version. This
+                    // gives us a linear time disjointness check.
+                    ptrs[i] = MaybeUninit::new(&mut *value as *mut V);
+                    slot_versions[i] = version.get();
+                    *version = NonZeroU32::new(2).unwrap();
+                },
+
+                _ => break,
+            }
+
+            i += 1;
+        }
+
+        // Undo temporary unoccupied markings.
+        for j in 0..i {
+            let idx = keys[j].data().idx as usize;
+            unsafe {
+                match self.slots.get_mut(idx) {
+                    Some(Occupied { version, .. }) => {
+                        *version = NonZeroU32::new_unchecked(slot_versions[j]);
+                    },
+                    _ => unreachable_unchecked(),
+                }
+            }
+        }
+
+        if i == N {
+            // All were valid and disjoint.
+            Some(unsafe { core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs) })
+        } else {
+            None
+        }
+    }
+
+    /// Returns mutable references to the values corresponding to the given
+    /// keys. All keys must be valid and disjoint.
+    ///
+    /// # Safety
+    ///
+    /// This should only be used if `contains_key(key)` is true for every given
+    /// key and no two keys are equal. Otherwise it is potentially unsafe.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SecondaryMap::new();
+    /// let ka = sm.insert(()); sec.insert(ka, "butter");
+    /// let kb = sm.insert(()); sec.insert(kb, "apples");
+    /// let [a, b] = unsafe { sec.get_disjoint_unchecked_mut([ka, kb]) };
+    /// std::mem::swap(a, b);
+    /// assert_eq!(sec[ka], "apples");
+    /// assert_eq!(sec[kb], "butter");
+    /// ```
+    #[cfg(all(nightly, feature = "unstable"))]
+    pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
+        &mut self,
+        keys: [K; N],
+    ) -> [&mut V; N] {
+        // Safe, see get_disjoint_mut.
+        let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
+        for i in 0..N {
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()) as *mut V);
+        }
+        core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The
@@ -1479,6 +1587,54 @@ mod serialize {
 mod tests {
     use crate::*;
     use std::collections::HashMap;
+
+    #[cfg(all(nightly, feature = "unstable"))]
+    #[test]
+    fn disjoint() {
+        // Intended to be run with miri to find any potential UB.
+        let mut sm = SlotMap::new();
+        let mut sec = SecondaryMap::new();
+
+        // Some churn.
+        for i in 0..20usize {
+            sm.insert(i);
+        }
+        sm.retain(|_, i| *i % 2 == 0);
+        
+        for (i, k) in sm.keys().enumerate() {
+            sec.insert(k, i);
+        }
+
+        let keys: Vec<_> = sm.keys().collect();
+        for i in 0..keys.len() {
+            for j in 0..keys.len() {
+                if let Some([r0, r1]) = sec.get_disjoint_mut([keys[i], keys[j]]) {
+                    *r0 ^= *r1;
+                    *r1 = r1.wrapping_add(*r0);
+                } else {
+                    assert!(i == j);
+                }
+            }
+        }
+
+        for i in 0..keys.len() {
+            for j in 0..keys.len() {
+                for k in 0..keys.len() {
+                    if let Some([r0, r1, r2]) = sec.get_disjoint_mut([keys[i], keys[j], keys[k]]) {
+                        *r0 ^= *r1;
+                        *r0 = r0.wrapping_add(*r2);
+                        *r1 ^= *r0;
+                        *r1 = r1.wrapping_add(*r2);
+                        *r2 ^= *r0;
+                        *r2 = r2.wrapping_add(*r1);
+                    } else {
+                        assert!(i == j || j == k || i == k);
+                    }
+                }
+            }
+        }
+    }
+
 
     #[cfg(feature = "serde")]
     use serde_json;

@@ -1270,6 +1270,48 @@ mod tests {
         assert_eq!(*drops.borrow(), 1750);
     }
 
+    #[cfg(all(nightly, feature = "unstable"))]
+    #[test]
+    fn disjoint() {
+        // Intended to be run with miri to find any potential UB.
+        let mut sm = SlotMap::new();
+
+        // Some churn.
+        for i in 0..20usize {
+            sm.insert(i);
+        }
+        sm.retain(|_, i| *i % 2 == 0);
+
+        let keys: Vec<_> = sm.keys().collect();
+        for i in 0..keys.len() {
+            for j in 0..keys.len() {
+                if let Some([r0, r1]) = sm.get_disjoint_mut([keys[i], keys[j]]) {
+                    *r0 ^= *r1;
+                    *r1 = r1.wrapping_add(*r0);
+                } else {
+                    assert!(i == j);
+                }
+            }
+        }
+
+        for i in 0..keys.len() {
+            for j in 0..keys.len() {
+                for k in 0..keys.len() {
+                    if let Some([r0, r1, r2]) = sm.get_disjoint_mut([keys[i], keys[j], keys[k]]) {
+                        *r0 ^= *r1;
+                        *r0 = r0.wrapping_add(*r2);
+                        *r1 ^= *r0;
+                        *r1 = r1.wrapping_add(*r2);
+                        *r2 ^= *r0;
+                        *r2 = r2.wrapping_add(*r1);
+                    } else {
+                        assert!(i == j || j == k || i == k);
+                    }
+                }
+            }
+        }
+    }
+
     quickcheck! {
         fn qc_slotmap_equiv_hashmap(operations: Vec<(u8, u32)>) -> bool {
             let mut hm = HashMap::new();

@@ -38,7 +38,7 @@ struct Slot<T> {
 /// in the secondary map, use a [`SecondaryMap`] instead.
 ///
 /// [`SecondaryMap`]: crate::SecondaryMap
-/// [`HashMap`]: std::collections::HashMap;
+/// [`HashMap`]: std::collections::HashMap
 ///
 /// Example usage:
 ///

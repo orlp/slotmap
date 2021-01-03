@@ -593,7 +593,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
                     ptrs[i] = MaybeUninit::new(&mut *value as *mut V);
                     slot_versions[i] = version.get();
                     *version = NonZeroU32::new(2).unwrap();
-                },
+                }
 
                 _ => break,
             }
@@ -608,7 +608,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
                 match self.slots.get_mut(idx) {
                     Some(Occupied { version, .. }) => {
                         *version = NonZeroU32::new_unchecked(slot_versions[j]);
-                    },
+                    }
                     _ => unreachable_unchecked(),
                 }
             }
@@ -1600,7 +1600,7 @@ mod tests {
             sm.insert(i);
         }
         sm.retain(|_, i| *i % 2 == 0);
-        
+
         for (i, k) in sm.keys().enumerate() {
             sec.insert(k, i);
         }

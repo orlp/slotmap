@@ -111,7 +111,7 @@
 //! for each storage slot what the latest stored version was, even if the slot
 //! is empty now. This means that iteration can be slow as it must iterate over
 //! potentially a lot of empty slots.
-//! 
+//!
 //! [`HopSlotMap`] solves this by maintaining more information on
 //! insertion/removal, allowing it to iterate only over filled slots by 'hopping
 //! over' contiguous blocks of vacant slots. This can give it significantly
@@ -308,7 +308,16 @@ impl Default for KeyData {
 /// map. You can create new key types using [`new_key_type!`], which makes a
 /// new type identical to [`DefaultKey`], just with a different name.
 pub trait Key:
-    From<KeyData> + Copy + Clone + Default + Eq + PartialEq + Ord + PartialOrd + core::hash::Hash + core::fmt::Debug
+    From<KeyData>
+    + Copy
+    + Clone
+    + Default
+    + Eq
+    + PartialEq
+    + Ord
+    + PartialOrd
+    + core::hash::Hash
+    + core::fmt::Debug
 {
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method (or default

@@ -1,13 +1,13 @@
 //! Contains the sparse secondary map implementation.
 
 use super::{is_older_version, Key, KeyData};
+#[cfg(all(nightly, feature = "unstable"))]
+use core::mem::MaybeUninit;
 use std::collections::hash_map::{self, HashMap};
 use std::hash;
 use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-#[cfg(all(nightly, feature = "unstable"))]
-use core::mem::MaybeUninit;
 
 #[cfg(all(nightly, feature = "unstable"))]
 use alloc::collections::TryReserveError;
@@ -498,7 +498,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
                     // gives us a linear time disjointness check.
                     ptrs[i] = MaybeUninit::new(&mut *value as *mut V);
                     *version ^= 1;
-                },
+                }
 
                 _ => break,
             }
@@ -511,7 +511,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             match self.slots.get_mut(&keys[j].data().idx) {
                 Some(Slot { version, .. }) => {
                     *version ^= 1;
-                },
+                }
                 _ => unsafe { core::hint::unreachable_unchecked() },
             }
         }
@@ -1467,7 +1467,7 @@ mod tests {
             sm.insert(i);
         }
         sm.retain(|_, i| *i % 2 == 0);
-        
+
         for (i, k) in sm.keys().enumerate() {
             sec.insert(k, i);
         }

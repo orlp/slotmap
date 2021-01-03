@@ -137,10 +137,10 @@
 //! detected at runtime, so it can lead to a hard to find bug.
 //!
 //! To prevent this, slot maps allow you to specify what the type is of the key
-//! they return, as long as that type implements the [`Key`] trait. To aid with
-//! this, the [`new_key_type!`] macro is provided that builds such a type for
-//! you. The resulting type is exactly like [`DefaultKey`]. So instead of simply
-//! using `SlotMap<DefaultKey, Player>` you would use:
+//! they return. You can construct new key types using the [`new_key_type!`]
+//! macro. The resulting type behaves exactly like [`DefaultKey`], but is a
+//! distinct type. So instead of simply using `SlotMap<DefaultKey, Player>` you
+//! would use:
 //!
 //! ```
 //! # use slotmap::*;
@@ -149,6 +149,8 @@
 //! new_key_type! { struct PlayerKey; }
 //! let sm: SlotMap<PlayerKey, Player> = SlotMap::with_key();
 //! ```
+//!
+//! You can write code generic over any key type using the [`Key`] trait.
 //!
 //! [`Vec`]: std::vec::Vec
 //! [`BTreeMap`]: std::collections::BTreeMap
@@ -280,9 +282,11 @@ impl Default for KeyData {
 /// non-sensical (and might panic in case of out-of-bounds).
 ///
 /// To prevent this, it is suggested to have a unique key type for each slot
-/// map. The easiest way to do this is through [`new_key_type!`], which
-/// makes a new type identical to [`DefaultKey`], just with a different name.
-pub trait Key: From<KeyData> {
+/// map. You can create new key types using [`new_key_type!`], which makes a
+/// new type identical to [`DefaultKey`], just with a different name.
+pub trait Key:
+    From<KeyData> + Copy + Clone + Default + Eq + PartialEq + Ord + PartialOrd + core::hash::Hash + core::fmt::Debug
+{
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method (or default
     /// initialization of keys made with [`new_key_type!`], which calls this
@@ -303,8 +307,6 @@ pub trait Key: From<KeyData> {
     /// assert!(k != nk);
     /// assert_eq!(sm.get(nk), None);
     /// ```
-    ///
-    /// [`new_key_type!`]: macro.new_key_type.html
     fn null() -> Self {
         KeyData::null().into()
     }
@@ -340,12 +342,12 @@ pub trait Key: From<KeyData> {
     fn data(&self) -> KeyData;
 }
 
-/// A helper macro to conveniently create new key types. If you use a new key
-/// type for each slot map you create you can entirely prevent using the wrong
-/// key on the wrong slot map.
+/// A helper macro to create new key types. If you use a new key type for each
+/// slot map you create you can entirely prevent using the wrong key on the
+/// wrong slot map.
 ///
-/// The type constructed by this macro is identical to [`DefaultKey`], just with
-/// a different name.
+/// The type constructed by this macro is defined exactly as [`DefaultKey`],
+/// but is a distinct type for the type checker and does not implicitly convert.
 ///
 /// # Examples
 ///
@@ -353,18 +355,30 @@ pub trait Key: From<KeyData> {
 /// # extern crate slotmap;
 /// # use slotmap::*;
 /// new_key_type! {
-///     struct EntityKey;
+///     // A private key type.
+///     struct RocketKey;
 ///
-///     /// Key for the Player slot map.
-///     pub struct PlayerKey;
+///     // A public key type with a doc comment.
+///     /// Key for the user slot map.
+///     pub struct UserKey;
 /// }
 ///
 /// fn main() {
-///     let mut players = SlotMap::with_key();
-///     let mut entities: SlotMap<EntityKey, (f64, f64)> = SlotMap::with_key();
-///     let bob: PlayerKey = players.insert("bobby");
-///     // Now this is a type error because entities.get expects an EntityKey:
-///     // entities.get(bob);
+///     let mut users = SlotMap::with_key();
+///     let mut rockets = SlotMap::with_key();
+///     let bob: UserKey = users.insert("bobby");
+///     let apollo: RocketKey = rockets.insert("apollo");
+///     // Now this is a type error because rockets.get expects an RocketKey:
+///     // rockets.get(bob);
+///
+///     // If for some reason you do end up needing to convert (e.g. storing
+///     // keys of multiple slot maps in the same data structure without
+///     // boxing), you can use KeyData as an intermediate representation. This
+///     // does mean that once again you are responsible for not using the wrong
+///     // key on the wrong slot map.
+///     let keys = vec![bob.data(), apollo.data()];
+///     println!("{} likes rocket {}",
+///              users[keys[0].into()], rockets[keys[1].into()]);
 /// }
 /// ```
 #[macro_export(local_inner_macros)]

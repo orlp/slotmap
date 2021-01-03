@@ -58,7 +58,7 @@
 //! feature flag for `slotmap` in your `Cargo.toml`.
 //!
 //! ```text
-//! slotmap = { version = "...", features = ["serde"] }
+//! slotmap = { version = "0.4", features = ["serde"] }
 //! ```
 //!
 //! # Why not [`slab`]?
@@ -178,20 +178,26 @@ extern crate quickcheck;
 extern crate serde_json;
 
 pub mod basic;
+pub mod dense;
+pub mod hop;
+pub mod secondary;
+#[cfg(feature = "std")]
+pub mod sparse_secondary;
+
+#[doc(inline)]
 pub use crate::basic::SlotMap;
 
-pub mod dense;
+#[doc(inline)]
 pub use crate::dense::DenseSlotMap;
 
-pub mod hop;
+#[doc(inline)]
 pub use crate::hop::HopSlotMap;
 
-pub mod secondary;
+#[doc(inline)]
 pub use crate::secondary::SecondaryMap;
 
 #[cfg(feature = "std")]
-pub mod sparse_secondary;
-#[cfg(feature = "std")]
+#[doc(inline)]
 pub use crate::sparse_secondary::SparseSecondaryMap;
 
 use core::fmt::{self, Debug, Formatter};

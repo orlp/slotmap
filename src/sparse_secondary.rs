@@ -630,16 +630,14 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
                 Entry::Occupied(OccupiedEntry {
                     inner,
                     kd,
-                    _k: PhantomData
-                })
-            },
-            hash_map::Entry::Vacant(inner) => {
-                Entry::Vacant(VacantEntry {
-                    inner,
-                    kd,
-                    _k: PhantomData
+                    _k: PhantomData,
                 })
             }
+            hash_map::Entry::Vacant(inner) => Entry::Vacant(VacantEntry {
+                inner,
+                kd,
+                _k: PhantomData,
+            }),
         })
     }
 }
@@ -1101,7 +1099,13 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     /// }
     /// ```
     pub fn insert(self, value: V) -> &'a mut V {
-        &mut self.inner.insert(Slot { version: self.kd.version.get(), value }).value
+        &mut self
+            .inner
+            .insert(Slot {
+                version: self.kd.version.get(),
+                value,
+            })
+            .value
     }
 }
 

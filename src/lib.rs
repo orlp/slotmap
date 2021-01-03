@@ -47,7 +47,7 @@
 //! }
 //! ```
 //!
-//! # Serialization through [`serde`]
+//! # Serialization through [`serde`], [`no_std`] support and unstable features
 //!
 //! Both keys and the slot maps have full (de)seralization support through
 //! the [`serde`] library. A key remains valid for a slot map even after one or
@@ -61,17 +61,28 @@
 //! slotmap = { version = "0.4", features = ["serde"] }
 //! ```
 //!
-//! # Why not [`slab`]?
+//! This crate also supports [`no_std`] environments, but does require the
+//! [`alloc`] crate to be available. To enable this you have to disable the
+//! `std` feature that is enabled by default:
 //!
-//! Unlike [`slab`], the keys returned by [`SlotMap`] are versioned. This means
-//! that once a key is removed, it stays removed, even if the physical storage
-//! inside the slotmap is reused for new elements. The key is a
+//! ```text
+//! slotmap = { version = "0.4", default-features = false }
+//! ```
+//!
+//! Unfortunately [`SparseSecondaryMap`] is not available in [`no_std`], because
+//! it relies on [`HashMap`]. Finally the `unstable` feature can be defined to
+//! enable the parts of `slotmap` that only work on nightly Rust.
+//!
+//! # Why not index a [`Vec`], or use [`slab`], [`stable-vec`], etc?
+//!
+//! Those solutions either can not reclaim memory from deleted elements or
+//! suffer from the ABA problem. The keys returned by `slotmap` are versioned.
+//! This means that once a key is removed, it stays removed, even if the
+//! physical storage inside the slotmap is reused for new elements. The key is a
 //! permanently unique<sup>*</sup> reference to the inserted value. Despite
-//! supporting versioning, a [`SlotMap`] is not slower than [`slab`], by
-//! internally using carefully checked unsafe code. A [`HopSlotMap`]
-//! also provides faster iteration than [`slab`] does, and [`DenseSlotMap`] even
-//! faster still. Additionally, at the time of writing [`slab`] does not support
-//! serialization.
+//! supporting versioning, a [`SlotMap`] is often not (much) slower than the
+//! alternative, by internally using carefully checked unsafe code. Finally,
+//! `slotmap` simply has a lot of features that make your life easy.
 //!
 //! # Performance characteristics and implementation details
 //!
@@ -95,23 +106,25 @@
 //!
 //! # Choosing [`SlotMap`], [`HopSlotMap`] or [`DenseSlotMap`]
 //!
-//! A [`SlotMap`] can never shrink the size of its underlying storage, because
-//! for each storage slot it must remember what the latest stored version was,
-//! even if the slot is empty now. This means that iteration can be slow as it
-//! must iterate over potentially a lot of empty slots.
-//!
+//! A [`SlotMap`] is the fastest for most operations, except iteration. It can
+//! never shrink the size of its underlying storage, because it must remember
+//! for each storage slot what the latest stored version was, even if the slot
+//! is empty now. This means that iteration can be slow as it must iterate over
+//! potentially a lot of empty slots.
+//! 
 //! [`HopSlotMap`] solves this by maintaining more information on
 //! insertion/removal, allowing it to iterate only over filled slots by 'hopping
 //! over' contiguous blocks of vacant slots. This can give it significantly
 //! better iteration speed.  If you expect to iterate over all elements in a
-//! [`SlotMap`] a lot, choose [`HopSlotMap`]. The downside is that insertion and
-//! removal is roughly twice as slow. Random access is the same speed for both.
+//! [`SlotMap`] a lot, and potentially have a lot of deleted elements, choose
+//! [`HopSlotMap`]. The downside is that insertion and removal is roughly twice
+//! as slow. Random access is the same speed for both.
 //!
 //! [`DenseSlotMap`] goes even further and stores all elements on a contiguous
 //! block of memory. It uses two indirections per random access; the slots
 //! contain indices used to access the contiguous memory. This means random
 //! access is slower than both [`SlotMap`] and [`HopSlotMap`], but iteration is
-//! significantly faster.
+//! significantly faster, as fast as a normal [`Vec`].
 //!
 //! # Choosing [`SecondaryMap`] or [`SparseSecondaryMap`]
 //!
@@ -156,7 +169,9 @@
 //! [`BTreeMap`]: std::collections::BTreeMap
 //! [`HashMap`]: std::collections::HashMap
 //! [`serde`]: https://github.com/serde-rs/serde
-//! [`slab`]: https://github.com/carllerche/slab
+//! [`slab`]: https://crates.io/crates/slab
+//! [`stable-vec`]: https://crates.io/crates/stable-vec
+//! [`no_std`]: https://doc.rust-lang.org/1.7.0/book/no-stdlib.html
 
 extern crate alloc;
 

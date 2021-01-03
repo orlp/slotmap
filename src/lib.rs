@@ -1,5 +1,5 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
-#![doc(html_root_url = "https://docs.rs/slotmap/0.4.0")]
+#![doc(html_root_url = "https://docs.rs/slotmap/1.0.0")]
 #![crate_name = "slotmap"]
 #![cfg_attr(all(nightly, feature = "unstable"), feature(try_reserve))]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
@@ -58,7 +58,7 @@
 //! feature flag for `slotmap` in your `Cargo.toml`.
 //!
 //! ```text
-//! slotmap = { version = "0.4", features = ["serde"] }
+//! slotmap = { version = "1.0", features = ["serde"] }
 //! ```
 //!
 //! This crate also supports [`no_std`] environments, but does require the
@@ -66,7 +66,7 @@
 //! `std` feature that is enabled by default:
 //!
 //! ```text
-//! slotmap = { version = "0.4", default-features = false }
+//! slotmap = { version = "1.0", default-features = false }
 //! ```
 //!
 //! Unfortunately [`SparseSecondaryMap`] is not available in [`no_std`], because
@@ -273,7 +273,7 @@ impl KeyData {
     /// that. If you are not doing FFI, you almost surely do not need this
     /// function.
     ///
-    /// [`serde`]: crate#serialization-through-serde
+    /// [`serde`]: crate#serialization-through-serde-no_std-support-and-unstable-features
     pub fn as_ffi(self) -> u64 {
         (u64::from(self.version.get()) << 32) | u64::from(self.idx)
     }

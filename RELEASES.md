@@ -1,3 +1,29 @@
+Version 1.0.0
+=============
+
+ - Removed all `Copy` trait restrictions of value types stable Rust! There are
+   no longer any restrictions on the types you can store in any of the
+   slot maps. For that reason `Slottable` was deprecated as well.
+
+ - `no_std` support was added, use it by opting out of the default feature `std`.
+
+ - Added `sm.get_disjoint_mut([k1, k2, ...])` which allows you to get mutable
+   references from multiple disjoint keys at the same time. This requires
+   `min-const-generics` to be stabilized, so until Rust 1.51 comes out this is
+   only available on nightly by setting the `unstable` feature.
+
+ - Added an `Entry` API to the secondary maps.
+
+ - Added `derive(Clone)` for iterators where possible.
+
+ - Replaced `Into<KeyData>` with `Key::data()`.
+
+ - `SecondaryMap` now uses minimal space overhead. Each slot now uses
+   `max(sizeof(T), 4)` bytes.
+ 
+ - Moved `SlotMap` to the `basic` module.
+
+
 Version 0.4.0
 =============
 

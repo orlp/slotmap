@@ -76,28 +76,24 @@ impl<T> Slot<T> {
 
 /// Secondary map, associate data with previously stored elements in a slot map.
 ///
-/// A `SecondaryMap` allows you to efficiently store additional information for
-/// each element in a slot map. You can have multiple secondary maps per slot
-/// map, but not multiple slot maps per secondary map. It is safe but
+/// A [`SecondaryMap`] allows you to efficiently store additional information
+/// for each element in a slot map. You can have multiple secondary maps per
+/// slot map, but not multiple slot maps per secondary map. It is safe but
 /// unspecified behavior if you use keys from multiple different slot maps in
-/// the same `SecondaryMap`.
+/// the same [`SecondaryMap`].
 ///
-/// A `SecondaryMap` does not leak memory even if you never remove elements. In
-/// return, when you remove a key from the primary slot map, after any insert
+/// A [`SecondaryMap`] does not leak memory even if you never remove elements.
+/// In return, when you remove a key from the primary slot map, after any insert
 /// the space associated with the removed element may be reclaimed. Don't expect
 /// the values associated with a removed key to stick around after an insertion
 /// has happened!
 ///
-/// Finally a note on memory complexity, the `SecondaryMap` can use memory for
+/// Finally a note on memory complexity, the [`SecondaryMap`] can use memory for
 /// each slot in the primary slot map, and has to iterate over every slot during
 /// iteration, regardless of whether you have inserted an associative value at
 /// that key or not. If you have some property that you only expect to set for a
-/// minority of keys, use a [`SparseSecondaryMap`], which is backed by a
-/// [`HashMap`].
-///
-/// [`SlotMap`]: ../struct.SlotMap.html
-/// [`SparseSecondaryMap`]: ../sparse_secondary/struct.SparseSecondaryMap.html
-/// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
+/// minority of keys, use a [`SparseSecondaryMap`](crate::SparseSecondaryMap),
+/// which is backed by a [`HashMap`](std::collections::HashMap).
 ///
 /// Example usage:
 ///
@@ -127,7 +123,7 @@ pub struct SecondaryMap<K: Key, V> {
 }
 
 impl<K: Key, V> SecondaryMap<K, V> {
-    /// Constructs a new, empty `SecondaryMap`.
+    /// Constructs a new, empty [`SecondaryMap`].
     ///
     /// # Examples
     ///
@@ -139,7 +135,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
         Self::with_capacity(0)
     }
 
-    /// Creates an empty `SecondaryMap` with the given capacity of slots.
+    /// Creates an empty [`SecondaryMap`] with the given capacity of slots.
     ///
     /// The secondary map will not reallocate until it holds at least `capacity`
     /// slots. Even inserting a single key-value pair might require as many
@@ -193,7 +189,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
         self.num_elems == 0
     }
 
-    /// Returns the number of elements the `SecondaryMap` can hold without
+    /// Returns the number of elements the [`SecondaryMap`] can hold without
     /// reallocating.
     ///
     /// # Examples
@@ -207,17 +203,17 @@ impl<K: Key, V> SecondaryMap<K, V> {
         self.slots.capacity() - 1 // Sentinel.
     }
 
-    /// Sets the capacity of the `SecondaryMap` to `new_capacity`, if it is
+    /// Sets the capacity of the [`SecondaryMap`] to `new_capacity`, if it is
     /// bigger than the current capacity.
     ///
-    /// It is recommended to set the capacity of a `SecondaryMap` to the
+    /// It is recommended to set the capacity of a [`SecondaryMap`] to the
     /// capacity of its corresponding slot map before inserting many new
     /// elements to prevent frequent reallocations. The collection may reserve
     /// more space than requested.
     ///
     /// # Panics
     ///
-    /// Panics if the new allocation size overflows `usize`.
+    /// Panics if the new allocation size overflows [`usize`].
     ///
     /// # Examples
     ///
@@ -236,10 +232,10 @@ impl<K: Key, V> SecondaryMap<K, V> {
         }
     }
 
-    /// Tries to set the capacity of the `SecondaryMap` to `new_capacity`, if it
+    /// Tries to set the capacity of the [`SecondaryMap`] to `new_capacity`, if it
     /// is bigger than the current capacity.
     ///
-    /// It is recommended to set the capacity of a `SecondaryMap` to the
+    /// It is recommended to set the capacity of a [`SecondaryMap`] to the
     /// capacity of its corresponding slot map before inserting many new
     /// elements to prevent frequent reallocations. The collection may reserve
     /// more space than requested.
@@ -264,7 +260,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
         }
     }
 
-    /// Returns `true` if the secondary map contains `key`.
+    /// Returns [`true`] if the secondary map contains `key`.
     ///
     /// # Examples
     ///
@@ -288,7 +284,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// fail and return `None` if `key` was removed from the originating slot
     /// map.
     ///
-    /// Returns `None` if this key was not present in the map, the old value
+    /// Returns [`None`] if this key was not present in the map, the old value
     /// otherwise.
     ///
     /// # Examples
@@ -690,8 +686,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
         }
     }
 
-    /// Gets the given key's corresponding entry in the map for in-place
-    /// manipulation. May return `None` if the key was removed from the
+    /// Gets the given key's corresponding [`Entry`] in the map for in-place
+    /// manipulation. May return [`None`] if the key was removed from the
     /// originating slot map.
     ///
     /// # Examples
@@ -801,9 +797,6 @@ impl<'a, K: Key, V: 'a + Copy> Extend<(K, &'a V)> for SecondaryMap<K, V> {
 
 /// A view into a occupied entry in a [`SecondaryMap`]. It is part of the
 /// [`Entry`] enum.
-///
-/// [`SecondaryMap`]: struct.SecondaryMap.html
-/// [`Entry`]: enum.Entry.html
 #[derive(Debug)]
 pub struct OccupiedEntry<'a, K: Key, V> {
     map: &'a mut SecondaryMap<K, V>,
@@ -813,9 +806,6 @@ pub struct OccupiedEntry<'a, K: Key, V> {
 
 /// A view into a vacant entry in a [`SecondaryMap`]. It is part of the
 /// [`Entry`] enum.
-///
-/// [`SecondaryMap`]: struct.SecondaryMap.html
-/// [`Entry`]: enum.Entry.html
 #[derive(Debug)]
 pub struct VacantEntry<'a, K: Key, V> {
     map: &'a mut SecondaryMap<K, V>,
@@ -826,10 +816,7 @@ pub struct VacantEntry<'a, K: Key, V> {
 /// A view into a single entry in a [`SecondaryMap`], which may either be
 /// vacant or occupied.
 ///
-/// This `enum` is constructed from the [`entry`] method on [`SecondaryMap`].
-///
-/// [`SecondaryMap`]: struct.SecondaryMap.html
-/// [`entry`]: struct.SecondaryMap.html#method.entry
+/// This `enum` is constructed using [`SecondaryMap::entry`].
 #[derive(Debug)]
 pub enum Entry<'a, K: Key, V> {
     /// An occupied entry.
@@ -1146,8 +1133,8 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
         self.kd.into()
     }
 
-    /// Sets the value of the entry with the VacantEntry's key, and returns a
-    /// mutable reference to it.
+    /// Sets the value of the entry with the [`VacantEntry`]'s key, and returns
+    /// a mutable reference to it.
     ///
     /// # Examples
     ///
@@ -1175,7 +1162,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
 }
 
 // Iterators.
-/// A draining iterator for `SecondaryMap`.
+/// A draining iterator for [`SecondaryMap`].
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
@@ -1183,7 +1170,7 @@ pub struct Drain<'a, K: Key + 'a, V: 'a> {
     cur: usize,
 }
 
-/// An iterator that moves key-value pairs out of a `SecondaryMap`.
+/// An iterator that moves key-value pairs out of a [`SecondaryMap`].
 #[derive(Debug)]
 pub struct IntoIter<K: Key, V> {
     num_left: usize,
@@ -1191,7 +1178,7 @@ pub struct IntoIter<K: Key, V> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// An iterator over the key-value pairs in a `SecondaryMap`.
+/// An iterator over the key-value pairs in a [`SecondaryMap`].
 #[derive(Debug)]
 pub struct Iter<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
@@ -1199,7 +1186,7 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// A mutable iterator over the key-value pairs in a `SecondaryMap`.
+/// A mutable iterator over the key-value pairs in a [`SecondaryMap`].
 #[derive(Debug)]
 pub struct IterMut<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
@@ -1207,19 +1194,19 @@ pub struct IterMut<'a, K: Key + 'a, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// An iterator over the keys in a `SecondaryMap`.
+/// An iterator over the keys in a [`SecondaryMap`].
 #[derive(Debug)]
 pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-/// An iterator over the values in a `SecondaryMap`.
+/// An iterator over the values in a [`SecondaryMap`].
 #[derive(Debug)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-/// A mutable iterator over the values in a `SecondaryMap`.
+/// A mutable iterator over the values in a [`SecondaryMap`].
 #[derive(Debug)]
 pub struct ValuesMut<'a, K: Key + 'a, V: 'a> {
     inner: IterMut<'a, K, V>,

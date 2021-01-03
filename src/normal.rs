@@ -109,7 +109,7 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 
 /// Slot map, storage with stable unique keys.
 ///
-/// See [crate documentation](index.html) for more details.
+/// See [crate documentation](crate) for more details.
 #[derive(Debug, Clone)]
 pub struct SlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
@@ -119,7 +119,7 @@ pub struct SlotMap<K: Key, V> {
 }
 
 impl<V> SlotMap<DefaultKey, V> {
-    /// Constructs a new, empty `SlotMap`.
+    /// Constructs a new, empty [`SlotMap`].
     ///
     /// # Examples
     ///
@@ -131,7 +131,7 @@ impl<V> SlotMap<DefaultKey, V> {
         Self::with_capacity_and_key(0)
     }
 
-    /// Creates an empty `SlotMap` with the given capacity.
+    /// Creates an empty [`SlotMap`] with the given capacity.
     ///
     /// The slot map will not reallocate until it holds at least `capacity`
     /// elements.
@@ -148,7 +148,7 @@ impl<V> SlotMap<DefaultKey, V> {
 }
 
 impl<K: Key, V> SlotMap<K, V> {
-    /// Constructs a new, empty `SlotMap` with a custom key type.
+    /// Constructs a new, empty [`SlotMap`] with a custom key type.
     ///
     /// # Examples
     ///
@@ -163,7 +163,7 @@ impl<K: Key, V> SlotMap<K, V> {
         Self::with_capacity_and_key(0)
     }
 
-    /// Creates an empty `SlotMap` with the given capacity and a custom key
+    /// Creates an empty [`SlotMap`] with the given capacity and a custom key
     /// type.
     ///
     /// The slot map will not reallocate until it holds at least `capacity`
@@ -232,7 +232,7 @@ impl<K: Key, V> SlotMap<K, V> {
         self.num_elems == 0
     }
 
-    /// Returns the number of elements the `SlotMap` can hold without
+    /// Returns the number of elements the [`SlotMap`] can hold without
     /// reallocating.
     ///
     /// # Examples
@@ -248,12 +248,12 @@ impl<K: Key, V> SlotMap<K, V> {
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted
-    /// in the `SlotMap`. The collection may reserve more space to
-    /// avoid frequent reallocations.
+    /// in the [`SlotMap`]. The collection may reserve more space to avoid
+    /// frequent reallocations.
     ///
     /// # Panics
     ///
-    /// Panics if the new allocation size overflows `usize`.
+    /// Panics if the new allocation size overflows [`usize`].
     ///
     /// # Examples
     ///
@@ -271,7 +271,7 @@ impl<K: Key, V> SlotMap<K, V> {
     }
 
     /// Tries to reserve capacity for at least `additional` more elements to be
-    /// inserted in the `SlotMap`. The collection may reserve more space to
+    /// inserted in the [`SlotMap`]. The collection may reserve more space to
     /// avoid frequent reallocations.
     ///
     /// # Examples
@@ -290,7 +290,7 @@ impl<K: Key, V> SlotMap<K, V> {
         self.slots.try_reserve(needed)
     }
 
-    /// Returns `true` if the slot map contains `key`.
+    /// Returns [`true`] if the slot map contains `key`.
     ///
     /// # Examples
     ///
@@ -871,7 +871,7 @@ impl<K: Key, V> IndexMut<K> for SlotMap<K, V> {
 }
 
 // Iterators.
-/// A draining iterator for `SlotMap`.
+/// A draining iterator for [`SlotMap`].
 #[derive(Debug)]
 pub struct Drain<'a, K: 'a + Key, V: 'a> {
     num_left: usize,
@@ -879,7 +879,7 @@ pub struct Drain<'a, K: 'a + Key, V: 'a> {
     cur: usize,
 }
 
-/// An iterator that moves key-value pairs out of a `SlotMap`.
+/// An iterator that moves key-value pairs out of a [`SlotMap`].
 #[derive(Debug, Clone)]
 pub struct IntoIter<K: Key, V> {
     num_left: usize,
@@ -887,7 +887,7 @@ pub struct IntoIter<K: Key, V> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// An iterator over the key-value pairs in a `SlotMap`.
+/// An iterator over the key-value pairs in a [`SlotMap`].
 #[derive(Debug, Clone)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
     num_left: usize,
@@ -895,7 +895,7 @@ pub struct Iter<'a, K: 'a + Key, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// A mutable iterator over the key-value pairs in a `SlotMap`.
+/// A mutable iterator over the key-value pairs in a [`SlotMap`].
 #[derive(Debug)]
 pub struct IterMut<'a, K: 'a + Key, V: 'a> {
     num_left: usize,
@@ -903,19 +903,19 @@ pub struct IterMut<'a, K: 'a + Key, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// An iterator over the keys in a `SlotMap`.
+/// An iterator over the keys in a [`SlotMap`].
 #[derive(Debug, Clone)]
 pub struct Keys<'a, K: 'a + Key, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-/// An iterator over the values in a `SlotMap`.
+/// An iterator over the values in a [`SlotMap`].
 #[derive(Debug, Clone)]
 pub struct Values<'a, K: 'a + Key, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-/// A mutable iterator over the values in a `SlotMap`.
+/// A mutable iterator over the values in a [`SlotMap`].
 #[derive(Debug)]
 pub struct ValuesMut<'a, K: 'a + Key, V: 'a> {
     inner: IterMut<'a, K, V>,

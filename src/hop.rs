@@ -4,13 +4,15 @@
 //! Contains the faster iteration, slower insertion/removal slot map
 //! implementation.
 //!
-//! This data structure is essentially the same as a regular `SlotMap`, but
+//! This data structure is essentially the same as a regular [`SlotMap`], but
 //! maintains extra information when inserting/removing elements that allows it
 //! to 'hop over' vacant slots during iteration, making it potentially much
 //! faster for iteration.
 //!
-//! The trade-off is that compared to a regular `SlotMap` insertion/removal is
+//! The trade-off is that compared to a regular [`SlotMap`] insertion/removal is
 //! roughly twice as slow. Random indexing has identical performance for both.
+//!
+//! [`SlotMap`]: crate::SlotMap
 
 #[cfg(all(nightly, feature = "unstable"))]
 use alloc::collections::TryReserveError;
@@ -126,7 +128,7 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 
 /// Hop slot map, storage with stable unique keys.
 ///
-/// See [crate documentation](index.html) for more details.
+/// See [crate documentation](crate) for more details.
 #[derive(Debug, Clone)]
 pub struct HopSlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
@@ -135,7 +137,7 @@ pub struct HopSlotMap<K: Key, V> {
 }
 
 impl<V> HopSlotMap<DefaultKey, V> {
-    /// Constructs a new, empty `HopSlotMap`.
+    /// Constructs a new, empty [`HopSlotMap`].
     ///
     /// # Examples
     ///
@@ -147,7 +149,7 @@ impl<V> HopSlotMap<DefaultKey, V> {
         Self::with_capacity_and_key(0)
     }
 
-    /// Creates an empty `HopSlotMap` with the given capacity.
+    /// Creates an empty [`HopSlotMap`] with the given capacity.
     ///
     /// The slot map will not reallocate until it holds at least `capacity`
     /// elements.
@@ -164,7 +166,7 @@ impl<V> HopSlotMap<DefaultKey, V> {
 }
 
 impl<K: Key, V> HopSlotMap<K, V> {
-    /// Constructs a new, empty `HopSlotMap` with a custom key type.
+    /// Constructs a new, empty [`HopSlotMap`] with a custom key type.
     ///
     /// # Examples
     ///
@@ -179,7 +181,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
         Self::with_capacity_and_key(0)
     }
 
-    /// Creates an empty `HopSlotMap` with the given capacity and a custom key
+    /// Creates an empty [`HopSlotMap`] with the given capacity and a custom key
     /// type.
     ///
     /// The slot map will not reallocate until it holds at least `capacity`
@@ -250,7 +252,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
         self.num_elems == 0
     }
 
-    /// Returns the number of elements the `HopSlotMap` can hold without
+    /// Returns the number of elements the [`HopSlotMap`] can hold without
     /// reallocating.
     ///
     /// # Examples
@@ -266,12 +268,12 @@ impl<K: Key, V> HopSlotMap<K, V> {
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted
-    /// in the `HopSlotMap`. The collection may reserve more space to
+    /// in the [`HopSlotMap`]. The collection may reserve more space to
     /// avoid frequent reallocations.
     ///
     /// # Panics
     ///
-    /// Panics if the new allocation size overflows `usize`.
+    /// Panics if the new allocation size overflows [`usize`].
     ///
     /// # Examples
     ///
@@ -289,7 +291,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     }
 
     /// Tries to reserve capacity for at least `additional` more elements to be
-    /// inserted in the `HopSlotMap`. The collection may reserve more space to
+    /// inserted in the [`HopSlotMap`]. The collection may reserve more space to
     /// avoid frequent reallocations.
     ///
     /// # Examples
@@ -308,7 +310,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
         self.slots.try_reserve(needed)
     }
 
-    /// Returns `true` if the slot map contains `key`.
+    /// Returns [`true`] if the slot map contains `key`.
     ///
     /// # Examples
     ///
@@ -719,7 +721,8 @@ impl<K: Key, V> HopSlotMap<K, V> {
     }
 
     /// Returns mutable references to the values corresponding to the given
-    /// keys. All keys must be valid and disjoint, otherwise None is returned.
+    /// keys. All keys must be valid and disjoint, otherwise [`None`] is
+    /// returned.
     ///
     /// # Examples
     ///
@@ -960,7 +963,7 @@ impl<K: Key, V> IndexMut<K> for HopSlotMap<K, V> {
 }
 
 // Iterators.
-/// A draining iterator for `HopSlotMap`.
+/// A draining iterator for [`HopSlotMap`].
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: 'a> {
     cur: usize,
@@ -968,7 +971,7 @@ pub struct Drain<'a, K: Key + 'a, V: 'a> {
     sm: &'a mut HopSlotMap<K, V>,
 }
 
-/// An iterator that moves key-value pairs out of a `HopSlotMap`.
+/// An iterator that moves key-value pairs out of a [`HopSlotMap`].
 #[derive(Debug, Clone)]
 pub struct IntoIter<K: Key, V> {
     cur: usize,
@@ -977,7 +980,7 @@ pub struct IntoIter<K: Key, V> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// An iterator over the key-value pairs in a `HopSlotMap`.
+/// An iterator over the key-value pairs in a [`HopSlotMap`].
 #[derive(Debug, Clone)]
 pub struct Iter<'a, K: Key + 'a, V: 'a> {
     cur: usize,
@@ -986,7 +989,7 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// A mutable iterator over the key-value pairs in a `HopSlotMap`.
+/// A mutable iterator over the key-value pairs in a [`HopSlotMap`].
 #[derive(Debug)]
 pub struct IterMut<'a, K: Key + 'a, V: 'a> {
     cur: usize,
@@ -995,19 +998,19 @@ pub struct IterMut<'a, K: Key + 'a, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// An iterator over the keys in a `HopSlotMap`.
+/// An iterator over the keys in a [`HopSlotMap`].
 #[derive(Debug, Clone)]
 pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-/// An iterator over the values in a `HopSlotMap`.
+/// An iterator over the values in a [`HopSlotMap`].
 #[derive(Debug, Clone)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-/// A mutable iterator over the values in a `HopSlotMap`.
+/// A mutable iterator over the values in a [`HopSlotMap`].
 #[derive(Debug)]
 pub struct ValuesMut<'a, K: Key + 'a, V: 'a> {
     inner: IterMut<'a, K, V>,
@@ -1137,8 +1140,8 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
         self.cur = idx + 1;
         self.num_left -= 1;
 
-        // Unsafe necessary because Rust can't deduce that we won't return multiple references to
-        // the same value.
+        // Unsafe necessary because Rust can't deduce that we won't
+        // return multiple references to the same value.
         let slot = &mut self.slots[idx];
         let version = slot.version;
         let value_ref = unsafe { &mut *(&mut *slot.u.value as *mut V) };

@@ -93,7 +93,7 @@
 //! for [`HopSlotMap`]. [`DenseSlotMap`] has an overhead of 8 bytes per element
 //! and 8 bytes per slot.
 //!
-//! # Choosing `SlotMap`, `HopSlotMap` or `DenseSlotMap`
+//! # Choosing [`SlotMap`], [`HopSlotMap`] or [`DenseSlotMap`]
 //!
 //! A [`SlotMap`] can never shrink the size of its underlying storage, because
 //! for each storage slot it must remember what the latest stored version was,
@@ -108,12 +108,12 @@
 //! removal is roughly twice as slow. Random access is the same speed for both.
 //!
 //! [`DenseSlotMap`] goes even further and stores all elements on a contiguous
-//! block of memory. It uses two indirects per random access; the slots contain
-//! indices used to access the contiguous memory. This means random access is
-//! slower than both [`SlotMap`] and [`HopSlotMap`], but iteration is
+//! block of memory. It uses two indirections per random access; the slots
+//! contain indices used to access the contiguous memory. This means random
+//! access is slower than both [`SlotMap`] and [`HopSlotMap`], but iteration is
 //! significantly faster.
 //!
-//! # Choosing `SecondaryMap` or `SparseSecondaryMap`
+//! # Choosing [`SecondaryMap`] or [`SparseSecondaryMap`]
 //!
 //! You want to associate extra data with objects stored in a slot map, so you
 //! use (multiple) secondary maps to map keys to that data.
@@ -150,19 +150,11 @@
 //! let sm: SlotMap<PlayerKey, Player> = SlotMap::with_key();
 //! ```
 //!
-//! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-//! [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
-//! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-//! [`SlotMap`]: struct.SlotMap.html
-//! [`HopSlotMap`]: hop/struct.HopSlotMap.html
-//! [`DenseSlotMap`]: dense/struct.DenseSlotMap.html
-//! [`SecondaryMap`]: secondary/struct.SecondaryMap.html
-//! [`SparseSecondaryMap`]: sparse_secondary/struct.SparseSecondaryMap.html
-//! [`Key`]: trait.Key.html
-//! [`new_key_type!`]: macro.new_key_type.html
+//! [`Vec`]: std::vec::Vec
+//! [`BTreeMap`]: std::collections::BTreeMap
+//! [`HashMap`]: std::collections::HashMap
 //! [`serde`]: https://github.com/serde-rs/serde
 //! [`slab`]: https://github.com/carllerche/slab
-//! [`DefaultKey`]: struct.DefaultKey.html
 
 extern crate alloc;
 
@@ -218,11 +210,9 @@ impl<T> Slottable for T {}
 
 /// The actual data stored in a [`Key`].
 ///
-/// This implements `Ord` so keys can be stored in e.g. [`BTreeMap`], but the
-/// order of keys is unspecified.
-///
-/// [`Key`]: trait.Key.html
-/// [`BTreeMap`]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
+/// This implements [`Ord`](std::cmp::Ord) so keys can be stored in e.g.
+/// [`BTreeMap`](std::collections::BTreeMap), but the order of keys is
+/// unspecified.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KeyData {
     idx: u32,
@@ -246,8 +236,8 @@ impl KeyData {
     }
 
     /// Returns the key data as a 64-bit integer. No guarantees about its value
-    /// are made other than that passing it to `from_ffi` will return a key
-    /// equal to the original.
+    /// are made other than that passing it to [`from_ffi`](Self::from_ffi)
+    /// will return a key equal to the original.
     ///
     /// With this you can easily pass slot map keys as opaque handles to foreign
     /// code. After you get them back you can confidently use them in your slot
@@ -258,7 +248,7 @@ impl KeyData {
     /// that. If you are not doing FFI, you almost surely do not need this
     /// function.
     ///
-    /// [`serde`]: index.html#serialization-through-serde
+    /// [`serde`]: crate#serialization-through-serde
     pub fn as_ffi(self) -> u64 {
         (u64::from(self.version.get()) << 32) | u64::from(self.idx)
     }
@@ -292,9 +282,6 @@ impl Default for KeyData {
 /// To prevent this, it is suggested to have a unique key type for each slot
 /// map. The easiest way to do this is through [`new_key_type!`], which
 /// makes a new type identical to [`DefaultKey`], just with a different name.
-///
-/// [`new_key_type!`]: macro.new_key_type.html
-/// [`DefaultKey`]: struct.DefaultKey.html
 pub trait Key: From<KeyData> {
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method (or default
@@ -350,8 +337,6 @@ pub trait Key: From<KeyData> {
     /// let mk = MyKey::null();
     /// assert_eq!(dk.data(), mk.data());
     /// ```
-    ///
-    /// [`KeyData`]: struct.KeyData.html
     fn data(&self) -> KeyData;
 }
 
@@ -361,8 +346,6 @@ pub trait Key: From<KeyData> {
 ///
 /// The type constructed by this macro is identical to [`DefaultKey`], just with
 /// a different name.
-///
-/// [`DefaultKey`]: struct.DefaultKey.html
 ///
 /// # Examples
 ///

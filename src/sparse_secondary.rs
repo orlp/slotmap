@@ -19,27 +19,26 @@ struct Slot<T> {
 /// Sparse secondary map, associate data with previously stored elements in a
 /// slot map.
 ///
-/// A `SparseSecondaryMap` allows you to efficiently store additional
+/// A [`SparseSecondaryMap`] allows you to efficiently store additional
 /// information for each element in a slot map. You can have multiple secondary
 /// maps per slot map, but not multiple slot maps per secondary map. It is safe
 /// but unspecified behavior if you use keys from multiple different slot maps
-/// in the same `SparseSecondaryMap`.
+/// in the same [`SparseSecondaryMap`].
 ///
-/// A `SparseSecondaryMap` does not leak memory even if you never remove
+/// A [`SparseSecondaryMap`] does not leak memory even if you never remove
 /// elements. In return, when you remove a key from the primary slot map, after
 /// any insert the space associated with the removed element may be reclaimed.
 /// Don't expect the values associated with a removed key to stick around after
 /// an insertion has happened!
 ///
-/// Unlike [`SecondaryMap`], the `SparseSecondaryMap` is backed by a
+/// Unlike [`SecondaryMap`], the [`SparseSecondaryMap`] is backed by a
 /// [`HashMap`]. This means its access times are higher, but it uses less memory
 /// and iterates faster if there are only a few elements of the slot map in the
 /// secondary map. If most or all of the elements in a slot map are also found
 /// in the secondary map, use a [`SecondaryMap`] instead.
 ///
-/// [`SlotMap`]: ../struct.SlotMap.html
-/// [`SecondaryMap`]: ../secondary/struct.SecondaryMap.html
-/// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
+/// [`SecondaryMap`]: crate::SecondaryMap
+/// [`HashMap`]: std::collections::HashMap;
 ///
 /// Example usage:
 ///
@@ -69,7 +68,7 @@ pub struct SparseSecondaryMap<K: Key, V, S: hash::BuildHasher = hash_map::Random
 }
 
 impl<K: Key, V> SparseSecondaryMap<K, V, hash_map::RandomState> {
-    /// Constructs a new, empty `SparseSecondaryMap`.
+    /// Constructs a new, empty [`SparseSecondaryMap`].
     ///
     /// # Examples
     ///
@@ -81,7 +80,7 @@ impl<K: Key, V> SparseSecondaryMap<K, V, hash_map::RandomState> {
         Self::with_capacity(0)
     }
 
-    /// Creates an empty `SparseSecondaryMap` with the given capacity of slots.
+    /// Creates an empty [`SparseSecondaryMap`] with the given capacity of slots.
     ///
     /// The secondary map will not reallocate until it holds at least `capacity`
     /// slots.
@@ -103,7 +102,7 @@ impl<K: Key, V> SparseSecondaryMap<K, V, hash_map::RandomState> {
 }
 
 impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
-    /// Creates an empty `SparseSecondaryMap` which will use the given hash
+    /// Creates an empty [`SparseSecondaryMap`] which will use the given hash
     /// builder to hash keys.
     ///
     /// The secondary map will not reallocate until it holds at least `capacity`
@@ -125,7 +124,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
         }
     }
 
-    /// Creates an empty `SparseSecondaryMap` with the given capacity of slots,
+    /// Creates an empty [`SparseSecondaryMap`] with the given capacity of slots,
     /// using `hash_builder` to hash the keys.
     ///
     /// The secondary map will not reallocate until it holds at least `capacity`
@@ -177,7 +176,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
         self.slots.is_empty()
     }
 
-    /// Returns the number of elements the `SparseSecondaryMap` can hold without
+    /// Returns the number of elements the [`SparseSecondaryMap`] can hold without
     /// reallocating.
     ///
     /// # Examples
@@ -192,12 +191,12 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     }
 
     /// Reserves capacity for at least `additional` more slots in the
-    /// `SparseSecondaryMap`. The collection may reserve more space to avoid
+    /// [`SparseSecondaryMap`]. The collection may reserve more space to avoid
     /// frequent reallocations.
     ///
     /// # Panics
     ///
-    /// Panics if the new allocation size overflows `usize`.
+    /// Panics if the new allocation size overflows [`usize`].
     ///
     /// # Examples
     ///
@@ -212,7 +211,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     }
 
     /// Tries to reserve capacity for at least `additional` more slots in the
-    /// `SparseSecondaryMap`.  The collection may reserve more space to avoid
+    /// [`SparseSecondaryMap`].  The collection may reserve more space to avoid
     /// frequent reallocations.
     ///
     /// # Examples
@@ -228,7 +227,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
         self.slots.try_reserve(additional)
     }
 
-    /// Returns `true` if the secondary map contains `key`.
+    /// Returns [`true`] if the secondary map contains `key`.
     ///
     /// # Examples
     ///
@@ -251,7 +250,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// Inserts a value into the secondary map at the given `key`. Can silently
     /// fail if `key` was removed from the originating slot map.
     ///
-    /// Returns `None` if this key was not present in the map, the old value
+    /// Returns [`None`] if this key was not present in the map, the old value
     /// otherwise.
     ///
     /// # Examples
@@ -700,47 +699,47 @@ where
 }
 
 // Iterators.
-/// A draining iterator for `SparseSecondaryMap`.
+/// A draining iterator for [`SparseSecondaryMap`].
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: 'a> {
     inner: hash_map::Drain<'a, u32, Slot<V>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// An iterator that moves key-value pairs out of a `SparseSecondaryMap`.
+/// An iterator that moves key-value pairs out of a [`SparseSecondaryMap`].
 #[derive(Debug)]
 pub struct IntoIter<K: Key, V> {
     inner: hash_map::IntoIter<u32, Slot<V>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// An iterator over the key-value pairs in a `SparseSecondaryMap`.
+/// An iterator over the key-value pairs in a [`SparseSecondaryMap`].
 #[derive(Debug)]
 pub struct Iter<'a, K: Key + 'a, V: 'a> {
     inner: hash_map::Iter<'a, u32, Slot<V>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// A mutable iterator over the key-value pairs in a `SparseSecondaryMap`.
+/// A mutable iterator over the key-value pairs in a [`SparseSecondaryMap`].
 #[derive(Debug)]
 pub struct IterMut<'a, K: Key + 'a, V: 'a> {
     inner: hash_map::IterMut<'a, u32, Slot<V>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
-/// An iterator over the keys in a `SparseSecondaryMap`.
+/// An iterator over the keys in a [`SparseSecondaryMap`].
 #[derive(Debug)]
 pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-/// An iterator over the values in a `SparseSecondaryMap`.
+/// An iterator over the values in a [`SparseSecondaryMap`].
 #[derive(Debug)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-/// A mutable iterator over the values in a `SparseSecondaryMap`.
+/// A mutable iterator over the values in a [`SparseSecondaryMap`].
 #[derive(Debug)]
 pub struct ValuesMut<'a, K: Key + 'a, V: 'a> {
     inner: IterMut<'a, K, V>,

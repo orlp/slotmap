@@ -29,7 +29,7 @@ struct Slot {
 
 /// Dense slot map, storage with stable unique keys.
 ///
-/// See [crate documentation](index.html) for more details.
+/// See [crate documentation](crate) for more details.
 #[derive(Debug, Clone)]
 pub struct DenseSlotMap<K: Key, V> {
     keys: Vec<K>,
@@ -39,7 +39,7 @@ pub struct DenseSlotMap<K: Key, V> {
 }
 
 impl<V> DenseSlotMap<DefaultKey, V> {
-    /// Construct a new, empty `DenseSlotMap`.
+    /// Construct a new, empty [`DenseSlotMap`].
     ///
     /// # Examples
     ///
@@ -51,7 +51,7 @@ impl<V> DenseSlotMap<DefaultKey, V> {
         Self::with_capacity_and_key(0)
     }
 
-    /// Creates an empty `DenseSlotMap` with the given capacity.
+    /// Creates an empty [`DenseSlotMap`] with the given capacity.
     ///
     /// The slot map will not reallocate until it holds at least `capacity`
     /// elements.
@@ -68,7 +68,7 @@ impl<V> DenseSlotMap<DefaultKey, V> {
 }
 
 impl<K: Key, V> DenseSlotMap<K, V> {
-    /// Constructs a new, empty `DenseSlotMap` with a custom key type.
+    /// Constructs a new, empty [`DenseSlotMap`] with a custom key type.
     ///
     /// # Examples
     ///
@@ -83,7 +83,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         Self::with_capacity_and_key(0)
     }
 
-    /// Creates an empty `DenseSlotMap` with the given capacity and a custom key
+    /// Creates an empty [`DenseSlotMap`] with the given capacity and a custom key
     /// type.
     ///
     /// The slot map will not reallocate until it holds at least `capacity`
@@ -152,7 +152,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         self.keys.is_empty()
     }
 
-    /// Returns the number of elements the `DenseSlotMap` can hold without
+    /// Returns the number of elements the [`DenseSlotMap`] can hold without
     /// reallocating.
     ///
     /// # Examples
@@ -167,12 +167,12 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted
-    /// in the `DenseSlotMap`. The collection may reserve more space to
+    /// in the [`DenseSlotMap`]. The collection may reserve more space to
     /// avoid frequent reallocations.
     ///
     /// # Panics
     ///
-    /// Panics if the new allocation size overflows `usize`.
+    /// Panics if the new allocation size overflows [`usize`].
     ///
     /// # Examples
     ///
@@ -192,7 +192,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     }
 
     /// Tries to reserve capacity for at least `additional` more elements to be
-    /// inserted in the `DenseSlotMap`. The collection may reserve more space to
+    /// inserted in the [`DenseSlotMap`]. The collection may reserve more space to
     /// avoid frequent reallocations.
     ///
     /// # Examples
@@ -213,7 +213,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         self.slots.try_reserve(needed)
     }
 
-    /// Returns `true` if the slot map contains `key`.
+    /// Returns [`true`] if the slot map contains `key`.
     ///
     /// # Examples
     ///
@@ -539,7 +539,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     }
 
     /// Returns mutable references to the values corresponding to the given
-    /// keys. All keys must be valid and disjoint, otherwise None is returned.
+    /// keys. All keys must be valid and disjoint, otherwise [`None`] is
+    /// returned.
     ///
     /// # Examples
     ///
@@ -778,46 +779,46 @@ impl<K: Key, V> IndexMut<K> for DenseSlotMap<K, V> {
 }
 
 // Iterators.
-/// A draining iterator for `DenseSlotMap`.
+/// A draining iterator for [`DenseSlotMap`].
 #[derive(Debug)]
 pub struct Drain<'a, K: 'a + Key, V: 'a> {
     sm: &'a mut DenseSlotMap<K, V>,
 }
 
-/// An iterator that moves key-value pairs out of a `DenseSlotMap`.
+/// An iterator that moves key-value pairs out of a [`DenseSlotMap`].
 #[derive(Debug, Clone)]
 pub struct IntoIter<K, V> {
     inner_keys: alloc::vec::IntoIter<K>,
     inner_values: alloc::vec::IntoIter<V>,
 }
 
-/// An iterator over the key-value pairs in a `DenseSlotMap`.
+/// An iterator over the key-value pairs in a [`DenseSlotMap`].
 #[derive(Debug, Clone)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
     inner_keys: core::slice::Iter<'a, K>,
     inner_values: core::slice::Iter<'a, V>,
 }
 
-/// A mutable iterator over the key-value pairs in a `DenseSlotMap`.
+/// A mutable iterator over the key-value pairs in a [`DenseSlotMap`].
 #[derive(Debug)]
 pub struct IterMut<'a, K: 'a + Key, V: 'a> {
     inner_keys: core::slice::Iter<'a, K>,
     inner_values: core::slice::IterMut<'a, V>,
 }
 
-/// An iterator over the keys in a `DenseSlotMap`.
+/// An iterator over the keys in a [`DenseSlotMap`].
 #[derive(Debug, Clone)]
 pub struct Keys<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
 }
 
-/// An iterator over the values in a `DenseSlotMap`.
+/// An iterator over the values in a [`DenseSlotMap`].
 #[derive(Debug, Clone)]
 pub struct Values<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
 }
 
-/// A mutable iterator over the values in a `DenseSlotMap`.
+/// A mutable iterator over the values in a [`DenseSlotMap`].
 #[derive(Debug)]
 pub struct ValuesMut<'a, K: 'a + Key, V: 'a> {
     inner: IterMut<'a, K, V>,

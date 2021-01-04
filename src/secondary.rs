@@ -576,9 +576,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
         // safe because the type we are claiming to have initialized here is a
         // bunch of `MaybeUninit`s, which do not require initialization.
         let mut ptrs: [MaybeUninit<*mut V>; N] = unsafe { MaybeUninit::uninit().assume_init() };
-
-        // And all bit patterns of u32 are safe, so this is also safe.
-        let mut slot_versions: [u32; N] = unsafe { MaybeUninit::uninit().assume_init() };
+        let mut slot_versions: [MaybeUninit<u32>; N] = unsafe { MaybeUninit::uninit().assume_init() };
 
         let mut i = 0;
         while i < N {
@@ -591,7 +589,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
                     // invalid, since keys always have an odd version. This
                     // gives us a linear time disjointness check.
                     ptrs[i] = MaybeUninit::new(&mut *value as *mut V);
-                    slot_versions[i] = version.get();
+                    slot_versions[i] = MaybeUninit::new(version.get());
                     *version = NonZeroU32::new(2).unwrap();
                 }
 
@@ -607,7 +605,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
             unsafe {
                 match self.slots.get_mut(idx) {
                     Some(Occupied { version, .. }) => {
-                        *version = NonZeroU32::new_unchecked(slot_versions[j]);
+                        *version = NonZeroU32::new_unchecked(slot_versions[j].assume_init());
                     }
                     _ => unreachable_unchecked(),
                 }

@@ -1,3 +1,12 @@
+Version 1.0.1
+=============
+
+ - Fixed an instance where an uninitialized [u32; N] was created. The
+   uninitialized values were never read - the code always initialized them
+   before reading - but simply having the variable be uninitialized (despite all
+   bit patterns being valid) is technically undefined behavior.
+
+
 Version 1.0.0
 =============
 

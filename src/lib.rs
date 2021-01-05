@@ -222,7 +222,7 @@ use core::num::NonZeroU32;
 // and hide from documentation.
 #[doc(hidden)]
 #[deprecated(
-    since = "0.5.0",
+    since = "1.0.0",
     note = "Slottable is not necessary anymore, slotmap now supports all types on stable."
 )]
 pub trait Slottable {}

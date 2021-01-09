@@ -877,6 +877,8 @@ impl<K: Key, V> IndexMut<K> for SlotMap<K, V> {
 
 // Iterators.
 /// A draining iterator for [`SlotMap`].
+///
+/// This iterator is created by [`SlotMap::drain`].
 #[derive(Debug)]
 pub struct Drain<'a, K: 'a + Key, V: 'a> {
     num_left: usize,
@@ -885,6 +887,9 @@ pub struct Drain<'a, K: 'a + Key, V: 'a> {
 }
 
 /// An iterator that moves key-value pairs out of a [`SlotMap`].
+///
+/// This iterator is created by calling the `into_iter` method on [`SlotMap`],
+/// provided by the [`IntoIterator`] trait.
 #[derive(Debug, Clone)]
 pub struct IntoIter<K: Key, V> {
     num_left: usize,
@@ -893,6 +898,8 @@ pub struct IntoIter<K: Key, V> {
 }
 
 /// An iterator over the key-value pairs in a [`SlotMap`].
+///
+/// This iterator is created by [`SlotMap::iter`].
 #[derive(Debug, Clone)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
     num_left: usize,
@@ -901,6 +908,8 @@ pub struct Iter<'a, K: 'a + Key, V: 'a> {
 }
 
 /// A mutable iterator over the key-value pairs in a [`SlotMap`].
+///
+/// This iterator is created by [`SlotMap::iter_mut`].
 #[derive(Debug)]
 pub struct IterMut<'a, K: 'a + Key, V: 'a> {
     num_left: usize,
@@ -909,18 +918,24 @@ pub struct IterMut<'a, K: 'a + Key, V: 'a> {
 }
 
 /// An iterator over the keys in a [`SlotMap`].
+///
+/// This iterator is created by [`SlotMap::keys`].
 #[derive(Debug, Clone)]
 pub struct Keys<'a, K: 'a + Key, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
 /// An iterator over the values in a [`SlotMap`].
+///
+/// This iterator is created by [`SlotMap::values`].
 #[derive(Debug, Clone)]
 pub struct Values<'a, K: 'a + Key, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
 /// A mutable iterator over the values in a [`SlotMap`].
+///
+/// This iterator is created by [`SlotMap::values_mut`].
 #[derive(Debug)]
 pub struct ValuesMut<'a, K: 'a + Key, V: 'a> {
     inner: IterMut<'a, K, V>,

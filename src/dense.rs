@@ -784,12 +784,17 @@ impl<K: Key, V> IndexMut<K> for DenseSlotMap<K, V> {
 
 // Iterators.
 /// A draining iterator for [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::drain`].
 #[derive(Debug)]
 pub struct Drain<'a, K: 'a + Key, V: 'a> {
     sm: &'a mut DenseSlotMap<K, V>,
 }
 
 /// An iterator that moves key-value pairs out of a [`DenseSlotMap`].
+///
+/// This iterator is created by calling the `into_iter` method on [`DenseSlotMap`],
+/// provided by the [`IntoIterator`] trait.
 #[derive(Debug, Clone)]
 pub struct IntoIter<K, V> {
     inner_keys: alloc::vec::IntoIter<K>,
@@ -797,6 +802,8 @@ pub struct IntoIter<K, V> {
 }
 
 /// An iterator over the key-value pairs in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::iter`].
 #[derive(Debug, Clone)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
     inner_keys: core::slice::Iter<'a, K>,
@@ -804,6 +811,8 @@ pub struct Iter<'a, K: 'a + Key, V: 'a> {
 }
 
 /// A mutable iterator over the key-value pairs in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::iter_mut`].
 #[derive(Debug)]
 pub struct IterMut<'a, K: 'a + Key, V: 'a> {
     inner_keys: core::slice::Iter<'a, K>,
@@ -811,18 +820,24 @@ pub struct IterMut<'a, K: 'a + Key, V: 'a> {
 }
 
 /// An iterator over the keys in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::keys`].
 #[derive(Debug, Clone)]
 pub struct Keys<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
 }
 
 /// An iterator over the values in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::values`].
 #[derive(Debug, Clone)]
 pub struct Values<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
 }
 
 /// A mutable iterator over the values in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::values_mut`].
 #[derive(Debug)]
 pub struct ValuesMut<'a, K: 'a + Key, V: 'a> {
     inner: IterMut<'a, K, V>,

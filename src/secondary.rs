@@ -1275,6 +1275,8 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
 
 // Iterators.
 /// A draining iterator for [`SecondaryMap`].
+///
+/// This iterator is created by [`SecondaryMap::drain`].
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
@@ -1283,6 +1285,9 @@ pub struct Drain<'a, K: Key + 'a, V: 'a> {
 }
 
 /// An iterator that moves key-value pairs out of a [`SecondaryMap`].
+///
+/// This iterator is created by calling the `into_iter` method on [`SecondaryMap`],
+/// provided by the [`IntoIterator`] trait.
 #[derive(Debug)]
 pub struct IntoIter<K: Key, V> {
     num_left: usize,
@@ -1291,6 +1296,8 @@ pub struct IntoIter<K: Key, V> {
 }
 
 /// An iterator over the key-value pairs in a [`SecondaryMap`].
+///
+/// This iterator is created by [`SecondaryMap::iter`].
 #[derive(Debug)]
 pub struct Iter<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
@@ -1299,6 +1306,8 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
 }
 
 /// A mutable iterator over the key-value pairs in a [`SecondaryMap`].
+///
+/// This iterator is created by [`SecondaryMap::iter_mut`].
 #[derive(Debug)]
 pub struct IterMut<'a, K: Key + 'a, V: 'a> {
     num_left: usize,
@@ -1307,18 +1316,24 @@ pub struct IterMut<'a, K: Key + 'a, V: 'a> {
 }
 
 /// An iterator over the keys in a [`SecondaryMap`].
+///
+/// This iterator is created by [`SecondaryMap::keys`].
 #[derive(Debug)]
 pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
 /// An iterator over the values in a [`SecondaryMap`].
+///
+/// This iterator is created by [`SecondaryMap::values`].
 #[derive(Debug)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
 /// A mutable iterator over the values in a [`SecondaryMap`].
+///
+/// This iterator is created by [`SecondaryMap::values_mut`].
 #[derive(Debug)]
 pub struct ValuesMut<'a, K: Key + 'a, V: 'a> {
     inner: IterMut<'a, K, V>,

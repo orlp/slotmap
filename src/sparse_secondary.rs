@@ -1183,6 +1183,8 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
 
 // Iterators.
 /// A draining iterator for [`SparseSecondaryMap`].
+///
+/// This iterator is created by [`SparseSecondaryMap::drain`].
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: 'a> {
     inner: hash_map::Drain<'a, u32, Slot<V>>,
@@ -1190,6 +1192,9 @@ pub struct Drain<'a, K: Key + 'a, V: 'a> {
 }
 
 /// An iterator that moves key-value pairs out of a [`SparseSecondaryMap`].
+///
+/// This iterator is created by calling the `into_iter` method on [`SparseSecondaryMap`],
+/// provided by the [`IntoIterator`] trait.
 #[derive(Debug)]
 pub struct IntoIter<K: Key, V> {
     inner: hash_map::IntoIter<u32, Slot<V>>,
@@ -1197,6 +1202,8 @@ pub struct IntoIter<K: Key, V> {
 }
 
 /// An iterator over the key-value pairs in a [`SparseSecondaryMap`].
+///
+/// This iterator is created by [`SparseSecondaryMap::iter`].
 #[derive(Debug)]
 pub struct Iter<'a, K: Key + 'a, V: 'a> {
     inner: hash_map::Iter<'a, u32, Slot<V>>,
@@ -1204,6 +1211,8 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
 }
 
 /// A mutable iterator over the key-value pairs in a [`SparseSecondaryMap`].
+///
+/// This iterator is created by [`SparseSecondaryMap::iter_mut`].
 #[derive(Debug)]
 pub struct IterMut<'a, K: Key + 'a, V: 'a> {
     inner: hash_map::IterMut<'a, u32, Slot<V>>,
@@ -1211,18 +1220,24 @@ pub struct IterMut<'a, K: Key + 'a, V: 'a> {
 }
 
 /// An iterator over the keys in a [`SparseSecondaryMap`].
+///
+/// This iterator is created by [`SparseSecondaryMap::keys`].
 #[derive(Debug)]
 pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
 /// An iterator over the values in a [`SparseSecondaryMap`].
+///
+/// This iterator is created by [`SparseSecondaryMap::values`].
 #[derive(Debug)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
 /// A mutable iterator over the values in a [`SparseSecondaryMap`].
+///
+/// This iterator is created by [`SparseSecondaryMap::values_mut`].
 #[derive(Debug)]
 pub struct ValuesMut<'a, K: Key + 'a, V: 'a> {
     inner: IterMut<'a, K, V>,

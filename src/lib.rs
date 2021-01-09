@@ -185,13 +185,6 @@ pub mod __impl {
     pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
 }
 
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
-
-#[cfg(test)]
-extern crate serde_json;
-
 pub mod basic;
 pub mod dense;
 pub mod hop;
@@ -453,8 +446,8 @@ macro_rules! __serialize_key {
             where
                 S: $crate::__impl::Serializer,
             {
-                self.data().serialize(serializer)
-            }
+                $crate::Key::data(self).serialize(serializer)
+            }   
         }
 
         impl<'de> $crate::__impl::Deserialize<'de> for $name {

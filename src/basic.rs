@@ -3,15 +3,14 @@
 
 //! Contains the slot map implementation.
 
-#[cfg(all(nightly, feature = "unstable"))]
+#[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
 use core::fmt;
 use core::iter::{Enumerate, FusedIterator};
 use core::marker::PhantomData;
-use core::mem::ManuallyDrop;
-#[cfg(all(nightly, feature = "unstable"))]
-use core::mem::MaybeUninit;
+#[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
+use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
 use crate::{DefaultKey, Key, KeyData};
@@ -283,7 +282,8 @@ impl<K: Key, V> SlotMap<K, V> {
     /// sm.try_reserve(32).unwrap();
     /// assert!(sm.capacity() >= 33);
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         // One slot is reserved for the sentinel.
         let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
@@ -636,7 +636,8 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
         // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
         // safe because the type we are claiming to have initialized here is a
@@ -697,7 +698,8 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
         &mut self,
         keys: [K; N],

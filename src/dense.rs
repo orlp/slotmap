@@ -6,11 +6,11 @@
 // are valid. Keys that are received from the user are not trusted (as they
 // might have come from a different slot map or malicious serde deseralization).
 
-#[cfg(all(nightly, feature = "unstable"))]
+#[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
 use core::iter::FusedIterator;
-#[cfg(all(nightly, feature = "unstable"))]
+#[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
@@ -204,7 +204,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// sm.try_reserve(32).unwrap();
     /// assert!(sm.capacity() >= 33);
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.keys.try_reserve(additional)?;
         self.values.try_reserve(additional)?;
@@ -562,7 +563,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
         // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
         // safe because the type we are claiming to have initialized here is a
@@ -625,7 +627,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
         &mut self,
         keys: [K; N],

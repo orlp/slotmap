@@ -1,16 +1,15 @@
 //! Contains the sparse secondary map implementation.
 
 use super::{is_older_version, Key, KeyData};
-#[cfg(all(nightly, feature = "unstable"))]
+#[cfg(all(nightly, any(doc, feature = "unstable")))]
+use alloc::collections::TryReserveError;
+#[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::MaybeUninit;
 use std::collections::hash_map::{self, HashMap};
 use std::hash;
 use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-
-#[cfg(all(nightly, feature = "unstable"))]
-use alloc::collections::TryReserveError;
 
 #[derive(Debug, Clone)]
 struct Slot<T> {
@@ -38,6 +37,9 @@ struct Slot<T> {
 /// and iterates faster if there are only a few elements of the slot map in the
 /// secondary map. If most or all of the elements in a slot map are also found
 /// in the secondary map, use a [`SecondaryMap`] instead.
+///
+/// The current implementation of [`SparseSecondaryMap`] requires [`std`] and is
+/// thus not available in `no_std` environments.
 ///
 /// [`SecondaryMap`]: crate::SecondaryMap
 /// [`HashMap`]: std::collections::HashMap
@@ -224,7 +226,8 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// sec.try_reserve(10).unwrap();
     /// assert!(sec.capacity() >= 10);
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.slots.try_reserve(additional)
     }
@@ -484,7 +487,8 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// assert_eq!(sec[ka], "apples");
     /// assert_eq!(sec[kb], "butter");
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
         // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
         // safe because the type we are claiming to have initialized here is a

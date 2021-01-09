@@ -113,7 +113,6 @@ impl<T> List<T> {
     }
 }
 
-
 fn main() {
     let mut dll = List::new();
     dll.push_head(5);

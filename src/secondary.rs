@@ -1,14 +1,14 @@
 //! Contains the secondary map implementation.
 
 use super::{is_older_version, Key, KeyData};
-#[cfg(all(nightly, feature = "unstable"))]
+#[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
 use core::hint::unreachable_unchecked;
 use core::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use core::marker::PhantomData;
 use core::mem::replace;
-#[cfg(all(nightly, feature = "unstable"))]
+#[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::MaybeUninit;
 use core::num::NonZeroU32;
 use core::ops::{Index, IndexMut};
@@ -251,7 +251,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// sec.try_set_capacity(1000).unwrap();
     /// assert!(sec.capacity() >= 1000);
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_set_capacity(&mut self, new_capacity: usize) -> Result<(), TryReserveError> {
         let new_capacity = new_capacity + 1; // Sentinel.
         if new_capacity > self.slots.capacity() {
@@ -575,7 +576,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec[ka], "apples");
     /// assert_eq!(sec[kb], "butter");
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
         // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
         // safe because the type we are claiming to have initialized here is a
@@ -647,7 +649,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec[ka], "apples");
     /// assert_eq!(sec[kb], "butter");
     /// ```
-    #[cfg(all(nightly, feature = "unstable"))]
+    #[cfg(all(nightly, any(doc, feature = "unstable")))]
+    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
         &mut self,
         keys: [K; N],

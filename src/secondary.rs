@@ -1588,9 +1588,6 @@ mod tests {
     use quickcheck::quickcheck;
     use std::collections::HashMap;
 
-    #[cfg(feature = "serde")]
-    use serde_json;
-
     #[cfg(all(nightly, feature = "unstable"))]
     #[test]
     fn disjoint() {
@@ -1667,7 +1664,7 @@ mod tests {
 
                     // Delete.
                     1 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
 
                         let idx = val as usize % hm_keys.len();
                         sm.remove(sm_keys[idx]);
@@ -1678,7 +1675,7 @@ mod tests {
 
                     // Access.
                     2 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
                         let idx = val as usize % hm_keys.len();
                         let (hm_key, sm_key) = (&hm_keys[idx], sm_keys[idx]);
 

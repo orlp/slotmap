@@ -1,18 +1,37 @@
 #![doc(html_root_url = "https://docs.rs/slotmap/1.0.1")]
 #![crate_name = "slotmap"]
-
-#![warn(invalid_html_tags,
-        missing_debug_implementations,
-        missing_doc_code_examples,
-        trivial_casts,
-        trivial_numeric_casts,
-        unused_lifetimes,
-        unused_import_braces)]
-#![deny(missing_docs,
-        unaligned_references)]
-
 #![cfg_attr(all(nightly, feature = "unstable"), feature(try_reserve))]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
+#![warn(
+    invalid_html_tags,
+    missing_debug_implementations,
+    missing_doc_code_examples,
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_lifetimes,
+    unused_import_braces
+)]
+#![deny(missing_docs, unaligned_references)]
+#![cfg_attr(feature = "cargo-clippy", allow(renamed_and_removed_lints))]
+#![cfg_attr(feature = "cargo-clippy", deny(clippy, clippy_pedantic))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    allow(
+        // Style differences.
+        module_name_repetitions,
+        redundant_closure_for_method_calls,
+        unseparated_literal_suffix,
+
+        // I know what I'm doing and want these.
+        wildcard_imports,
+        inline_always,
+        cast_possible_truncation,
+        needless_pass_by_value,
+
+        // Very noisy.
+        missing_errors_doc,
+        must_use_candidate
+    ))]
 
 //! # slotmap
 //!
@@ -256,7 +275,7 @@ impl KeyData {
         Self::new(core::u32::MAX, 1)
     }
 
-    fn is_null(&self) -> bool {
+    fn is_null(self) -> bool {
         self.idx == core::u32::MAX
     }
 
@@ -556,7 +575,7 @@ mod tests {
         assert!(is_older(0, 1));
         assert!(is_older(0, 1 << 31));
         assert!(!is_older(0, (1 << 31) + 1));
-        assert!(is_older((-1i32) as u32, 0));
+        assert!(is_older(u32::MAX, 0));
     }
 
     #[cfg(feature = "serde")]

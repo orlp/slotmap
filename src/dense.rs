@@ -229,8 +229,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         let kd = key.data();
         self.slots
             .get(kd.idx as usize)
-            .map(|slot| slot.version == kd.version.get())
-            .unwrap_or(false)
+            .map_or(false, |slot| slot.version == kd.version.get())
     }
 
     /// Inserts a value into the slot map. Returns a unique key that can be used
@@ -1091,19 +1090,18 @@ mod tests {
     use quickcheck::quickcheck;
     use std::collections::HashMap;
 
-    #[cfg(feature = "serde")]
-    use serde_json;
+    #[derive(Clone)]
+    struct CountDrop<'a>(&'a core::cell::RefCell<usize>);
+
+    impl<'a> Drop for CountDrop<'a> {
+        fn drop(&mut self) {
+            *self.0.borrow_mut() += 1;
+        }
+    }
 
     #[test]
     fn check_drops() {
         let drops = core::cell::RefCell::new(0usize);
-        #[derive(Clone)]
-        struct CountDrop<'a>(&'a core::cell::RefCell<usize>);
-        impl<'a> Drop for CountDrop<'a> {
-            fn drop(&mut self) {
-                *self.0.borrow_mut() += 1;
-            }
-        }
 
         {
             let mut clone = {
@@ -1207,7 +1205,7 @@ mod tests {
 
                     // Delete.
                     1 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
 
                         let idx = val as usize % hm_keys.len();
                         if hm.remove(&hm_keys[idx]) != sm.remove(sm_keys[idx]) {
@@ -1217,7 +1215,7 @@ mod tests {
 
                     // Access.
                     2 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
                         let idx = val as usize % hm_keys.len();
                         let (hm_key, sm_key) = (&hm_keys[idx], sm_keys[idx]);
 

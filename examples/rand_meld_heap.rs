@@ -9,7 +9,7 @@ new_key_type! {
     struct HeapKey;
 }
 
-// Intentionally not copy or clone.
+#[derive(Copy, Clone)]
 struct NodeHandle(HeapKey);
 
 #[derive(Copy, Clone)]
@@ -29,7 +29,7 @@ impl<T: Ord + std::fmt::Debug> RandMeldHeap<T> {
     pub fn new() -> Self {
         Self {
             sm: SlotMap::with_key(),
-            rng: std::num::Wrapping(0xdeadbeef),
+            rng: std::num::Wrapping(0xdead_beef),
             root: HeapKey::null(),
         }
     }
@@ -54,16 +54,14 @@ impl<T: Ord + std::fmt::Debug> RandMeldHeap<T> {
     }
 
     pub fn pop(&mut self) -> Option<T> {
-        if let Some(root) = self.sm.remove(self.root) {
+        self.sm.remove(self.root).map(|root| {
             self.root = self.meld(root.children[0], root.children[1]);
             if let Some(new_root) = self.sm.get_mut(self.root) {
                 new_root.parent = HeapKey::null();
             }
 
-            Some(root.value)
-        } else {
-            None
-        }
+            root.value
+        })
     }
 
     pub fn remove_key(&mut self, node: NodeHandle) -> T {
@@ -72,7 +70,7 @@ impl<T: Ord + std::fmt::Debug> RandMeldHeap<T> {
         self.sm.remove(node).unwrap().value
     }
 
-    pub fn update_key(&mut self, node: &NodeHandle, value: T) {
+    pub fn update_key(&mut self, node: NodeHandle, value: T) {
         let node = node.0;
 
         // Unlink and re-insert.
@@ -169,7 +167,7 @@ fn main() {
         rhm.insert(k * k);
     }
 
-    rhm.update_key(&the_answer, 42);
+    rhm.update_key(the_answer, 42);
     rhm.remove_key(big);
 
     while rhm.len() > 0 {

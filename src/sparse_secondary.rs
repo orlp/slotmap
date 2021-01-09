@@ -507,8 +507,8 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
         }
 
         // Undo temporary even versions.
-        for j in 0..i {
-            match self.slots.get_mut(&keys[j].data().idx) {
+        for k in &keys[0..i] {
+            match self.slots.get_mut(&k.data().idx) {
                 Some(Slot { version, .. }) => {
                     *version ^= 1;
                 }
@@ -1437,9 +1437,6 @@ mod tests {
     use quickcheck::quickcheck;
     use std::collections::HashMap;
 
-    #[cfg(feature = "serde")]
-    use serde_json;
-
     #[test]
     fn custom_hasher() {
         type FastSparseSecondaryMap<K, V> = SparseSecondaryMap<K, V, fxhash::FxBuildHasher>;
@@ -1532,7 +1529,7 @@ mod tests {
 
                     // Delete.
                     1 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
 
                         let idx = val as usize % hm_keys.len();
                         sm.remove(sm_keys[idx]);
@@ -1543,7 +1540,7 @@ mod tests {
 
                     // Access.
                     2 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
                         let idx = val as usize % hm_keys.len();
                         let (hm_key, sm_key) = (&hm_keys[idx], sm_keys[idx]);
 

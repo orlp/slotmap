@@ -1222,20 +1222,19 @@ mod tests {
     use quickcheck::quickcheck;
     use std::collections::HashMap;
 
-    #[cfg(feature = "serde")]
-    use serde_json;
+    #[derive(Clone)]
+    struct CountDrop<'a>(&'a std::cell::RefCell<usize>);
+
+    impl<'a> Drop for CountDrop<'a> {
+        fn drop(&mut self) {
+            *self.0.borrow_mut() += 1;
+        }
+    }
 
     #[cfg(all(nightly, feature = "unstable"))]
     #[test]
     fn check_drops() {
         let drops = std::cell::RefCell::new(0usize);
-        #[derive(Clone)]
-        struct CountDrop<'a>(&'a std::cell::RefCell<usize>);
-        impl<'a> Drop for CountDrop<'a> {
-            fn drop(&mut self) {
-                *self.0.borrow_mut() += 1;
-            }
-        }
 
         {
             let mut clone = {
@@ -1339,7 +1338,7 @@ mod tests {
 
                     // Delete.
                     1 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
 
                         let idx = val as usize % hm_keys.len();
                         if hm.remove(&hm_keys[idx]) != sm.remove(sm_keys[idx]) {
@@ -1349,7 +1348,7 @@ mod tests {
 
                     // Access.
                     2 => {
-                        if hm_keys.len() == 0 { continue; }
+                        if hm_keys.is_empty() { continue; }
                         let idx = val as usize % hm_keys.len();
                         let (hm_key, sm_key) = (&hm_keys[idx], sm_keys[idx]);
 

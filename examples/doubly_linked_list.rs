@@ -65,21 +65,17 @@ impl<T> List<T> {
     }
 
     fn pop_head(&mut self) -> Option<T> {
-        if let Some(old_head) = self.sm.remove(self.head) {
+        self.sm.remove(self.head).map(|old_head| {
             self.head = old_head.next;
-            Some(old_head.value)
-        } else {
-            None
-        }
+            old_head.value
+        })
     }
 
     fn pop_tail(&mut self) -> Option<T> {
-        if let Some(old_tail) = self.sm.remove(self.tail) {
+        self.sm.remove(self.tail).map(|old_tail| {
             self.tail = old_tail.prev;
-            Some(old_tail.value)
-        } else {
-            None
-        }
+            old_tail.value
+        })
     }
 }
 

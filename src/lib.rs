@@ -53,6 +53,8 @@
 //! stored in slot maps, without hashing required - it's direct indexing under
 //! the hood.
 //!
+//! The minimum required stable Rust version for this crate is 1.49.
+//!
 //! # Examples
 //!
 //! ```

@@ -10,7 +10,8 @@ ownership otherwise, such as game entities or graph nodes. Two secondary maps,
 further objects to the keys created by one of the slot maps. Please refer to the
 [**the documentation**](https://docs.rs/slotmap) for more information.
 
-To start using `slotmap` add the following to your `Cargo.toml`:
+The minimum required stable Rust version for `slotmap` is 1.49. To start using
+`slotmap` add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]

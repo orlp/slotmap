@@ -1371,6 +1371,7 @@ mod serialize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck::quickcheck;
     use std::collections::HashMap;
 
     #[cfg(feature = "serde")]

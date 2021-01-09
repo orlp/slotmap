@@ -576,7 +576,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
         // safe because the type we are claiming to have initialized here is a
         // bunch of `MaybeUninit`s, which do not require initialization.
         let mut ptrs: [MaybeUninit<*mut V>; N] = unsafe { MaybeUninit::uninit().assume_init() };
-        let mut slot_versions: [MaybeUninit<u32>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+        let mut slot_versions: [MaybeUninit<u32>; N] =
+            unsafe { MaybeUninit::uninit().assume_init() };
 
         let mut i = 0;
         while i < N {
@@ -1584,7 +1585,11 @@ mod serialize {
 #[cfg(test)]
 mod tests {
     use crate::*;
+    use quickcheck::quickcheck;
     use std::collections::HashMap;
+
+    #[cfg(feature = "serde")]
+    use serde_json;
 
     #[cfg(all(nightly, feature = "unstable"))]
     #[test]
@@ -1632,10 +1637,6 @@ mod tests {
             }
         }
     }
-
-
-    #[cfg(feature = "serde")]
-    use serde_json;
 
     quickcheck! {
         fn qc_secmap_equiv_hashmap(operations: Vec<(u8, u32)>) -> bool {

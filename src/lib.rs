@@ -175,22 +175,12 @@
 
 extern crate alloc;
 
-#[cfg(feature = "serde")]
-extern crate serde;
-
 // So our macros can refer to these.
 #[cfg(feature = "serde")]
 #[doc(hidden)]
 pub mod __impl {
     pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
 }
-
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
-
-#[cfg(test)]
-extern crate serde_json;
 
 pub mod basic;
 pub mod dense;

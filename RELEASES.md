@@ -1,3 +1,12 @@
+Version 1.0.2
+=============
+
+ - Fixed the `new_key_type!` macro, it assumed the `Key` trait was in scope.
+ - Updated code base with more stringent (clippy) warnings, and many small code
+   quality and documentation changes.
+ - Documented the minimum required stable Rust version, which is 1.49.
+
+
 Version 1.0.1
 =============
 

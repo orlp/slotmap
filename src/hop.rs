@@ -761,7 +761,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
             unsafe {
                 let slot = self.slots.get_unchecked_mut(kd.idx as usize);
                 slot.version ^= 1;
-                ptrs[i] = MaybeUninit::new(&mut *slot.u.value as *mut V);
+                ptrs[i] = MaybeUninit::new(&mut *slot.u.value);
             }
             i += 1;
         }
@@ -810,7 +810,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
         // Safe, see get_disjoint_mut.
         let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
         for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()) as *mut V);
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()));
         }
         core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
@@ -1144,7 +1144,10 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
         // return multiple references to the same value.
         let slot = &mut self.slots[idx];
         let version = slot.version;
-        let value_ref = unsafe { &mut *(&mut *slot.u.value as *mut V) };
+        let value_ref = unsafe {
+            let ptr: *mut V = &mut *slot.u.value;
+            &mut *ptr
+        };
         Some((KeyData::new(idx as u32, version).into(), value_ref))
     }
 

@@ -651,7 +651,7 @@ impl<K: Key, V> SlotMap<K, V> {
             unsafe {
                 let slot = self.slots.get_unchecked_mut(kd.idx as usize);
                 slot.version ^= 1;
-                ptrs[i] = MaybeUninit::new(&mut *slot.u.value as *mut V);
+                ptrs[i] = MaybeUninit::new(&mut *slot.u.value);
             }
             i += 1;
         }
@@ -700,7 +700,7 @@ impl<K: Key, V> SlotMap<K, V> {
         // Safe, see get_disjoint_mut.
         let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
         for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()) as *mut V);
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()));
         }
         core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }

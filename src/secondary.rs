@@ -175,7 +175,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(squared.len(), 1);
     /// ```
     pub fn len(&self) -> usize {
-        self.num_elems as usize
+        self.num_elems
     }
 
     /// Returns if the secondary map is empty.
@@ -589,7 +589,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
                     // set the version to 2 so duplicate keys would show up as
                     // invalid, since keys always have an odd version. This
                     // gives us a linear time disjointness check.
-                    ptrs[i] = MaybeUninit::new(&mut *value as *mut V);
+                    ptrs[i] = MaybeUninit::new(&mut *value);
                     slot_versions[i] = MaybeUninit::new(version.get());
                     *version = NonZeroU32::new(2).unwrap();
                 }
@@ -650,7 +650,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
         // Safe, see get_disjoint_mut.
         let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
         for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()) as *mut V);
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()));
         }
         core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }

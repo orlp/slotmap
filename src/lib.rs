@@ -1,6 +1,16 @@
-#![deny(warnings, missing_docs, missing_debug_implementations)]
 #![doc(html_root_url = "https://docs.rs/slotmap/1.0.1")]
 #![crate_name = "slotmap"]
+
+#![warn(invalid_html_tags,
+        missing_debug_implementations,
+        missing_doc_code_examples,
+        trivial_casts,
+        trivial_numeric_casts,
+        unused_lifetimes,
+        unused_import_braces)]
+#![deny(missing_docs,
+        unaligned_references)]
+
 #![cfg_attr(all(nightly, feature = "unstable"), feature(try_reserve))]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 

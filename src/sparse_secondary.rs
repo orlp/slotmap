@@ -496,7 +496,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
                     // make the version even so duplicate keys would show up as
                     // invalid, since keys always have an odd version. This
                     // gives us a linear time disjointness check.
-                    ptrs[i] = MaybeUninit::new(&mut *value as *mut V);
+                    ptrs[i] = MaybeUninit::new(&mut *value);
                     *version ^= 1;
                 }
 

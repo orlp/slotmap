@@ -501,6 +501,11 @@ impl<K: Key, V> SlotMap<K, V> {
     /// Clears the slot map, returning all key-value pairs in arbitrary order as
     /// an iterator. Keeps the allocated memory for reuse.
     ///
+    /// When the iterator is dropped all elements in the slot map are removed,
+    /// even if the iterator was not fully consumed. If the iterator is not
+    /// dropped (using e.g. [`std::mem::forget`]), only the elements that were
+    /// iterated over are removed.
+    ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
     ///

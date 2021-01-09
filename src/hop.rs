@@ -604,8 +604,10 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// Clears the slot map, returning all key-value pairs in arbitrary order as
     /// an iterator. Keeps the allocated memory for reuse.
     ///
-    /// Even if the iterator is not (fully) consumed, when it goes out of scope
-    /// all remaining elements are cleared.
+    /// When the iterator is dropped all elements in the slot map are removed,
+    /// even if the iterator was not fully consumed. If the iterator is not
+    /// dropped (using e.g. [`std::mem::forget`]), only the elements that were
+    /// iterated over are removed.
     ///
     /// # Examples
     ///

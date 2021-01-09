@@ -453,7 +453,7 @@ macro_rules! __serialize_key {
             where
                 S: $crate::__impl::Serializer,
             {
-                self.data().serialize(serializer)
+                $crate::Key::data(self).serialize(serializer)
             }
         }
 
@@ -534,10 +534,23 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Intentionally no `use super::*;` because we want to test macro expansion
+    // in the *users* scope, which might not have that.
+    #[test]
+    fn macro_expansion() {
+        use super::new_key_type;
+
+        new_key_type! {
+            struct A;
+            pub(crate) struct B;
+            pub struct C;
+        }
+    }
 
     #[test]
     fn check_is_older_version() {
+        use super::*;
+
         let is_older = |a, b| is_older_version(a, b);
         assert!(!is_older(42, 42));
         assert!(is_older(0, 1));
@@ -549,6 +562,8 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn key_serde() {
+        use super::*;
+
         // Check round-trip through serde.
         let mut sm = SlotMap::new();
         let k = sm.insert(42);

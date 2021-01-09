@@ -282,28 +282,27 @@ impl<K: Key, V> DenseSlotMap<K, V> {
 
         if let Some(slot) = self.slots.get_mut(idx as usize) {
             let occupied_version = slot.version | 1;
-            let kd = KeyData::new(idx, occupied_version);
+            let key = KeyData::new(idx, occupied_version).into();
 
             // Push value before adjusting slots/freelist in case f panics.
-            self.values.push(f(kd.into()));
-            self.keys.push(kd.into());
+            self.values.push(f(key));
+            self.keys.push(key);
             self.free_head = slot.idx_or_free;
             slot.idx_or_free = self.keys.len() as u32 - 1;
             slot.version = occupied_version;
-            return kd.into();
+            return key;
         }
 
-        let kd = KeyData::new(idx, 1);
-
         // Push value before adjusting slots/freelist in case f panics.
-        self.values.push(f(kd.into()));
-        self.keys.push(kd.into());
+        let key = KeyData::new(idx, 1).into();
+        self.values.push(f(key));
+        self.keys.push(key);
         self.slots.push(Slot {
             version: 1,
             idx_or_free: self.keys.len() as u32 - 1,
         });
         self.free_head = self.slots.len() as u32;
-        kd.into()
+        key
     }
 
     // Helper function to add a slot to the freelist. Returns the index that
@@ -638,7 +637,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         // Safe, see get_disjoint_mut.
         let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
         for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()));
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i]));
         }
         core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
@@ -903,7 +902,7 @@ impl<'a, K: 'a + Key, V> Iterator for Iter<'a, K, V> {
         let value = self.inner_values.next();
 
         if let (Some(k), Some(v)) = (key, value) {
-            Some((k.data().into(), v))
+            Some((*k, v))
         } else {
             None
         }
@@ -922,7 +921,7 @@ impl<'a, K: 'a + Key, V> Iterator for IterMut<'a, K, V> {
         let value = self.inner_values.next();
 
         if let (Some(k), Some(v)) = (key, value) {
-            Some((k.data().into(), v))
+            Some((*k, v))
         } else {
             None
         }

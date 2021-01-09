@@ -370,8 +370,8 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
         F: FnMut(K, &mut V) -> bool,
     {
         self.slots.retain(|&idx, slot| {
-            let kd = KeyData::new(idx, slot.version);
-            f(kd.into(), &mut slot.value)
+            let key = KeyData::new(idx, slot.version).into();
+            f(key, &mut slot.value)
         })
     }
 

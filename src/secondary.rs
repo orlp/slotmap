@@ -397,8 +397,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
     {
         for (i, slot) in self.slots.iter_mut().enumerate() {
             if let Occupied { value, version } = slot {
-                let kd = KeyData::new(i as u32, version.get());
-                if !f(kd.into(), value) {
+                let key = KeyData::new(i as u32, version.get()).into();
+                if !f(key, value) {
                     self.num_elems -= 1;
                     *slot = Slot::new_vacant();
                 }
@@ -660,7 +660,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
         // Safe, see get_disjoint_mut.
         let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
         for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()));
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i]));
         }
         core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
@@ -1357,8 +1357,8 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
             if let Occupied { value, version } = replace(slot, Slot::new_vacant()) {
                 self.sm.num_elems -= 1;
                 self.num_left -= 1;
-                let kd = KeyData::new(idx as u32, version.get());
-                return Some((kd.into(), value));
+                let key = KeyData::new(idx as u32, version.get()).into();
+                return Some((key, value));
             }
         }
 
@@ -1383,8 +1383,8 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
         while let Some((idx, mut slot)) = self.slots.next() {
             if let Occupied { value, version } = replace(&mut slot, Slot::new_vacant()) {
                 self.num_left -= 1;
-                let kd = KeyData::new(idx as u32, version.get());
-                return Some((kd.into(), value));
+                let key = KeyData::new(idx as u32, version.get()).into();
+                return Some((key, value));
             }
         }
 
@@ -1403,8 +1403,8 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
         while let Some((idx, slot)) = self.slots.next() {
             if let Occupied { value, version } = slot {
                 self.num_left -= 1;
-                let kd = KeyData::new(idx as u32, version.get());
-                return Some((kd.into(), value));
+                let key = KeyData::new(idx as u32, version.get()).into();
+                return Some((key, value));
             }
         }
 
@@ -1422,9 +1422,9 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
     fn next(&mut self) -> Option<(K, &'a mut V)> {
         while let Some((idx, slot)) = self.slots.next() {
             if let Occupied { value, version } = slot {
-                let kd = KeyData::new(idx as u32, version.get());
+                let key = KeyData::new(idx as u32, version.get()).into();
                 self.num_left -= 1;
-                return Some((kd.into(), value));
+                return Some((key, value));
             }
         }
 

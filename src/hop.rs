@@ -398,22 +398,22 @@ impl<K: Key, V> HopSlotMap<K, V> {
             // Freelist is empty.
             if slot_idx == 0 {
                 let version = 1;
-                let kd = KeyData::new(self.slots.len() as u32, version);
+                let key = KeyData::new(self.slots.len() as u32, version).into();
 
                 self.slots.push(Slot {
                     u: SlotUnion {
-                        value: ManuallyDrop::new(f(kd.into())),
+                        value: ManuallyDrop::new(f(key)),
                     },
                     version,
                 });
                 self.num_elems = new_num_elems;
-                return kd.into();
+                return key;
             }
 
             // Compute value first in case f panics.
             let occupied_version = self.slots[slot_idx].version | 1;
-            let kd = KeyData::new(slot_idx as u32, occupied_version);
-            let value = f(kd.into());
+            let key = KeyData::new(slot_idx as u32, occupied_version).into();
+            let value = f(key);
 
             // Update freelist.
             if front == back {
@@ -433,7 +433,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
             slot.version = occupied_version;
             slot.u.value = ManuallyDrop::new(value);
             self.num_elems = new_num_elems;
-            kd.into()
+            key
         }
     }
 
@@ -565,8 +565,8 @@ impl<K: Key, V> HopSlotMap<K, V> {
             let should_remove = {
                 match slot.get_mut() {
                     OccupiedMut(value) => {
-                        let kd = KeyData::new(i as u32, version);
-                        !f(kd.into(), value)
+                        let key = KeyData::new(i as u32, version).into();
+                        !f(key, value)
                     }
                     VacantMut(free) => {
                         i = free.other_end as usize;
@@ -816,7 +816,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
         // Safe, see get_disjoint_mut.
         let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
         for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()));
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i]));
         }
         core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
@@ -1062,9 +1062,8 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
 
         self.cur = idx + 1;
         self.num_left -= 1;
-        Some((KeyData::new(idx as u32, version).into(), unsafe {
-            self.sm.remove_from_slot(idx)
-        }))
+        let key = KeyData::new(idx as u32, version).into();
+        Some((key, unsafe { self.sm.remove_from_slot(idx) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1101,9 +1100,9 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
         self.cur = idx + 1;
         self.num_left -= 1;
         let slot = &mut self.slots[idx];
-        let kd = KeyData::new(idx as u32, slot.version);
+        let key = KeyData::new(idx as u32, slot.version).into();
         slot.version = 0; // Prevent dropping after extracting the value.
-        Some((kd.into(), unsafe { ManuallyDrop::take(&mut slot.u.value) }))
+        Some((key, unsafe { ManuallyDrop::take(&mut slot.u.value) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

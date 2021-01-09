@@ -709,7 +709,7 @@ impl<K: Key, V> SlotMap<K, V> {
         // Safe, see get_disjoint_mut.
         let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
         for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i].data().into()));
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i]));
         }
         core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }

@@ -669,6 +669,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// // sm.get_unchecked(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
+        debug_assert!(self.contains_key(key));
         &self.slots.get_unchecked(key.data().idx as usize).u.value
     }
 
@@ -715,6 +716,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// // sm.get_unchecked_mut(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
+        debug_assert!(self.contains_key(key));
         &mut self
             .slots
             .get_unchecked_mut(key.data().idx as usize)

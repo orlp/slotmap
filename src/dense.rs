@@ -484,6 +484,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// // sm.get_unchecked(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
+        debug_assert!(self.contains_key(key));
         let idx = self
             .slots
             .get_unchecked(key.data().idx as usize)
@@ -536,6 +537,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// // sm.get_unchecked_mut(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
+        debug_assert!(self.contains_key(key));
         let idx = self
             .slots
             .get_unchecked(key.data().idx as usize)

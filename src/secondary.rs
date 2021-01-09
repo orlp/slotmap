@@ -503,6 +503,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// // sec.get_unchecked(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
+        debug_assert!(self.contains_key(key));
         let slot = self.slots.get_unchecked(key.data().idx as usize);
         slot.get_unchecked()
     }
@@ -552,6 +553,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// // sec.get_unchecked_mut(key) is now dangerous!
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
+        debug_assert!(self.contains_key(key));
         let slot = self.slots.get_unchecked_mut(key.data().idx as usize);
         slot.get_unchecked_mut()
     }

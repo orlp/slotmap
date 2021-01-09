@@ -5,7 +5,6 @@
 #![warn(
     invalid_html_tags,
     missing_debug_implementations,
-    missing_doc_code_examples,
     trivial_casts,
     trivial_numeric_casts,
     unused_lifetimes,

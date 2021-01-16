@@ -1283,6 +1283,58 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
         }
         unsafe { slot.get_unchecked_mut() }
     }
+
+    /// Returns the stale key and data, if any, which would be overwritten by
+    /// inserting using this `VacantEntry`.
+    ///
+    /// This situation arises if the stale key was removed from the
+    /// primary map, and a subsequent insert into the primary map
+    /// reused the slot.
+    ///
+    /// `remove_stale_entry` can be used to handle this situation specially ---
+    /// for example, if the application wants to lazily clean up tertiary data
+    /// in another data structure indexed by the now-stale key, or by the value
+    /// stored in the `SecondaryMap`.
+    ///
+    /// Most applications will not need this.
+    ///
+    /// # Examples
+    /// ```
+    /// # use slotmap::*;
+    /// # use slotmap::secondary::Entry;
+    /// let mut pri = SlotMap::new();
+    /// let mut sec = SecondaryMap::new();
+    ///
+    /// let k1 = pri.insert(1);
+    ///
+    /// let ent = sec.entry(k1);
+    /// let mut vacant = match ent { Some(Entry::Vacant(vac)) => vac, _ => panic!("1. {:?}", &ent) };
+    /// assert_eq!(vacant.remove_stale_entry(), None);
+    ///
+    /// sec.insert(k1, 'a');
+    /// pri.remove(k1);
+    /// // Imagine we don't keep a note of k1, after this.
+    /// let k2 = pri.insert(2);
+    ///
+    /// let ent = sec.entry(k2);
+    /// let mut vacant = match ent { Some(Entry::Vacant(vac)) => vac, _ => panic!("2. {:?}", &ent) };
+    /// // Now we have recovered k1 and the associated data:
+    /// assert_eq!(vacant.remove_stale_entry(), Some((k1, 'a')));
+    /// assert_eq!(vacant.remove_stale_entry(), None);
+    ///
+    /// vacant.insert('b');
+    /// assert!(sec.entry(k1).is_none());
+    /// ```
+    pub fn remove_stale_entry(&mut self) -> Option<(K, V)> {
+        let slot = unsafe { self.map.slots.get_unchecked_mut(self.kd.idx as usize) };
+        let old_slot = replace(slot, Slot::new_vacant());
+        if let Occupied { value, version } = old_slot {
+            let stale_kd = KeyData { idx: self.kd.idx, version };
+            Some((stale_kd.into(), value))
+        } else {
+            None
+        }
+    }
 }
 
 // Iterators.

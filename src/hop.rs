@@ -113,6 +113,16 @@ impl<T: Clone> Clone for Slot<T> {
             version: self.version,
         }
     }
+
+    fn clone_from(&mut self, source: &Self) {
+        match (self.get_mut(), source.get()) {
+            (OccupiedMut(self_val), Occupied(source_val)) => self_val.clone_from(source_val),
+            (VacantMut(self_val), Vacant(&source_val)) => *self_val = source_val,
+            (_, Occupied(value)) => self.u = SlotUnion{ value: ManuallyDrop::new(value.clone()) },
+            (_, Vacant(&free)) => self.u = SlotUnion{ free },
+        }
+        self.version = source.version;
+    }
 }
 
 impl<T: fmt::Debug> fmt::Debug for Slot<T> {
@@ -129,7 +139,7 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 /// Hop slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HopSlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
     num_elems: u32,
@@ -939,6 +949,20 @@ impl<K: Key, V> HopSlotMap<K, V> {
         ValuesMut {
             inner: self.iter_mut(),
         }
+    }
+}
+
+impl<K: Key, V> Clone for HopSlotMap<K, V> where V: Clone{
+    fn clone(&self) -> Self {
+        Self{
+            slots: self.slots.clone(),
+            ..*self
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.slots.clone_from(&source.slots);
+        self.num_elems = source.num_elems;
     }
 }
 

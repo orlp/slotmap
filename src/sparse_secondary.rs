@@ -448,6 +448,31 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             .map(|slot| &slot.value)
     }
 
+    /// Returns a reference to the value corresponding to the key without
+    /// version or bounds checking.
+    ///
+    /// # Safety
+    ///
+    /// This should only be used if `contains_key(key)` is true. Otherwise it is
+    /// potentially unsafe.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let key = sm.insert("foo");
+    /// let mut sec = SparseSecondaryMap::new();
+    /// sec.insert(key, "bar");
+    /// assert_eq!(unsafe { sec.get_unchecked(key) }, &"bar");
+    /// sec.remove(key);
+    /// // sec.get_unchecked(key) is now dangerous!
+    /// ```
+    pub unsafe fn get_unchecked(&self, key: K) -> &V {
+        debug_assert!(self.contains_key(key));
+        self.get(key).unwrap_or_else(|| core::hint::unreachable_unchecked())
+    }
+
     /// Returns a mutable reference to the value corresponding to the key.
     ///
     /// # Examples
@@ -469,6 +494,32 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             .get_mut(&kd.idx)
             .filter(|slot| slot.version == kd.version.get())
             .map(|slot| &mut slot.value)
+    }
+
+    /// Returns a mutable reference to the value corresponding to the key
+    /// without version or bounds checking.
+    ///
+    /// # Safety
+    ///
+    /// This should only be used if `contains_key(key)` is true. Otherwise it is
+    /// potentially unsafe.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let key = sm.insert("foo");
+    /// let mut sec = SparseSecondaryMap::new();
+    /// sec.insert(key, "bar");
+    /// unsafe { *sec.get_unchecked_mut(key) = "baz" };
+    /// assert_eq!(sec[key], "baz");
+    /// sec.remove(key);
+    /// // sec.get_unchecked_mut(key) is now dangerous!
+    /// ```
+    pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
+        debug_assert!(self.contains_key(key));
+        self.get_mut(key).unwrap_or_else(|| core::hint::unreachable_unchecked())
     }
 
     /// Returns mutable references to the values corresponding to the given
@@ -536,6 +587,42 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
         } else {
             None
         }
+    }
+
+    /// Returns mutable references to the values corresponding to the given
+    /// keys. All keys must be valid and disjoint.
+    ///
+    /// Requires at least stable Rust version 1.51.
+    ///
+    /// # Safety
+    ///
+    /// This should only be used if `contains_key(key)` is true for every given
+    /// key and no two keys are equal. Otherwise it is potentially unsafe.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let mut sec = SparseSecondaryMap::new();
+    /// let ka = sm.insert(()); sec.insert(ka, "butter");
+    /// let kb = sm.insert(()); sec.insert(kb, "apples");
+    /// let [a, b] = unsafe { sec.get_disjoint_unchecked_mut([ka, kb]) };
+    /// std::mem::swap(a, b);
+    /// assert_eq!(sec[ka], "apples");
+    /// assert_eq!(sec[kb], "butter");
+    /// ```
+    #[cfg(has_min_const_generics)]
+    pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
+        &mut self,
+        keys: [K; N],
+    ) -> [&mut V; N] {
+        // Safe, see get_disjoint_mut.
+        let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
+        for i in 0..N {
+            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i]));
+        }
+        core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The

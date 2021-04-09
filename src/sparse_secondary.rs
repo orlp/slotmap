@@ -470,7 +470,8 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
         debug_assert!(self.contains_key(key));
-        self.get(key).unwrap_or_else(|| core::hint::unreachable_unchecked())
+        self.get(key)
+            .unwrap_or_else(|| core::hint::unreachable_unchecked())
     }
 
     /// Returns a mutable reference to the value corresponding to the key.
@@ -519,7 +520,8 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        self.get_mut(key).unwrap_or_else(|| core::hint::unreachable_unchecked())
+        self.get_mut(key)
+            .unwrap_or_else(|| core::hint::unreachable_unchecked())
     }
 
     /// Returns mutable references to the values corresponding to the given

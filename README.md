@@ -6,7 +6,7 @@ is returned that can be used to later access or remove the values. Insertion,
 deletion and access all take O(1) time with low overhead. Great for storing
 collections of objects that need stable, safe references but have no clear
 ownership otherwise, such as game entities or graph nodes. Two secondary maps,
-`SecondaryMap` and `SparseSlotMap` are also provided that allow you to map
+`SecondaryMap` and `SparseSecondaryMap` are also provided that allow you to map
 further objects to the keys created by one of the slot maps. Please refer to the
 [**the documentation**](https://docs.rs/slotmap) for more information.
 

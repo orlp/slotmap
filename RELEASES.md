@@ -1,3 +1,9 @@
+Version 1.0.3
+=============
+
+ - Made `get_disjoint_mut` available on stable Rust 1.51 and up.
+ - Added unchecked variants for the getters on `SparseSecondaryMap`.
+
 Version 1.0.2
 =============
 

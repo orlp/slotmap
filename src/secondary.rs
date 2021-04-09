@@ -565,6 +565,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// Returns mutable references to the values corresponding to the given
     /// keys. All keys must be valid and disjoint, otherwise None is returned.
     ///
+    /// Requires at least stable Rust version 1.51.
+    ///
     /// # Examples
     ///
     /// ```
@@ -582,8 +584,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec[ka], "apples");
     /// assert_eq!(sec[kb], "butter");
     /// ```
-    #[cfg(all(nightly, any(doc, feature = "unstable")))]
-    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
+    #[cfg(has_min_const_generics)]
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
         // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
         // safe because the type we are claiming to have initialized here is a
@@ -637,6 +638,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// Returns mutable references to the values corresponding to the given
     /// keys. All keys must be valid and disjoint.
     ///
+    /// Requires at least stable Rust version 1.51.
+    ///
     /// # Safety
     ///
     /// This should only be used if `contains_key(key)` is true for every given
@@ -655,8 +658,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec[ka], "apples");
     /// assert_eq!(sec[kb], "butter");
     /// ```
-    #[cfg(all(nightly, any(doc, feature = "unstable")))]
-    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
+    #[cfg(has_min_const_generics)]
     pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
         &mut self,
         keys: [K; N],

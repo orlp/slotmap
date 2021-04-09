@@ -304,6 +304,10 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(squared[k], 16);
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        if key.is_null() {
+            return None;
+        }
+
         let kd = key.data();
         self.slots
             .extend((self.slots.len()..=kd.idx as usize).map(|_| Slot::new_vacant()));
@@ -818,6 +822,10 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(*v, 10);
     /// ```
     pub fn entry(&mut self, key: K) -> Option<Entry<K, V>> {
+        if key.is_null() {
+            return None;
+        }
+
         let kd = key.data();
 
         // Ensure the slot exists so the Entry implementation can safely assume

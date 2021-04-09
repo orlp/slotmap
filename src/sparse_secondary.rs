@@ -272,6 +272,10 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// assert_eq!(squared[k], 16);
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        if key.is_null() {
+            return None;
+        }
+
         let kd = key.data();
 
         if let Some(slot) = self.slots.get_mut(&kd.idx) {
@@ -684,6 +688,10 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// assert_eq!(*v, 10);
     /// ```
     pub fn entry(&mut self, key: K) -> Option<Entry<K, V>> {
+        if key.is_null() {
+            return None;
+        }
+
         let kd = key.data();
 
         // Until we can map an OccupiedEntry to a VacantEntry I don't think

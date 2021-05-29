@@ -1312,6 +1312,15 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
+impl <'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+    fn clone(&self) -> Self {
+        Iter {
+            inner: self.inner.clone(),
+            _k: self._k
+        }
+    }
+}
+
 /// A mutable iterator over the key-value pairs in a [`SparseSecondaryMap`].
 ///
 /// This iterator is created by [`SparseSecondaryMap::iter_mut`].
@@ -1329,12 +1338,28 @@ pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
+impl <'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+    fn clone(&self) -> Self {
+        Keys {
+            inner: self.inner.clone()
+        }
+    }
+}
+
 /// An iterator over the values in a [`SparseSecondaryMap`].
 ///
 /// This iterator is created by [`SparseSecondaryMap::values`].
 #[derive(Debug)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
+}
+
+impl <'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+    fn clone(&self) -> Self {
+        Values {
+            inner: self.inner.clone()
+        }
+    }
 }
 
 /// A mutable iterator over the values in a [`SparseSecondaryMap`].

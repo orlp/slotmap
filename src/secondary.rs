@@ -1281,9 +1281,12 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     /// ```
     pub fn insert(self, value: V) -> &'a mut V {
         let slot = unsafe { self.map.slots.get_unchecked_mut(self.kd.idx as usize) };
-        self.map.num_elems += 1;
-        let old_slot = replace(slot, Slot::new_occupied(self.kd.version.get(), value));
-        core::mem::forget(old_slot); // No need to check, it was vacant.
+        // Despite the slot being considered Vacant for this entry, it might be occupied
+        // with an outdated element.
+        match replace(slot, Slot::new_occupied(self.kd.version.get(), value)) {
+            Occupied { .. } => {},
+            Vacant => self.map.num_elems += 1,
+        }
         unsafe { slot.get_unchecked_mut() }
     }
 }

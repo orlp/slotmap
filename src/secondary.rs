@@ -4,6 +4,7 @@ use super::{is_older_version, Key, KeyData};
 #[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
+use core::fmt::{self, Debug};
 use core::hint::unreachable_unchecked;
 use core::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use core::marker::PhantomData;
@@ -117,11 +118,21 @@ impl<T> Slot<T> {
 /// health[bob] -= ammo[alice] * 3;
 /// ammo[alice] = 0;
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SecondaryMap<K: Key, V> {
     slots: Vec<Slot<V>>,
     num_elems: usize,
     _k: PhantomData<fn(K) -> K>,
+}
+
+impl<K: Debug + Key, V: Debug> Debug for SecondaryMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_map();
+        for (k, v) in self.iter() {
+            f.entry(&k, v);
+        }
+        f.finish()
+    }
 }
 
 impl<K: Key, V> SecondaryMap<K, V> {
@@ -1284,7 +1295,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
         // Despite the slot being considered Vacant for this entry, it might be occupied
         // with an outdated element.
         match replace(slot, Slot::new_occupied(self.kd.version.get(), value)) {
-            Occupied { .. } => {},
+            Occupied { .. } => {}
             Vacant => self.map.num_elems += 1,
         }
         unsafe { slot.get_unchecked_mut() }

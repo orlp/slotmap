@@ -13,6 +13,7 @@ use core::iter::FusedIterator;
 #[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
+use std::iter::FromIterator;
 
 use crate::{DefaultKey, Key, KeyData};
 
@@ -1016,6 +1017,18 @@ impl<'a, K: 'a + Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {}
 impl<'a, K: 'a + Key, V> ExactSizeIterator for Drain<'a, K, V> {}
 impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 
+impl<K: Key, V> FromIterator<V> for DenseSlotMap<K, V> {
+    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+        let (lower, _) = iter.size_hint();
+        let mut map = DenseSlotMap::with_capacity_and_key(lower);
+        for item in iter {
+            map.insert_with_key(|_| item);
+        }
+        map
+    }
+}
+
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
@@ -1267,6 +1280,12 @@ mod tests {
             smv.sort();
             hmv.sort();
             smv == hmv
+        }
+    }
+
+    quickcheck! {
+        fn collect(xs: Vec<u32>) -> bool {
+            xs == xs.iter().cloned().collect::<DenseSlotMap<DefaultKey, u32>>().values().cloned().collect::<Vec<u32>>()
         }
     }
 

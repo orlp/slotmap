@@ -1,31 +1,10 @@
 #![no_main]
-use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
 
 use slotmap::HopSlotMap;
 
-#[derive(Arbitrary, Debug)]
-struct Target {
-    ctor: Constructor,
-    ops: Vec<Op>,
-}
-
-#[derive(Arbitrary, Debug)]
-enum Constructor {
-    New,
-    WithCapacity(u8),
-}
-
-#[derive(Arbitrary, Debug)]
-enum Op {
-    Reserve(u8),
-    Insert,
-    InsertWithKey,
-    Remove(usize),
-    Retain(Vec<bool>),
-    Clear,
-    Drain,
-}
+mod target;
+use target::{Target, Constructor, Op};
 
 fuzz_target!(|data: Target| {
     let mut map = match data.ctor {

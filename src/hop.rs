@@ -623,8 +623,7 @@ impl<K: Key, V: Slottable> HopSlotMap<K, V> {
     /// ```
     pub fn drain(&mut self) -> Drain<K, V> {
         Drain {
-            cur: 0,
-            num_left: self.len(),
+            cur: unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 },
             sm: self,
         }
     }
@@ -873,7 +872,6 @@ impl<K: Key, V: Slottable> IndexMut<K> for HopSlotMap<K, V> {
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: Slottable + 'a> {
     cur: usize,
-    num_left: usize,
     sm: &'a mut HopSlotMap<K, V>,
 }
 
@@ -926,34 +924,28 @@ impl<'a, K: Key, V: Slottable> Iterator for Drain<'a, K, V> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
-        if self.cur >= self.sm.slots.len() {
+        // All unchecked indices are safe due to the invariants of the freelist
+        // and that self.sm.len() guarantees there is another element.
+        if self.sm.len() == 0 {
             return None;
         }
 
-        let (idx, version) = {
-            let slot = &self.sm.slots[self.cur];
-            match slot.get() {
-                Occupied(_) => (self.cur, slot.version),
-                Vacant(free) => {
-                    // Skip block of contiguous vacant slots.
-                    let idx = free.other_end as usize + 1;
-                    if idx >= self.sm.slots.len() {
-                        return None;
-                    }
-                    (idx, self.sm.slots[idx].version)
-                }
-            }
+        // Skip ahead to next element. Must do this before removing.
+        let idx = self.cur;
+        self.cur = match self.sm.slots.get(idx + 1).map(|s| s.get()) {
+            Some(Occupied(_)) => idx + 1,
+            Some(Vacant(free)) => free.other_end as usize + 1,
+            None => 0,
         };
 
-        self.cur = idx + 1;
-        self.num_left -= 1;
-        Some((KeyData::new(idx as u32, version).into(), unsafe {
-            self.sm.remove_from_slot(idx)
-        }))
+        let key = KeyData::new(idx as u32, unsafe {
+            self.sm.slots.get_unchecked(idx).version
+        });
+        Some((key.into(), unsafe { self.sm.remove_from_slot(idx) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.num_left, Some(self.num_left))
+        (self.sm.len(), Some(self.sm.len()))
     }
 }
 

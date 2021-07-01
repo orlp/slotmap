@@ -522,7 +522,6 @@ impl<K: Key, V> SlotMap<K, V> {
     pub fn drain(&mut self) -> Drain<K, V> {
         Drain {
             cur: 1,
-            num_left: self.len(),
             sm: self,
         }
     }
@@ -887,7 +886,6 @@ impl<K: Key, V> IndexMut<K> for SlotMap<K, V> {
 /// This iterator is created by [`SlotMap::drain`].
 #[derive(Debug)]
 pub struct Drain<'a, K: 'a + Key, V: 'a> {
-    num_left: usize,
     sm: &'a mut SlotMap<K, V>,
     cur: usize,
 }
@@ -961,7 +959,6 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
                 let slot = self.sm.slots.get_unchecked(idx);
                 if slot.occupied() {
                     let kd = KeyData::new(idx as u32, slot.version);
-                    self.num_left -= 1;
                     return Some((kd.into(), self.sm.remove_from_slot(idx)));
                 }
             }
@@ -971,7 +968,7 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.num_left, Some(self.num_left))
+        (self.sm.len(), Some(self.sm.len()))
     }
 }
 

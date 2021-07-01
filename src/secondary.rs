@@ -459,7 +459,6 @@ impl<K: Key, V> SecondaryMap<K, V> {
     pub fn drain(&mut self) -> Drain<K, V> {
         Drain {
             cur: 1,
-            num_left: self.len(),
             sm: self,
         }
     }
@@ -1297,7 +1296,6 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
 /// This iterator is created by [`SecondaryMap::drain`].
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: 'a> {
-    num_left: usize,
     sm: &'a mut SecondaryMap<K, V>,
     cur: usize,
 }
@@ -1361,15 +1359,11 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
-        let len = self.sm.slots.len();
-        while self.cur < len {
+        while let Some(slot) = self.sm.slots.get_mut(self.cur) {
             let idx = self.cur;
             self.cur += 1;
-
-            let slot = unsafe { self.sm.slots.get_unchecked_mut(idx) };
             if let Occupied { value, version } = replace(slot, Slot::new_vacant()) {
                 self.sm.num_elems -= 1;
-                self.num_left -= 1;
                 let key = KeyData::new(idx as u32, version.get()).into();
                 return Some((key, value));
             }
@@ -1379,7 +1373,7 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.num_left, Some(self.num_left))
+        (self.sm.len(), Some(self.sm.len()))
     }
 }
 

@@ -4,7 +4,7 @@ use libfuzzer_sys::fuzz_target;
 use slotmap::HopSlotMap;
 
 mod target;
-use target::{Target, Constructor, Op};
+use target::{Constructor, Op, Target};
 
 fuzz_target!(|data: Target| {
     let mut map = match data.ctor {

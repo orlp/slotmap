@@ -1,3 +1,9 @@
+Version 0.4.1
+=============
+
+ - Backport of fix made in 1.0.4.
+
+
 Version 0.4.0
 =============
 

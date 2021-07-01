@@ -20,7 +20,19 @@ path = ".."
 members = ["."]
 
 [[bin]]
-name = "fuzz_target_1"
-path = "fuzz_targets/fuzz_target_1.rs"
+name = "hop_slot_map"
+path = "fuzz_targets/hop_slot_map.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "dense_slot_map"
+path = "fuzz_targets/dense_slot_map.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "basic_slot_map"
+path = "fuzz_targets/basic_slot_map.rs"
 test = false
 doc = false

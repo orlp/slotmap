@@ -2,7 +2,7 @@
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
 
-use slotmap::HopSlotMap;
+use slotmap::SlotMap;
 
 #[derive(Arbitrary, Debug)]
 struct Target {
@@ -19,8 +19,8 @@ enum Constructor {
 #[derive(Arbitrary, Debug)]
 enum Op {
     Reserve(u8),
-    Insert(char),
-    InsertWithKey(char),
+    Insert,
+    InsertWithKey,
     Remove(usize),
     Retain(Vec<bool>),
     Clear,
@@ -29,8 +29,8 @@ enum Op {
 
 fuzz_target!(|data: Target| {
     let mut map = match data.ctor {
-        Constructor::New => HopSlotMap::new(),
-        Constructor::WithCapacity(n) => HopSlotMap::with_capacity(n as usize),
+        Constructor::New => SlotMap::new(),
+        Constructor::WithCapacity(n) => SlotMap::with_capacity(n as usize),
     };
 
     let mut keys = Vec::new();
@@ -38,8 +38,8 @@ fuzz_target!(|data: Target| {
     for op in data.ops {
         match op {
             Op::Reserve(n) => map.reserve(n as usize),
-            Op::Insert(k) => keys.push(map.insert(k)),
-            Op::InsertWithKey(k) => keys.push(map.insert_with_key(|_| k)),
+            Op::Insert => keys.push(map.insert(())),
+            Op::InsertWithKey => keys.push(map.insert_with_key(|_| ())),
             Op::Remove(k) => {
                 if let Some(k) = keys.get(k) {
                     map.remove(*k);

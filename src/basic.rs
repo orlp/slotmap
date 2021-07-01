@@ -1246,7 +1246,7 @@ mod serialize {
 mod tests {
     use super::*;
     use quickcheck::quickcheck;
-    use std::collections::HashMap;
+    use std::collections::{HashSet, HashMap};
 
     #[derive(Clone)]
     struct CountDrop<'a>(&'a std::cell::RefCell<usize>);
@@ -1364,6 +1364,14 @@ mod tests {
 
                     // Delete.
                     1 => {
+                        // 10% of the time test clear.
+                        if val % 10 == 0 {
+                            let hmvals: HashSet<_> = hm.drain().map(|(_, v)| v).collect();
+                            let smvals: HashSet<_> = sm.drain().map(|(_, v)| v).collect();
+                            if hmvals != smvals {
+                                return false;
+                            }
+                        }
                         if hm_keys.is_empty() { continue; }
 
                         let idx = val as usize % hm_keys.len();

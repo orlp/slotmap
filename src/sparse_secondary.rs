@@ -168,7 +168,7 @@ impl<K: Key, V> SparseSecondaryMap<K, V> {
     /// # use slotmap::*;
     /// let mut sec: SparseSecondaryMap<DefaultKey, i32> = SparseSecondaryMap::with_capacity(10);
     /// assert!(sec.capacity() >= 10);
-    /// sec.reserve(10);
+    /// sec.reserve(20);
     /// assert!(sec.capacity() >= 20);
     /// ```
     pub fn reserve(&mut self, additional: usize) {

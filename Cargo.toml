@@ -1,6 +1,6 @@
 [package]
 name = "slotmap"
-version = "1.0.4"  # Remember to grep and update version everywhere.
+version = "1.0.5"  # Remember to grep and update version everywhere.
 edition = "2018"
 authors = ["Orson Peters <orsonpeters@gmail.com>"]
 description = "Slotmap data structure"

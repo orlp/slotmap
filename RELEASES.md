@@ -1,3 +1,11 @@
+Version 1.0.5
+=============
+
+ - Added fuzzing for extra testing.
+ - Fixed an issue that could cause a segfault when using `HopSlotMap::retain`
+   that had the same underlying cause as the fix in 1.0.4 but was missed.
+
+
 Version 1.0.4
 =============
 

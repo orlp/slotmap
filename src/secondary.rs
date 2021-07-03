@@ -457,10 +457,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(v, vec![(k, 1)]);
     /// ```
     pub fn drain(&mut self) -> Drain<K, V> {
-        Drain {
-            cur: 1,
-            sm: self,
-        }
+        Drain { cur: 1, sm: self }
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -1283,7 +1280,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
         // Despite the slot being considered Vacant for this entry, it might be occupied
         // with an outdated element.
         match replace(slot, Slot::new_occupied(self.kd.version.get(), value)) {
-            Occupied { .. } => {},
+            Occupied { .. } => {}
             Vacant => self.map.num_elems += 1,
         }
         unsafe { slot.get_unchecked_mut() }

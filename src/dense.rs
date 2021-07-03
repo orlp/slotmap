@@ -1114,7 +1114,7 @@ mod serialize {
 mod tests {
     use super::*;
     use quickcheck::quickcheck;
-    use std::collections::{HashSet, HashMap};
+    use std::collections::{HashMap, HashSet};
 
     #[derive(Clone)]
     struct CountDrop<'a>(&'a core::cell::RefCell<usize>);

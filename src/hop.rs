@@ -50,13 +50,7 @@ enum SlotContent<'a, T: 'a + Slottable> {
     Vacant(&'a FreeListEntry),
 }
 
-enum SlotContentMut<'a, T: 'a + Slottable> {
-    OccupiedMut(&'a mut T),
-    VacantMut(&'a mut FreeListEntry),
-}
-
 use self::SlotContent::{Occupied, Vacant};
-use self::SlotContentMut::{OccupiedMut, VacantMut};
 
 impl<T: Slottable> Slot<T> {
     // Is this slot occupied?
@@ -71,16 +65,6 @@ impl<T: Slottable> Slot<T> {
                 Occupied(&*self.u.value)
             } else {
                 Vacant(&self.u.free)
-            }
-        }
-    }
-
-    pub fn get_mut(&mut self) -> SlotContentMut<T> {
-        unsafe {
-            if self.occupied() {
-                OccupiedMut(&mut *self.u.value)
-            } else {
-                VacantMut(&mut self.u.free)
             }
         }
     }
@@ -558,32 +542,29 @@ impl<K: Key, V: Slottable> HopSlotMap<K, V> {
     where
         F: FnMut(K, &mut V) -> bool,
     {
-        let len = self.slots.len();
-        let mut i = 0;
-        while i < len {
-            let should_remove = {
-                // This is safe because removing elements does not shrink slots.
-                let slot = unsafe { self.slots.get_unchecked_mut(i) };
-                let version = slot.version;
+        let mut elems_left_to_scan = self.len();
+        let mut cur = unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 };
+        while elems_left_to_scan > 0 {
+            // This is safe because removing elements does not shrink slots, cur always
+            // points to an occupied slot.
+            let idx = cur;
+            let slot = unsafe { self.slots.get_unchecked_mut(cur) };
+            let version = slot.version;
+            let key = KeyData::new(cur as u32, version).into();
+            let should_remove = !f(key, unsafe { &mut *slot.u.value });
 
-                match slot.get_mut() {
-                    OccupiedMut(value) => {
-                        let key = KeyData::new(i as u32, version);
-                        !f(key.into(), value)
-                    }
-                    VacantMut(free) => {
-                        i = free.other_end as usize;
-                        false
-                    }
-                }
+            cur = match self.slots.get(cur + 1).map(|s| s.get()) {
+                Some(Occupied(_)) => cur + 1,
+                Some(Vacant(free)) => free.other_end as usize + 1,
+                None => 0,
             };
 
             if should_remove {
-                // This is safe because we know that the slot was occupied.
-                unsafe { self.remove_from_slot(i) };
+                // This must happen after getting the next index.
+                unsafe { self.remove_from_slot(idx) };
             }
 
-            i += 1;
+            elems_left_to_scan -= 1;
         }
     }
 

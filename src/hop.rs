@@ -48,13 +48,7 @@ enum SlotContent<'a, T: 'a + Slottable> {
     Vacant(&'a FreeListEntry),
 }
 
-enum SlotContentMut<'a, T: 'a + Slottable> {
-    OccupiedMut(&'a mut T),
-    VacantMut(&'a mut FreeListEntry),
-}
-
 use self::SlotContent::{Occupied, Vacant};
-use self::SlotContentMut::{OccupiedMut, VacantMut};
 
 impl<T: Slottable> Slot<T> {
     // Is this slot occupied?
@@ -69,16 +63,6 @@ impl<T: Slottable> Slot<T> {
                 Occupied(&*self.u.value)
             } else {
                 Vacant(&self.u.free)
-            }
-        }
-    }
-
-    pub fn get_mut(&mut self) -> SlotContentMut<T> {
-        unsafe {
-            if self.occupied() {
-                OccupiedMut(&mut *self.u.value)
-            } else {
-                VacantMut(&mut self.u.free)
             }
         }
     }
@@ -536,32 +520,29 @@ impl<K: Key, V: Slottable> HopSlotMap<K, V> {
     where
         F: FnMut(K, &mut V) -> bool,
     {
-        let len = self.slots.len();
-        let mut i = 0;
-        while i < len {
-            let should_remove = {
-                // This is safe because removing elements does not shrink slots.
-                let slot = unsafe { self.slots.get_unchecked_mut(i) };
-                let version = slot.version;
+        let mut elems_left_to_scan = self.len();
+        let mut cur = unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 };
+        while elems_left_to_scan > 0 {
+            // This is safe because removing elements does not shrink slots, cur always
+            // points to an occupied slot.
+            let idx = cur;
+            let slot = unsafe { self.slots.get_unchecked_mut(cur) };
+            let version = slot.version;
+            let key = KeyData::new(cur as u32, version).into();
+            let should_remove = !f(key, unsafe { &mut *slot.u.value });
 
-                match slot.get_mut() {
-                    OccupiedMut(value) => {
-                        let key = KeyData::new(i as u32, version);
-                        !f(key.into(), value)
-                    }
-                    VacantMut(free) => {
-                        i = free.other_end as usize;
-                        false
-                    }
-                }
+            cur = match self.slots.get(cur + 1).map(|s| s.get()) {
+                Some(Occupied(_)) => cur + 1,
+                Some(Vacant(free)) => free.other_end as usize + 1,
+                None => 0,
             };
 
             if should_remove {
-                // This is safe because we know that the slot was occupied.
-                unsafe { self.remove_from_slot(i) };
+                // This must happen after getting the next index.
+                unsafe { self.remove_from_slot(idx) };
             }
 
-            i += 1;
+            elems_left_to_scan -= 1;
         }
     }
 
@@ -601,8 +582,7 @@ impl<K: Key, V: Slottable> HopSlotMap<K, V> {
     /// ```
     pub fn drain(&mut self) -> Drain<K, V> {
         Drain {
-            cur: 0,
-            num_left: self.len(),
+            cur: unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 },
             sm: self,
         }
     }
@@ -851,7 +831,6 @@ impl<K: Key, V: Slottable> IndexMut<K> for HopSlotMap<K, V> {
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: Slottable + 'a> {
     cur: usize,
-    num_left: usize,
     sm: &'a mut HopSlotMap<K, V>,
 }
 
@@ -904,34 +883,28 @@ impl<'a, K: Key, V: Slottable> Iterator for Drain<'a, K, V> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
-        if self.cur >= self.sm.slots.len() {
+        // All unchecked indices are safe due to the invariants of the freelist
+        // and that self.sm.len() guarantees there is another element.
+        if self.sm.len() == 0 {
             return None;
         }
 
-        let (idx, version) = {
-            let slot = &self.sm.slots[self.cur];
-            match slot.get() {
-                Occupied(_) => (self.cur, slot.version),
-                Vacant(free) => {
-                    // Skip block of contiguous vacant slots.
-                    let idx = free.other_end as usize + 1;
-                    if idx >= self.sm.slots.len() {
-                        return None;
-                    }
-                    (idx, self.sm.slots[idx].version)
-                }
-            }
+        // Skip ahead to next element. Must do this before removing.
+        let idx = self.cur;
+        self.cur = match self.sm.slots.get(idx + 1).map(|s| s.get()) {
+            Some(Occupied(_)) => idx + 1,
+            Some(Vacant(free)) => free.other_end as usize + 1,
+            None => 0,
         };
 
-        self.cur = idx + 1;
-        self.num_left -= 1;
-        Some((KeyData::new(idx as u32, version).into(), unsafe {
-            self.sm.remove_from_slot(idx)
-        }))
+        let key = KeyData::new(idx as u32, unsafe {
+            self.sm.slots.get_unchecked(idx).version
+        });
+        Some((key.into(), unsafe { self.sm.remove_from_slot(idx) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.num_left, Some(self.num_left))
+        (self.sm.len(), Some(self.sm.len()))
     }
 }
 

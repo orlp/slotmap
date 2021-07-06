@@ -17,7 +17,7 @@
 #[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
-use core::fmt;
+use core::fmt::{self, Debug};
 use core::iter::FusedIterator;
 use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
@@ -113,11 +113,21 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 /// Hop slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HopSlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
     num_elems: u32,
     _k: PhantomData<fn(K) -> K>,
+}
+
+impl<K: Debug + Key, V: Debug> Debug for HopSlotMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_map();
+        for (k, v) in self.iter() {
+            f.entry(&k, v);
+        }
+        f.finish()
+    }
 }
 
 impl<V> HopSlotMap<DefaultKey, V> {

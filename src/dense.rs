@@ -810,10 +810,19 @@ pub struct IntoIter<K, V> {
 /// An iterator over the key-value pairs in a [`DenseSlotMap`].
 ///
 /// This iterator is created by [`DenseSlotMap::iter`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
     inner_keys: core::slice::Iter<'a, K>,
     inner_values: core::slice::Iter<'a, V>,
+}
+
+impl <'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+    fn clone(&self) -> Self {
+        Iter {
+            inner_keys: self.inner_keys.clone(),
+            inner_values: self.inner_values.clone()
+        }
+    }
 }
 
 /// A mutable iterator over the key-value pairs in a [`DenseSlotMap`].
@@ -828,17 +837,33 @@ pub struct IterMut<'a, K: 'a + Key, V: 'a> {
 /// An iterator over the keys in a [`DenseSlotMap`].
 ///
 /// This iterator is created by [`DenseSlotMap::keys`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Keys<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
+}
+
+impl <'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+    fn clone(&self) -> Self {
+        Keys {
+            inner: self.inner.clone()
+        }
+    }
 }
 
 /// An iterator over the values in a [`DenseSlotMap`].
 ///
 /// This iterator is created by [`DenseSlotMap::values`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Values<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
+}
+
+impl <'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+    fn clone(&self) -> Self {
+        Values {
+            inner: self.inner.clone()
+        }
+    }
 }
 
 /// A mutable iterator over the values in a [`DenseSlotMap`].

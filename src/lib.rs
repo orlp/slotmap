@@ -239,6 +239,9 @@ pub use crate::sparse_secondary::SparseSecondaryMap;
 use core::fmt::{self, Debug, Formatter};
 use core::num::NonZeroU32;
 
+#[derive(Debug)]
+enum Never {}
+
 // Keep Slottable for backwards compatibility, but warn about deprecation
 // and hide from documentation.
 #[doc(hidden)]

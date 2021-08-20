@@ -13,7 +13,7 @@ use core::marker::PhantomData;
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
-use crate::{DefaultKey, Key, KeyData};
+use crate::{DefaultKey, Key, KeyData, Never};
 
 // Storage inside a slot or metadata for the freelist when vacant.
 union SlotUnion<T> {
@@ -350,8 +350,7 @@ impl<K: Key, V> SlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        self.try_insert_with_key::<_, ()>(move |k| Ok(f(k)))
-            .ok()
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
             .unwrap()
     }
 
@@ -406,7 +405,7 @@ impl<K: Key, V> SlotMap<K, V> {
         let version = 1;
         let kd = KeyData::new(self.slots.len() as u32, version);
 
-        // Create new slot before adjusting freelist in case f or the allocation panics.
+        // Create new slot before adjusting freelist in case f or the allocation panics or errors.
         self.slots.push(Slot {
             u: SlotUnion {
                 value: ManuallyDrop::new(f(kd.into())?),

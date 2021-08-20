@@ -25,7 +25,7 @@ use core::mem::ManuallyDrop;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::{DefaultKey, Key, KeyData};
+use crate::{DefaultKey, Key, KeyData, Never};
 
 // Metadata to maintain the freelist.
 #[derive(Clone, Copy, Debug)]
@@ -362,8 +362,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        self.try_insert_with_key::<_, ()>(move |k| Ok(f(k)))
-            .ok()
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
             .unwrap()
     }
 

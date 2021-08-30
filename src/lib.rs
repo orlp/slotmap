@@ -328,7 +328,13 @@ impl Default for KeyData {
 /// To prevent this, it is suggested to have a unique key type for each slot
 /// map. You can create new key types using [`new_key_type!`], which makes a
 /// new type identical to [`DefaultKey`], just with a different name.
-pub trait Key:
+///
+/// This trait is intended to be a thin wrapper around [`KeyData`], and all
+/// methods must behave exactly as if we're operating on a [`KeyData`] directly.
+/// The internal unsafe code relies on this, therefore this trait is `unsafe` to
+/// implement. It is strongly suggested to simply use [`new_key_type!`] instead
+/// of implementing this trait yourself.
+pub unsafe trait Key:
     From<KeyData>
     + Copy
     + Clone
@@ -450,7 +456,7 @@ macro_rules! new_key_type {
             }
         }
 
-        impl $crate::Key for $name {
+        unsafe impl $crate::Key for $name {
             fn data(&self) -> $crate::KeyData {
                 self.0
             }

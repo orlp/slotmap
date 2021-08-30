@@ -1,5 +1,5 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
-#![doc(html_root_url = "https://docs.rs/slotmap/0.4.2")]
+#![doc(html_root_url = "https://docs.rs/slotmap/0.4.3")]
 #![crate_name = "slotmap"]
 #![cfg_attr(feature = "unstable", feature(untagged_unions, try_reserve))]
 

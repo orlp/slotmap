@@ -1,3 +1,9 @@
+Version 1.0.6
+=============
+
+ - Made Key trait unsafe, as it was erroneously safe to implement. 
+
+
 Version 1.0.5
 =============
 

@@ -975,12 +975,23 @@ pub struct IntoIter<K: Key, V> {
 /// An iterator over the key-value pairs in a [`HopSlotMap`].
 ///
 /// This iterator is created by [`HopSlotMap::iter`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Iter<'a, K: Key + 'a, V: 'a> {
     cur: usize,
     num_left: usize,
     slots: &'a [Slot<V>],
     _k: PhantomData<fn(K) -> K>,
+}
+
+impl <'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+    fn clone(&self) -> Self {
+        Iter {
+            cur: self.cur,
+            num_left: self.num_left,
+            slots: self.slots,
+            _k: self._k.clone()
+        }
+    }
 }
 
 /// A mutable iterator over the key-value pairs in a [`HopSlotMap`].
@@ -997,17 +1008,33 @@ pub struct IterMut<'a, K: Key + 'a, V: 'a> {
 /// An iterator over the keys in a [`HopSlotMap`].
 ///
 /// This iterator is created by [`HopSlotMap::keys`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
+}
+
+impl <'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+    fn clone(&self) -> Self {
+        Keys {
+            inner: self.inner.clone()
+        }
+    }
 }
 
 /// An iterator over the values in a [`HopSlotMap`].
 ///
 /// This iterator is created by [`HopSlotMap::values`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
+}
+
+impl <'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+    fn clone(&self) -> Self {
+        Values {
+            inner: self.inner.clone()
+        }
+    }
 }
 
 /// A mutable iterator over the values in a [`HopSlotMap`].

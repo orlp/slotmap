@@ -329,9 +329,17 @@ impl Default for KeyData {
 /// map. The easiest way to do this is through [`new_key_type!`], which
 /// makes a new type identical to [`DefaultKey`], just with a different name.
 ///
+/// This trait is intended to be a thin wrapper around [`KeyData`], and all
+/// methods must behave exactly as if we're operating on a [`KeyData`] directly.
+/// The internal unsafe code relies on this, therefore this trait is `unsafe` to
+/// implement. It is strongly suggested to simply use [`new_key_type!`] instead
+/// of implementing this trait yourself.
+///
+///
 /// [`new_key_type!`]: macro.new_key_type.html
 /// [`DefaultKey`]: struct.DefaultKey.html
-pub trait Key: From<KeyData> + Into<KeyData> + Clone {
+/// [`KeyData`]: struct.KeyData.html
+pub unsafe trait Key: From<KeyData> + Into<KeyData> + Clone {
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method (or default
     /// initialization of keys made with [`new_key_type!`], which calls this
@@ -427,7 +435,7 @@ macro_rules! new_key_type {
             }
         }
 
-        impl $crate::Key for $name { }
+        unsafe impl $crate::Key for $name { }
 
         $crate::__serialize_key!($name);
 

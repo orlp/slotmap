@@ -12,6 +12,7 @@ use core::marker::PhantomData;
 #[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
+use std::fmt::Debug;
 
 use crate::{DefaultKey, Key, KeyData};
 
@@ -109,12 +110,22 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 /// Slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
     free_head: u32,
     num_elems: u32,
     _k: PhantomData<fn(K) -> K>,
+}
+
+impl<K: Debug + Key, V: Debug> Debug for SlotMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_map();
+        for (k, v) in self.iter() {
+            f.entry(&k, v);
+        }
+        f.finish()
+    }
 }
 
 impl<V> SlotMap<DefaultKey, V> {

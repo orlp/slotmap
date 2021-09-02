@@ -6,6 +6,7 @@ use alloc::collections::TryReserveError;
 #[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::MaybeUninit;
 use std::collections::hash_map::{self, HashMap};
+use std::fmt::{self, Debug};
 use std::hash;
 use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
@@ -65,10 +66,20 @@ struct Slot<T> {
 /// ammo[alice] = 0;
 /// ```
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SparseSecondaryMap<K: Key, V, S: hash::BuildHasher = hash_map::RandomState> {
     slots: HashMap<u32, Slot<V>, S>,
     _k: PhantomData<fn(K) -> K>,
+}
+
+impl<K: Debug + Key, V: Debug, S: hash::BuildHasher> Debug for SparseSecondaryMap<K, V, S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_map();
+        for (k, v) in self.iter() {
+            f.entry(&k, v);
+        }
+        f.finish()
+    }
 }
 
 impl<K: Key, V> SparseSecondaryMap<K, V, hash_map::RandomState> {

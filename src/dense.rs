@@ -30,7 +30,7 @@ struct Slot {
 /// Dense slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DenseSlotMap<K: Key, V> {
     keys: Vec<K>,
     values: Vec<V>,
@@ -788,6 +788,27 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         ValuesMut {
             inner: self.iter_mut(),
         }
+    }
+}
+
+impl<K: Key, V> Clone for DenseSlotMap<K, V>
+where
+    V: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            keys: self.keys.clone(),
+            values: self.values.clone(),
+            slots: self.slots.clone(),
+            ..*self
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.keys.clone_from(&source.keys);
+        self.values.clone_from(&source.values);
+        self.slots.clone_from(&source.slots);
+        self.free_head = source.free_head;
     }
 }
 

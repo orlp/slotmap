@@ -220,24 +220,20 @@ pub mod secondary;
 #[cfg(feature = "std")]
 pub mod sparse_secondary;
 
+use core::fmt::{self, Debug, Formatter};
+use core::num::NonZeroU32;
+
 #[doc(inline)]
 pub use crate::basic::SlotMap;
-
 #[doc(inline)]
 pub use crate::dense::DenseSlotMap;
-
 #[doc(inline)]
 pub use crate::hop::HopSlotMap;
-
 #[doc(inline)]
 pub use crate::secondary::SecondaryMap;
-
 #[cfg(feature = "std")]
 #[doc(inline)]
 pub use crate::sparse_secondary::SparseSecondaryMap;
-
-use core::fmt::{self, Debug, Formatter};
-use core::num::NonZeroU32;
 
 #[derive(Debug)]
 enum Never {}
@@ -522,8 +518,9 @@ fn is_older_version(a: u32, b: u32) -> bool {
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
-    use super::*;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     pub struct SerKey {
@@ -564,6 +561,8 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
+    use crate::SecondaryMap;
+
     // Intentionally no `use super::*;` because we want to test macro expansion
     // in the *users* scope, which might not have that.
     #[test]
@@ -587,6 +586,38 @@ mod tests {
         assert!(is_older(0, 1 << 31));
         assert!(!is_older(0, (1 << 31) + 1));
         assert!(is_older(u32::MAX, 0));
+    }
+
+    #[test]
+    fn iters_cloneable() {
+        use super::*;
+
+        struct NoClone;
+
+        let mut sm = SlotMap::new();
+        let mut hsm = HopSlotMap::new();
+        let mut dsm = DenseSlotMap::new();
+        let mut scm = SecondaryMap::new();
+        let mut sscm = SparseSecondaryMap::new();
+        scm.insert(sm.insert(NoClone), NoClone);
+        sscm.insert(hsm.insert(NoClone), NoClone);
+        dsm.insert(NoClone);
+
+        let _ = sm.keys().clone();
+        let _ = sm.values().clone();
+        let _ = sm.iter().clone();
+        let _ = hsm.keys().clone();
+        let _ = hsm.values().clone();
+        let _ = hsm.iter().clone();
+        let _ = dsm.keys().clone();
+        let _ = dsm.values().clone();
+        let _ = dsm.iter().clone();
+        let _ = scm.keys().clone();
+        let _ = scm.values().clone();
+        let _ = scm.iter().clone();
+        let _ = sscm.keys().clone();
+        let _ = sscm.values().clone();
+        let _ = sscm.iter().clone();
     }
 
     #[cfg(feature = "serde")]

@@ -1,6 +1,5 @@
 //! Contains the secondary map implementation.
 
-use super::{is_older_version, Key, KeyData};
 #[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
@@ -13,6 +12,8 @@ use core::mem::MaybeUninit;
 use core::num::NonZeroU32;
 use core::ops::{Index, IndexMut};
 
+use super::{is_older_version, Key, KeyData};
+
 // This representation works because we don't have to store the versions
 // of removed elements.
 #[derive(Debug, Clone)]
@@ -22,8 +23,7 @@ enum Slot<T> {
     Vacant,
 }
 
-use self::Slot::Occupied;
-use self::Slot::Vacant;
+use self::Slot::{Occupied, Vacant};
 
 impl<T> Slot<T> {
     pub fn new_occupied(version: u32, value: T) -> Self {
@@ -602,7 +602,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
                     ptrs[i] = MaybeUninit::new(&mut *value);
                     slot_versions[i] = MaybeUninit::new(version.get());
                     *version = NonZeroU32::new(2).unwrap();
-                }
+                },
 
                 _ => break,
             }
@@ -617,7 +617,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
                 match self.slots.get_mut(idx) {
                     Some(Occupied { version, .. }) => {
                         *version = NonZeroU32::new_unchecked(slot_versions[j].assume_init());
-                    }
+                    },
                     _ => unreachable_unchecked(),
                 }
             }
@@ -882,11 +882,8 @@ impl<K: Key, V: PartialEq> PartialEq for SecondaryMap<K, V> {
             return false;
         }
 
-        self.iter().all(|(key, value)| {
-            other
-                .get(key)
-                .map_or(false, |other_value| *value == *other_value)
-        })
+        self.iter()
+            .all(|(key, value)| other.get(key).map_or(false, |other_value| *value == *other_value))
     }
 }
 
@@ -1036,7 +1033,7 @@ impl<'a, K: Key, V> Entry<'a, K, V> {
             Entry::Occupied(mut entry) => {
                 f(entry.get_mut());
                 Entry::Occupied(entry)
-            }
+            },
             Entry::Vacant(entry) => Entry::Vacant(entry),
         }
     }
@@ -1280,7 +1277,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
         // Despite the slot being considered Vacant for this entry, it might be occupied
         // with an outdated element.
         match replace(slot, Slot::new_occupied(self.kd.version.get(), value)) {
-            Occupied { .. } => {}
+            Occupied { .. } => {},
             Vacant => self.map.num_elems += 1,
         }
         unsafe { slot.get_unchecked_mut() }
@@ -1318,12 +1315,12 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
     fn clone(&self) -> Self {
         Iter {
             num_left: self.num_left,
             slots: self.slots.clone(),
-            _k: self._k
+            _k: self._k,
         }
     }
 }
@@ -1346,10 +1343,10 @@ pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
     fn clone(&self) -> Self {
         Keys {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -1362,10 +1359,10 @@ pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
     fn clone(&self) -> Self {
         Values {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -1555,8 +1552,9 @@ impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
-    use super::*;
     use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     struct SerdeSlot<T> {
@@ -1639,9 +1637,11 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
-    use quickcheck::quickcheck;
     use std::collections::HashMap;
+
+    use quickcheck::quickcheck;
+
+    use crate::*;
 
     #[cfg(all(nightly, feature = "unstable"))]
     #[test]

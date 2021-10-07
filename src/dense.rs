@@ -274,8 +274,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
-            .unwrap()
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap()
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -513,10 +512,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
         debug_assert!(self.contains_key(key));
-        let idx = self
-            .slots
-            .get_unchecked(key.data().idx as usize)
-            .idx_or_free;
+        let idx = self.slots.get_unchecked(key.data().idx as usize).idx_or_free;
         &self.values.get_unchecked(idx as usize)
     }
 
@@ -566,10 +562,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        let idx = self
-            .slots
-            .get_unchecked(key.data().idx as usize)
-            .idx_or_free;
+        let idx = self.slots.get_unchecked(key.data().idx as usize).idx_or_free;
         self.values.get_unchecked_mut(idx as usize)
     }
 
@@ -866,11 +859,11 @@ pub struct Iter<'a, K: 'a + Key, V: 'a> {
     inner_values: core::slice::Iter<'a, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
     fn clone(&self) -> Self {
         Iter {
             inner_keys: self.inner_keys.clone(),
-            inner_values: self.inner_values.clone()
+            inner_values: self.inner_values.clone(),
         }
     }
 }
@@ -892,10 +885,10 @@ pub struct Keys<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
     fn clone(&self) -> Self {
         Keys {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -908,10 +901,10 @@ pub struct Values<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
     fn clone(&self) -> Self {
         Values {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -1094,8 +1087,9 @@ impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
-    use super::*;
     use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     struct SerdeSlot<T> {
@@ -1135,10 +1129,7 @@ mod serialize {
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if serde_slots
-                .get(0)
-                .map_or(true, |slot| slot.version % 2 == 1)
-            {
+            if serde_slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 
@@ -1187,9 +1178,11 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use quickcheck::quickcheck;
     use std::collections::{HashMap, HashSet};
+
+    use quickcheck::quickcheck;
+
+    use super::*;
 
     #[derive(Clone)]
     struct CountDrop<'a>(&'a core::cell::RefCell<usize>);

@@ -97,9 +97,15 @@ impl<T: Clone> Clone for Slot<T> {
     fn clone_from(&mut self, source: &Self) {
         match (self.get_mut(), source.get()) {
             (OccupiedMut(self_val), Occupied(source_val)) => self_val.clone_from(source_val),
-            (VacantMut(self_val), Vacant(&source_val)) => *self_val = source_val,
-            (_, Occupied(value)) => self.u = SlotUnion{ value: ManuallyDrop::new(value.clone()) },
-            (_, Vacant(&next_free)) => self.u = SlotUnion{ next_free },
+            (VacantMut(self_next_free), Vacant(&source_next_free)) => {
+                *self_next_free = source_next_free
+            },
+            (_, Occupied(value)) => {
+                self.u = SlotUnion {
+                    value: ManuallyDrop::new(value.clone()),
+                }
+            },
+            (_, Vacant(&next_free)) => self.u = SlotUnion { next_free },
         }
         self.version = source.version;
     }
@@ -360,8 +366,7 @@ impl<K: Key, V> SlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
-            .unwrap()
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap()
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -647,11 +652,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        &mut self
-            .slots
-            .get_unchecked_mut(key.data().idx as usize)
-            .u
-            .value
+        &mut self.slots.get_unchecked_mut(key.data().idx as usize).u.value
     }
 
     /// Returns mutable references to the values corresponding to the given
@@ -965,12 +966,12 @@ pub struct Iter<'a, K: 'a + Key, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
     fn clone(&self) -> Self {
         Iter {
             num_left: self.num_left,
             slots: self.slots.clone(),
-            _k: self._k
+            _k: self._k,
         }
     }
 }
@@ -993,10 +994,10 @@ pub struct Keys<'a, K: 'a + Key, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
     fn clone(&self) -> Self {
         Keys {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -1009,10 +1010,10 @@ pub struct Values<'a, K: 'a + Key, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
     fn clone(&self) -> Self {
         Values {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -1215,8 +1216,9 @@ impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
-    use super::*;
     use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     struct SerdeSlot<T> {
@@ -1321,9 +1323,11 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use quickcheck::quickcheck;
     use std::collections::{HashMap, HashSet};
+
+    use quickcheck::quickcheck;
+
+    use super::*;
 
     #[derive(Clone)]
     struct CountDrop<'a>(&'a std::cell::RefCell<usize>);

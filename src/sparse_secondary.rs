@@ -1,6 +1,5 @@
 //! Contains the sparse secondary map implementation.
 
-use super::{is_older_version, Key, KeyData};
 #[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 #[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
@@ -10,6 +9,8 @@ use std::hash;
 use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
+
+use super::{is_older_version, Key, KeyData};
 
 #[derive(Debug, Clone)]
 struct Slot<T> {
@@ -247,9 +248,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub fn contains_key(&self, key: K) -> bool {
         let kd = key.data();
-        self.slots
-            .get(&kd.idx)
-            .map_or(false, |slot| slot.version == kd.version.get())
+        self.slots.get(&kd.idx).map_or(false, |slot| slot.version == kd.version.get())
     }
 
     /// Inserts a value into the secondary map at the given `key`. Can silently
@@ -296,13 +295,10 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             return None;
         }
 
-        self.slots.insert(
-            kd.idx,
-            Slot {
-                version: kd.version.get(),
-                value,
-            },
-        );
+        self.slots.insert(kd.idx, Slot {
+            version: kd.version.get(),
+            value,
+        });
 
         None
     }
@@ -470,8 +466,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
         debug_assert!(self.contains_key(key));
-        self.get(key)
-            .unwrap_or_else(|| core::hint::unreachable_unchecked())
+        self.get(key).unwrap_or_else(|| core::hint::unreachable_unchecked())
     }
 
     /// Returns a mutable reference to the value corresponding to the key.
@@ -520,8 +515,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        self.get_mut(key)
-            .unwrap_or_else(|| core::hint::unreachable_unchecked())
+        self.get_mut(key).unwrap_or_else(|| core::hint::unreachable_unchecked())
     }
 
     /// Returns mutable references to the values corresponding to the given
@@ -565,7 +559,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
                     // gives us a linear time disjointness check.
                     ptrs[i] = MaybeUninit::new(&mut *value);
                     *version ^= 1;
-                }
+                },
 
                 _ => break,
             }
@@ -578,7 +572,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             match self.slots.get_mut(&k.data().idx) {
                 Some(Slot { version, .. }) => {
                     *version ^= 1;
-                }
+                },
                 _ => unsafe { core::hint::unreachable_unchecked() },
             }
         }
@@ -806,7 +800,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
                     kd,
                     _k: PhantomData,
                 })
-            }
+            },
             hash_map::Entry::Vacant(inner) => Entry::Vacant(VacantEntry {
                 inner,
                 kd,
@@ -865,11 +859,8 @@ where
             return false;
         }
 
-        self.iter().all(|(key, value)| {
-            other
-                .get(key)
-                .map_or(false, |other_value| *value == *other_value)
-        })
+        self.iter()
+            .all(|(key, value)| other.get(key).map_or(false, |other_value| *value == *other_value))
     }
 }
 
@@ -1038,7 +1029,7 @@ impl<'a, K: Key, V> Entry<'a, K, V> {
             Entry::Occupied(mut entry) => {
                 f(entry.get_mut());
                 Entry::Occupied(entry)
-            }
+            },
             Entry::Vacant(entry) => Entry::Vacant(entry),
         }
     }
@@ -1312,11 +1303,11 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
     fn clone(&self) -> Self {
         Iter {
             inner: self.inner.clone(),
-            _k: self._k
+            _k: self._k,
         }
     }
 }
@@ -1338,10 +1329,10 @@ pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
     fn clone(&self) -> Self {
         Keys {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -1354,10 +1345,10 @@ pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
     fn clone(&self) -> Self {
         Values {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -1533,9 +1524,10 @@ impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
     use super::*;
     use crate::SecondaryMap;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     impl<K, V, H> Serialize for SparseSecondaryMap<K, V, H>
     where
@@ -1580,9 +1572,11 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
-    use quickcheck::quickcheck;
     use std::collections::HashMap;
+
+    use quickcheck::quickcheck;
+
+    use crate::*;
 
     #[test]
     fn custom_hasher() {
@@ -1593,10 +1587,7 @@ mod tests {
         sec.insert(key1, 1234);
         assert_eq!(sec[key1], 1234);
         assert_eq!(sec.len(), 1);
-        let sec2 = sec
-            .iter()
-            .map(|(k, &v)| (k, v))
-            .collect::<FastSparseSecondaryMap<_, _>>();
+        let sec2 = sec.iter().map(|(k, &v)| (k, v)).collect::<FastSparseSecondaryMap<_, _>>();
         assert_eq!(sec, sec2);
     }
 

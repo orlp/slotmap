@@ -54,7 +54,13 @@ enum SlotContent<'a, T: 'a> {
     Vacant(&'a FreeListEntry),
 }
 
+enum SlotContentMut<'a, T: 'a> {
+    OccupiedMut(&'a mut T),
+    VacantMut(&'a mut FreeListEntry),
+}
+
 use self::SlotContent::{Occupied, Vacant};
+use self::SlotContentMut::{OccupiedMut, VacantMut};
 
 impl<T> Slot<T> {
     // Is this slot occupied?
@@ -69,6 +75,16 @@ impl<T> Slot<T> {
                 Occupied(&*self.u.value)
             } else {
                 Vacant(&self.u.free)
+            }
+        }
+    }
+
+    pub fn get_mut(&mut self) -> SlotContentMut<T> {
+        unsafe {
+            if self.occupied() {
+                OccupiedMut(&mut *self.u.value)
+            } else {
+                VacantMut(&mut self.u.free)
             }
         }
     }
@@ -101,9 +117,13 @@ impl<T: Clone> Clone for Slot<T> {
     fn clone_from(&mut self, source: &Self) {
         match (self.get_mut(), source.get()) {
             (OccupiedMut(self_val), Occupied(source_val)) => self_val.clone_from(source_val),
-            (VacantMut(self_val), Vacant(&source_val)) => *self_val = source_val,
-            (_, Occupied(value)) => self.u = SlotUnion{ value: ManuallyDrop::new(value.clone()) },
-            (_, Vacant(&free)) => self.u = SlotUnion{ free },
+            (VacantMut(self_free), Vacant(&source_free)) => *self_free = source_free,
+            (_, Occupied(value)) => {
+                self.u = SlotUnion {
+                    value: ManuallyDrop::new(value.clone()),
+                }
+            },
+            (_, Vacant(&free)) => self.u = SlotUnion { free },
         }
         self.version = source.version;
     }
@@ -372,8 +392,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
-            .unwrap()
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap()
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -489,7 +508,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
                     next: 0,
                     prev: old_tail,
                 };
-            }
+            },
 
             (false, true) => {
                 // Prepend to vacant block on right.
@@ -500,14 +519,14 @@ impl<K: Key, V> HopSlotMap<K, V> {
                 self.freelist(front_data.prev).next = i;
                 self.freelist(front_data.next).prev = i;
                 *self.freelist(i) = front_data;
-            }
+            },
 
             (true, false) => {
                 // Append to vacant block on left.
                 let front = self.freelist(i - 1).other_end;
                 self.freelist(i).other_end = front;
                 self.freelist(front).other_end = i;
-            }
+            },
 
             (true, true) => {
                 // We must merge left and right.
@@ -521,7 +540,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
                 let back = right.other_end;
                 self.freelist(front).other_end = back;
                 self.freelist(back).other_end = front;
-            }
+            },
         }
 
         self.num_elems -= 1;
@@ -736,11 +755,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        &mut self
-            .slots
-            .get_unchecked_mut(key.data().idx as usize)
-            .u
-            .value
+        &mut self.slots.get_unchecked_mut(key.data().idx as usize).u.value
     }
 
     /// Returns mutable references to the values corresponding to the given
@@ -963,9 +978,12 @@ impl<K: Key, V> HopSlotMap<K, V> {
     }
 }
 
-impl<K: Key, V> Clone for HopSlotMap<K, V> where V: Clone{
+impl<K: Key, V> Clone for HopSlotMap<K, V>
+where
+    V: Clone,
+{
     fn clone(&self) -> Self {
-        Self{
+        Self {
             slots: self.slots.clone(),
             ..*self
         }
@@ -1036,13 +1054,13 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
     fn clone(&self) -> Self {
         Iter {
             cur: self.cur,
             num_left: self.num_left,
             slots: self.slots,
-            _k: self._k.clone()
+            _k: self._k.clone(),
         }
     }
 }
@@ -1066,10 +1084,10 @@ pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
     fn clone(&self) -> Self {
         Keys {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -1082,10 +1100,10 @@ pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
-impl <'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
     fn clone(&self) -> Self {
         Values {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -1116,9 +1134,7 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
             None => 0,
         };
 
-        let key = KeyData::new(idx as u32, unsafe {
-            self.sm.slots.get_unchecked(idx).version
-        });
+        let key = KeyData::new(idx as u32, unsafe { self.sm.slots.get_unchecked(idx).version });
         Some((key.into(), unsafe { self.sm.remove_from_slot(idx) }))
     }
 
@@ -1150,7 +1166,7 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
                     return None;
                 }
                 idx
-            }
+            },
         };
 
         self.cur = idx + 1;
@@ -1210,7 +1226,7 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
                     return None;
                 }
                 idx
-            }
+            },
         };
 
         self.cur = idx + 1;
@@ -1319,8 +1335,9 @@ impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
-    use super::*;
     use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     struct SerdeSlot<T> {
@@ -1449,9 +1466,11 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use quickcheck::quickcheck;
     use std::collections::{HashMap, HashSet};
+
+    use quickcheck::quickcheck;
+
+    use super::*;
 
     #[derive(Clone)]
     struct CountDrop<'a>(&'a std::cell::RefCell<usize>);

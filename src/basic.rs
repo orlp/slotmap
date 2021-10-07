@@ -13,7 +13,7 @@ use core::marker::PhantomData;
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
-use crate::{DefaultKey, Key, KeyData};
+use crate::{DefaultKey, Key, KeyData, Never};
 
 // Storage inside a slot or metadata for the freelist when vacant.
 union SlotUnion<T> {
@@ -350,6 +350,35 @@ impl<K: Key, V> SlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
+            .unwrap()
+    }
+
+    /// Inserts a value given by `f` into the slot map. The key where the
+    /// value will be stored is passed into `f`. This is useful to store values
+    /// that contain their own key.
+    ///
+    /// If `f` returns `Err`, this method returns the error. The slotmap is untouched.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of elements in the slot map equals
+    /// 2<sup>32</sup> - 2.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let key = sm.try_insert_with_key::<_, ()>(|k| Ok((k, 20))).unwrap();
+    /// assert_eq!(sm[key], (key, 20));
+    ///
+    /// sm.try_insert_with_key::<_, ()>(|k| Err(())).unwrap_err();
+    /// ```
+    pub fn try_insert_with_key<F, E>(&mut self, f: F) -> Result<K, E>
+    where
+        F: FnOnce(K) -> Result<V, E>,
+    {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
         if new_num_elems == core::u32::MAX {
@@ -360,8 +389,8 @@ impl<K: Key, V> SlotMap<K, V> {
             let occupied_version = slot.version | 1;
             let kd = KeyData::new(self.free_head, occupied_version);
 
-            // Get value first in case f panics.
-            let value = f(kd.into());
+            // Get value first in case f panics or returns an error.
+            let value = f(kd.into())?;
 
             // Update.
             unsafe {
@@ -370,23 +399,23 @@ impl<K: Key, V> SlotMap<K, V> {
                 slot.version = occupied_version;
             }
             self.num_elems = new_num_elems;
-            return kd.into();
+            return Ok(kd.into());
         }
 
         let version = 1;
         let kd = KeyData::new(self.slots.len() as u32, version);
 
-        // Create new slot before adjusting freelist in case f or the allocation panics.
+        // Create new slot before adjusting freelist in case f or the allocation panics or errors.
         self.slots.push(Slot {
             u: SlotUnion {
-                value: ManuallyDrop::new(f(kd.into())),
+                value: ManuallyDrop::new(f(kd.into())?),
             },
             version,
         });
 
         self.free_head = kd.idx + 1;
         self.num_elems = new_num_elems;
-        kd.into()
+        Ok(kd.into())
     }
 
     // Helper function to remove a value from a slot. Safe iff the slot is

@@ -25,7 +25,7 @@ use core::mem::ManuallyDrop;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::{DefaultKey, Key, KeyData};
+use crate::{DefaultKey, Key, KeyData, Never};
 
 // Metadata to maintain the freelist.
 #[derive(Clone, Copy, Debug)]
@@ -362,6 +362,35 @@ impl<K: Key, V> HopSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
+            .unwrap()
+    }
+
+    /// Inserts a value given by `f` into the slot map. The key where the
+    /// value will be stored is passed into `f`. This is useful to store values
+    /// that contain their own key.
+    ///
+    /// If `f` returns `Err`, this method returns the error. The slotmap is untouched.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of elements in the slot map equals
+    /// 2<sup>32</sup> - 2.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = HopSlotMap::new();
+    /// let key = sm.try_insert_with_key::<_, ()>(|k| Ok((k, 20))).unwrap();
+    /// assert_eq!(sm[key], (key, 20));
+    ///
+    /// sm.try_insert_with_key::<_, ()>(|k| Err(())).unwrap_err();
+    /// ```
+    pub fn try_insert_with_key<F, E>(&mut self, f: F) -> Result<K, E>
+    where
+        F: FnOnce(K) -> Result<V, E>,
+    {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
         if new_num_elems == core::u32::MAX {
@@ -386,18 +415,18 @@ impl<K: Key, V> HopSlotMap<K, V> {
 
                 self.slots.push(Slot {
                     u: SlotUnion {
-                        value: ManuallyDrop::new(f(key)),
+                        value: ManuallyDrop::new(f(key)?),
                     },
                     version,
                 });
                 self.num_elems = new_num_elems;
-                return key;
+                return Ok(key);
             }
 
-            // Compute value first in case f panics.
+            // Compute value first in case f panics or returns an error.
             let occupied_version = self.slots[slot_idx].version | 1;
             let key = KeyData::new(slot_idx as u32, occupied_version).into();
-            let value = f(key);
+            let value = f(key)?;
 
             // Update freelist.
             if front == back {
@@ -417,7 +446,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
             slot.version = occupied_version;
             slot.u.value = ManuallyDrop::new(value);
             self.num_elems = new_num_elems;
-            key
+            Ok(key)
         }
     }
 

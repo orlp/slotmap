@@ -14,7 +14,7 @@ use core::iter::FusedIterator;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::{DefaultKey, Key, KeyData};
+use crate::{DefaultKey, Key, KeyData, Never};
 
 // A slot, which represents storage for an index and a current version.
 // Can be occupied or vacant.
@@ -274,6 +274,35 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
+            .unwrap()
+    }
+
+    /// Inserts a value given by `f` into the slot map. The key where the
+    /// value will be stored is passed into `f`. This is useful to store values
+    /// that contain their own key.
+    ///
+    /// If `f` returns `Err`, this method returns the error. The slotmap is untouched.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of elements in the slot map equals
+    /// 2<sup>32</sup> - 2.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::new();
+    /// let key = sm.try_insert_with_key::<_, ()>(|k| Ok((k, 20))).unwrap();
+    /// assert_eq!(sm[key], (key, 20));
+    ///
+    /// sm.try_insert_with_key::<_, ()>(|k| Err(())).unwrap_err();
+    /// ```
+    pub fn try_insert_with_key<F, E>(&mut self, f: F) -> Result<K, E>
+    where
+        F: FnOnce(K) -> Result<V, E>,
+    {
         if self.len() >= (core::u32::MAX - 1) as usize {
             panic!("DenseSlotMap number of elements overflow");
         }
@@ -284,25 +313,25 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             let occupied_version = slot.version | 1;
             let key = KeyData::new(idx, occupied_version).into();
 
-            // Push value before adjusting slots/freelist in case f panics.
-            self.values.push(f(key));
+            // Push value before adjusting slots/freelist in case f panics or returns an error.
+            self.values.push(f(key)?);
             self.keys.push(key);
             self.free_head = slot.idx_or_free;
             slot.idx_or_free = self.keys.len() as u32 - 1;
             slot.version = occupied_version;
-            return key;
+            return Ok(key);
         }
 
-        // Push value before adjusting slots/freelist in case f panics.
+        // Push value before adjusting slots/freelist in case f panics or returns an error.
         let key = KeyData::new(idx, 1).into();
-        self.values.push(f(key));
+        self.values.push(f(key)?);
         self.keys.push(key);
         self.slots.push(Slot {
             version: 1,
             idx_or_free: self.keys.len() as u32 - 1,
         });
         self.free_head = self.slots.len() as u32;
-        key
+        Ok(key)
     }
 
     // Helper function to add a slot to the freelist. Returns the index that

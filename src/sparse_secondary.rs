@@ -10,7 +10,8 @@ use std::iter::{Extend, FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
-use super::{is_older_version, Key, KeyData};
+use super::{Key, KeyData};
+use crate::util::{is_older_version, UnwrapUnchecked};
 
 #[derive(Debug, Clone)]
 struct Slot<T> {
@@ -466,7 +467,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
         debug_assert!(self.contains_key(key));
-        self.get(key).unwrap_or_else(|| core::hint::unreachable_unchecked())
+        self.get(key).unwrap_unchecked_()
     }
 
     /// Returns a mutable reference to the value corresponding to the key.
@@ -515,7 +516,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        self.get_mut(key).unwrap_or_else(|| core::hint::unreachable_unchecked())
+        self.get_mut(key).unwrap_unchecked_()
     }
 
     /// Returns mutable references to the values corresponding to the given

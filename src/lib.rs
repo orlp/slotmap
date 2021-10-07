@@ -219,6 +219,7 @@ pub mod hop;
 pub mod secondary;
 #[cfg(feature = "std")]
 pub mod sparse_secondary;
+pub(crate) mod util;
 
 use core::fmt::{self, Debug, Formatter};
 use core::num::NonZeroU32;
@@ -234,9 +235,6 @@ pub use crate::secondary::SecondaryMap;
 #[cfg(feature = "std")]
 #[doc(inline)]
 pub use crate::sparse_secondary::SparseSecondaryMap;
-
-#[derive(Debug)]
-enum Never {}
 
 // Keep Slottable for backwards compatibility, but warn about deprecation
 // and hide from documentation.
@@ -508,13 +506,6 @@ new_key_type! {
     pub struct DefaultKey;
 }
 
-// Returns if a is an older version than b, taking into account wrapping of
-// versions.
-fn is_older_version(a: u32, b: u32) -> bool {
-    let diff = a.wrapping_sub(b);
-    diff >= (1 << 31)
-}
-
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
@@ -561,8 +552,6 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use crate::SecondaryMap;
-
     // Intentionally no `use super::*;` because we want to test macro expansion
     // in the *users* scope, which might not have that.
     #[test]
@@ -578,7 +567,7 @@ mod tests {
 
     #[test]
     fn check_is_older_version() {
-        use super::*;
+        use super::util::is_older_version;
 
         let is_older = |a, b| is_older_version(a, b);
         assert!(!is_older(42, 42));

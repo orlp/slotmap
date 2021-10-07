@@ -14,7 +14,8 @@ use core::iter::FusedIterator;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::{DefaultKey, Key, KeyData, Never};
+use crate::util::{Never, UnwrapUnchecked};
+use crate::{DefaultKey, Key, KeyData};
 
 // A slot, which represents storage for an index and a current version.
 // Can be occupied or vacant.
@@ -249,8 +250,9 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let key = sm.insert(42);
     /// assert_eq!(sm[key], 42);
     /// ```
+    #[inline(always)]
     pub fn insert(&mut self, value: V) -> K {
-        self.insert_with_key(|_| value)
+        unsafe { self.try_insert_with_key::<_, Never>(move |_| Ok(value)).unwrap_unchecked_() }
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -270,11 +272,12 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let key = sm.insert_with_key(|k| (k, 20));
     /// assert_eq!(sm[key], (key, 20));
     /// ```
+    #[inline(always)]
     pub fn insert_with_key<F>(&mut self, f: F) -> K
     where
         F: FnOnce(K) -> V,
     {
-        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap()
+        unsafe { self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap_unchecked_() }
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the

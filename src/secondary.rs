@@ -12,7 +12,8 @@ use core::mem::MaybeUninit;
 use core::num::NonZeroU32;
 use core::ops::{Index, IndexMut};
 
-use super::{is_older_version, Key, KeyData};
+use super::{Key, KeyData};
+use crate::util::is_older_version;
 
 // This representation works because we don't have to store the versions
 // of removed elements.

@@ -1136,14 +1136,21 @@ impl<'a, K: Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {}
 impl<'a, K: Key, V> ExactSizeIterator for Drain<'a, K, V> {}
 impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 
-impl<K: Key, V> FromIterator<V> for SlotMap<K, V> {
-    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+impl<K: Key, V> Extend<V> for SlotMap<K, V> {
+    fn extend<T: IntoIterator<Item = V>>(&mut self, iter: T) {
         let iter = iter.into_iter();
         let (lower, _) = iter.size_hint();
-        let mut map = SlotMap::with_capacity_and_key(lower);
+        self.reserve(lower);
         for item in iter {
-            map.insert_with_key(|_| item);
+            self.insert_with_key(|_| item);
         }
+    }
+}
+
+impl<K: Key, V> FromIterator<V> for SlotMap<K, V> {
+    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+        let mut map = SlotMap::with_key();
+        map.extend(iter);
         map
     }
 }
@@ -1419,6 +1426,12 @@ mod tests {
     quickcheck! {
         fn collect(xs: Vec<u32>) -> bool {
             xs == xs.iter().cloned().collect::<SlotMap<DefaultKey, u32>>().values().cloned().collect::<Vec<u32>>()
+        }
+
+        fn extend(xs: Vec<u32>) -> bool {
+            let mut map = SlotMap::new();
+            map.extend(xs.clone());
+            xs == map.values().cloned().collect::<Vec<u32>>()
         }
     }
 

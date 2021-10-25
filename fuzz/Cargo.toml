@@ -1,0 +1,38 @@
+
+[package]
+name = "slotmap-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = { version = "0.4.0", features = ["arbitrary-derive"] }
+
+[dependencies.slotmap]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "hop_slot_map"
+path = "fuzz_targets/hop_slot_map.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "dense_slot_map"
+path = "fuzz_targets/dense_slot_map.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "basic_slot_map"
+path = "fuzz_targets/basic_slot_map.rs"
+test = false
+doc = false

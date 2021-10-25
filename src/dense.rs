@@ -15,6 +15,7 @@ use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 use std::iter::FromIterator;
 
+use crate::util::{Never, UnwrapUnchecked};
 use crate::{DefaultKey, Key, KeyData};
 
 // A slot, which represents storage for an index and a current version.
@@ -31,7 +32,7 @@ struct Slot {
 /// Dense slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DenseSlotMap<K: Key, V> {
     keys: Vec<K>,
     values: Vec<V>,
@@ -250,8 +251,9 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let key = sm.insert(42);
     /// assert_eq!(sm[key], 42);
     /// ```
+    #[inline(always)]
     pub fn insert(&mut self, value: V) -> K {
-        self.insert_with_key(|_| value)
+        unsafe { self.try_insert_with_key::<_, Never>(move |_| Ok(value)).unwrap_unchecked_() }
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -271,9 +273,38 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let key = sm.insert_with_key(|k| (k, 20));
     /// assert_eq!(sm[key], (key, 20));
     /// ```
+    #[inline(always)]
     pub fn insert_with_key<F>(&mut self, f: F) -> K
     where
         F: FnOnce(K) -> V,
+    {
+        unsafe { self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap_unchecked_() }
+    }
+
+    /// Inserts a value given by `f` into the slot map. The key where the
+    /// value will be stored is passed into `f`. This is useful to store values
+    /// that contain their own key.
+    ///
+    /// If `f` returns `Err`, this method returns the error. The slotmap is untouched.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of elements in the slot map equals
+    /// 2<sup>32</sup> - 2.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::new();
+    /// let key = sm.try_insert_with_key::<_, ()>(|k| Ok((k, 20))).unwrap();
+    /// assert_eq!(sm[key], (key, 20));
+    ///
+    /// sm.try_insert_with_key::<_, ()>(|k| Err(())).unwrap_err();
+    /// ```
+    pub fn try_insert_with_key<F, E>(&mut self, f: F) -> Result<K, E>
+    where
+        F: FnOnce(K) -> Result<V, E>,
     {
         if self.len() >= (core::u32::MAX - 1) as usize {
             panic!("DenseSlotMap number of elements overflow");
@@ -285,25 +316,25 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             let occupied_version = slot.version | 1;
             let key = KeyData::new(idx, occupied_version).into();
 
-            // Push value before adjusting slots/freelist in case f panics.
-            self.values.push(f(key));
+            // Push value before adjusting slots/freelist in case f panics or returns an error.
+            self.values.push(f(key)?);
             self.keys.push(key);
             self.free_head = slot.idx_or_free;
             slot.idx_or_free = self.keys.len() as u32 - 1;
             slot.version = occupied_version;
-            return key;
+            return Ok(key);
         }
 
-        // Push value before adjusting slots/freelist in case f panics.
+        // Push value before adjusting slots/freelist in case f panics or returns an error.
         let key = KeyData::new(idx, 1).into();
-        self.values.push(f(key));
+        self.values.push(f(key)?);
         self.keys.push(key);
         self.slots.push(Slot {
             version: 1,
             idx_or_free: self.keys.len() as u32 - 1,
         });
         self.free_head = self.slots.len() as u32;
-        key
+        Ok(key)
     }
 
     // Helper function to add a slot to the freelist. Returns the index that
@@ -485,10 +516,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
         debug_assert!(self.contains_key(key));
-        let idx = self
-            .slots
-            .get_unchecked(key.data().idx as usize)
-            .idx_or_free;
+        let idx = self.slots.get_unchecked(key.data().idx as usize).idx_or_free;
         &self.values.get_unchecked(idx as usize)
     }
 
@@ -538,10 +566,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        let idx = self
-            .slots
-            .get_unchecked(key.data().idx as usize)
-            .idx_or_free;
+        let idx = self.slots.get_unchecked(key.data().idx as usize).idx_or_free;
         self.values.get_unchecked_mut(idx as usize)
     }
 
@@ -763,6 +788,27 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     }
 }
 
+impl<K: Key, V> Clone for DenseSlotMap<K, V>
+where
+    V: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            keys: self.keys.clone(),
+            values: self.values.clone(),
+            slots: self.slots.clone(),
+            ..*self
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.keys.clone_from(&source.keys);
+        self.values.clone_from(&source.values);
+        self.slots.clone_from(&source.slots);
+        self.free_head = source.free_head;
+    }
+}
+
 impl<K: Key, V> Default for DenseSlotMap<K, V> {
     fn default() -> Self {
         Self::with_key()
@@ -811,10 +857,19 @@ pub struct IntoIter<K, V> {
 /// An iterator over the key-value pairs in a [`DenseSlotMap`].
 ///
 /// This iterator is created by [`DenseSlotMap::iter`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Iter<'a, K: 'a + Key, V: 'a> {
     inner_keys: core::slice::Iter<'a, K>,
     inner_values: core::slice::Iter<'a, V>,
+}
+
+impl<'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+    fn clone(&self) -> Self {
+        Iter {
+            inner_keys: self.inner_keys.clone(),
+            inner_values: self.inner_values.clone(),
+        }
+    }
 }
 
 /// A mutable iterator over the key-value pairs in a [`DenseSlotMap`].
@@ -829,17 +884,33 @@ pub struct IterMut<'a, K: 'a + Key, V: 'a> {
 /// An iterator over the keys in a [`DenseSlotMap`].
 ///
 /// This iterator is created by [`DenseSlotMap::keys`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Keys<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
+}
+
+impl<'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+    fn clone(&self) -> Self {
+        Keys {
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 /// An iterator over the values in a [`DenseSlotMap`].
 ///
 /// This iterator is created by [`DenseSlotMap::values`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Values<'a, K: 'a + Key, V> {
     inner: Iter<'a, K, V>,
+}
+
+impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+    fn clone(&self) -> Self {
+        Values {
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 /// A mutable iterator over the values in a [`DenseSlotMap`].
@@ -1039,8 +1110,9 @@ impl<K: Key, V> FromIterator<V> for DenseSlotMap<K, V> {
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
-    use super::*;
     use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     struct SerdeSlot<T> {
@@ -1080,10 +1152,7 @@ mod serialize {
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if serde_slots
-                .get(0)
-                .map_or(true, |slot| slot.version % 2 == 1)
-            {
+            if serde_slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 
@@ -1132,9 +1201,11 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::{HashMap, HashSet};
+
     use quickcheck::quickcheck;
-    use std::collections::HashMap;
+
+    use super::*;
 
     #[derive(Clone)]
     struct CountDrop<'a>(&'a core::cell::RefCell<usize>);
@@ -1251,6 +1322,14 @@ mod tests {
 
                     // Delete.
                     1 => {
+                        // 10% of the time test clear.
+                        if val % 10 == 0 {
+                            let hmvals: HashSet<_> = hm.drain().map(|(_, v)| v).collect();
+                            let smvals: HashSet<_> = sm.drain().map(|(_, v)| v).collect();
+                            if hmvals != smvals {
+                                return false;
+                            }
+                        }
                         if hm_keys.is_empty() { continue; }
 
                         let idx = val as usize % hm_keys.len();

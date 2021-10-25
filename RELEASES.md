@@ -1,8 +1,30 @@
+Version 1.0.6
+=============
+
+ - Made Key trait unsafe, as it was erroneously safe to implement. 
+
+
+Version 1.0.5
+=============
+
+ - Added fuzzing for extra testing.
+ - Fixed an issue that could cause a segfault when using `HopSlotMap::retain`
+   that had the same underlying cause as the fix in 1.0.4 but was missed.
+
+
+Version 1.0.4
+=============
+
+ - Fixed an issue that could cause a segfault when using `HopSlotMap::drain`.
+   All versions 0.3+ are affected, and thus yanked.
+
+
 Version 1.0.3
 =============
 
  - Made `get_disjoint_mut` available on stable Rust 1.51 and up.
  - Added unchecked variants for the getters on `SparseSecondaryMap`.
+
 
 Version 1.0.2
 =============
@@ -46,6 +68,12 @@ Version 1.0.0
    `max(sizeof(T), 4)` bytes.
  
  - Moved `SlotMap` to the `basic` module.
+
+
+Version 0.4.1
+=============
+
+ - Backport of fix made in 1.0.4.
 
 
 Version 0.4.0

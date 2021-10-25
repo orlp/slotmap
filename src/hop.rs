@@ -26,6 +26,7 @@ use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 use std::iter::FromIterator;
 
+use crate::util::{Never, UnwrapUnchecked};
 use crate::{DefaultKey, Key, KeyData};
 
 // Metadata to maintain the freelist.
@@ -114,6 +115,20 @@ impl<T: Clone> Clone for Slot<T> {
             version: self.version,
         }
     }
+
+    fn clone_from(&mut self, source: &Self) {
+        match (self.get_mut(), source.get()) {
+            (OccupiedMut(self_val), Occupied(source_val)) => self_val.clone_from(source_val),
+            (VacantMut(self_free), Vacant(&source_free)) => *self_free = source_free,
+            (_, Occupied(value)) => {
+                self.u = SlotUnion {
+                    value: ManuallyDrop::new(value.clone()),
+                }
+            },
+            (_, Vacant(&free)) => self.u = SlotUnion { free },
+        }
+        self.version = source.version;
+    }
 }
 
 impl<T: fmt::Debug> fmt::Debug for Slot<T> {
@@ -130,7 +145,7 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 /// Hop slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HopSlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
     num_elems: u32,
@@ -347,8 +362,9 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// let key = sm.insert(42);
     /// assert_eq!(sm[key], 42);
     /// ```
+    #[inline(always)]
     pub fn insert(&mut self, value: V) -> K {
-        self.insert_with_key(|_| value)
+        unsafe { self.try_insert_with_key::<_, Never>(move |_| Ok(value)).unwrap_unchecked_() }
     }
 
     // Helper function to make using the freelist painless.
@@ -375,9 +391,38 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// let key = sm.insert_with_key(|k| (k, 20));
     /// assert_eq!(sm[key], (key, 20));
     /// ```
+    #[inline(always)]
     pub fn insert_with_key<F>(&mut self, f: F) -> K
     where
         F: FnOnce(K) -> V,
+    {
+        unsafe { self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap_unchecked_() }
+    }
+
+    /// Inserts a value given by `f` into the slot map. The key where the
+    /// value will be stored is passed into `f`. This is useful to store values
+    /// that contain their own key.
+    ///
+    /// If `f` returns `Err`, this method returns the error. The slotmap is untouched.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of elements in the slot map equals
+    /// 2<sup>32</sup> - 2.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = HopSlotMap::new();
+    /// let key = sm.try_insert_with_key::<_, ()>(|k| Ok((k, 20))).unwrap();
+    /// assert_eq!(sm[key], (key, 20));
+    ///
+    /// sm.try_insert_with_key::<_, ()>(|k| Err(())).unwrap_err();
+    /// ```
+    pub fn try_insert_with_key<F, E>(&mut self, f: F) -> Result<K, E>
+    where
+        F: FnOnce(K) -> Result<V, E>,
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
@@ -403,18 +448,18 @@ impl<K: Key, V> HopSlotMap<K, V> {
 
                 self.slots.push(Slot {
                     u: SlotUnion {
-                        value: ManuallyDrop::new(f(key)),
+                        value: ManuallyDrop::new(f(key)?),
                     },
                     version,
                 });
                 self.num_elems = new_num_elems;
-                return key;
+                return Ok(key);
             }
 
-            // Compute value first in case f panics.
+            // Compute value first in case f panics or returns an error.
             let occupied_version = self.slots[slot_idx].version | 1;
             let key = KeyData::new(slot_idx as u32, occupied_version).into();
-            let value = f(key);
+            let value = f(key)?;
 
             // Update freelist.
             if front == back {
@@ -434,7 +479,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
             slot.version = occupied_version;
             slot.u.value = ManuallyDrop::new(value);
             self.num_elems = new_num_elems;
-            key
+            Ok(key)
         }
     }
 
@@ -467,7 +512,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
                     next: 0,
                     prev: old_tail,
                 };
-            }
+            },
 
             (false, true) => {
                 // Prepend to vacant block on right.
@@ -478,14 +523,14 @@ impl<K: Key, V> HopSlotMap<K, V> {
                 self.freelist(front_data.prev).next = i;
                 self.freelist(front_data.next).prev = i;
                 *self.freelist(i) = front_data;
-            }
+            },
 
             (true, false) => {
                 // Append to vacant block on left.
                 let front = self.freelist(i - 1).other_end;
                 self.freelist(i).other_end = front;
                 self.freelist(front).other_end = i;
-            }
+            },
 
             (true, true) => {
                 // We must merge left and right.
@@ -499,7 +544,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
                 let back = right.other_end;
                 self.freelist(front).other_end = back;
                 self.freelist(back).other_end = front;
-            }
+            },
         }
 
         self.num_elems -= 1;
@@ -556,32 +601,29 @@ impl<K: Key, V> HopSlotMap<K, V> {
     where
         F: FnMut(K, &mut V) -> bool,
     {
-        let len = self.slots.len();
-        let mut i = 0;
-        while i < len {
-            // This is safe because removing elements does not shrink slots.
-            let slot = unsafe { self.slots.get_unchecked_mut(i) };
+        let mut elems_left_to_scan = self.len();
+        let mut cur = unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 };
+        while elems_left_to_scan > 0 {
+            // This is safe because removing elements does not shrink slots, cur always
+            // points to an occupied slot.
+            let idx = cur;
+            let slot = unsafe { self.slots.get_unchecked_mut(cur) };
             let version = slot.version;
+            let key = KeyData::new(cur as u32, version).into();
+            let should_remove = !f(key, unsafe { &mut *slot.u.value });
 
-            let should_remove = {
-                match slot.get_mut() {
-                    OccupiedMut(value) => {
-                        let key = KeyData::new(i as u32, version).into();
-                        !f(key, value)
-                    }
-                    VacantMut(free) => {
-                        i = free.other_end as usize;
-                        false
-                    }
-                }
+            cur = match self.slots.get(cur + 1).map(|s| s.get()) {
+                Some(Occupied(_)) => cur + 1,
+                Some(Vacant(free)) => free.other_end as usize + 1,
+                None => 0,
             };
 
             if should_remove {
-                // This is safe because we know that the slot was occupied.
-                unsafe { self.remove_from_slot(i) };
+                // This must happen after getting the next index.
+                unsafe { self.remove_from_slot(idx) };
             }
 
-            i += 1;
+            elems_left_to_scan -= 1;
         }
     }
 
@@ -623,8 +665,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// ```
     pub fn drain(&mut self) -> Drain<K, V> {
         Drain {
-            cur: 0,
-            num_left: self.len(),
+            cur: unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 },
             sm: self,
         }
     }
@@ -718,11 +759,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        &mut self
-            .slots
-            .get_unchecked_mut(key.data().idx as usize)
-            .u
-            .value
+        &mut self.slots.get_unchecked_mut(key.data().idx as usize).u.value
     }
 
     /// Returns mutable references to the values corresponding to the given
@@ -945,6 +982,23 @@ impl<K: Key, V> HopSlotMap<K, V> {
     }
 }
 
+impl<K: Key, V> Clone for HopSlotMap<K, V>
+where
+    V: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            slots: self.slots.clone(),
+            ..*self
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.slots.clone_from(&source.slots);
+        self.num_elems = source.num_elems;
+    }
+}
+
 impl<K: Key, V> Default for HopSlotMap<K, V> {
     fn default() -> Self {
         Self::with_key()
@@ -978,7 +1032,6 @@ impl<K: Key, V> IndexMut<K> for HopSlotMap<K, V> {
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: 'a> {
     cur: usize,
-    num_left: usize,
     sm: &'a mut HopSlotMap<K, V>,
 }
 
@@ -997,12 +1050,23 @@ pub struct IntoIter<K: Key, V> {
 /// An iterator over the key-value pairs in a [`HopSlotMap`].
 ///
 /// This iterator is created by [`HopSlotMap::iter`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Iter<'a, K: Key + 'a, V: 'a> {
     cur: usize,
     num_left: usize,
     slots: &'a [Slot<V>],
     _k: PhantomData<fn(K) -> K>,
+}
+
+impl<'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+    fn clone(&self) -> Self {
+        Iter {
+            cur: self.cur,
+            num_left: self.num_left,
+            slots: self.slots,
+            _k: self._k.clone(),
+        }
+    }
 }
 
 /// A mutable iterator over the key-value pairs in a [`HopSlotMap`].
@@ -1019,17 +1083,33 @@ pub struct IterMut<'a, K: Key + 'a, V: 'a> {
 /// An iterator over the keys in a [`HopSlotMap`].
 ///
 /// This iterator is created by [`HopSlotMap::keys`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
+}
+
+impl<'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+    fn clone(&self) -> Self {
+        Keys {
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 /// An iterator over the values in a [`HopSlotMap`].
 ///
 /// This iterator is created by [`HopSlotMap::values`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
+}
+
+impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+    fn clone(&self) -> Self {
+        Values {
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 /// A mutable iterator over the values in a [`HopSlotMap`].
@@ -1044,33 +1124,26 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
-        if self.cur >= self.sm.slots.len() {
+        // All unchecked indices are safe due to the invariants of the freelist
+        // and that self.sm.len() guarantees there is another element.
+        if self.sm.len() == 0 {
             return None;
         }
 
-        let (idx, version) = {
-            let slot = &self.sm.slots[self.cur];
-            match slot.get() {
-                Occupied(_) => (self.cur, slot.version),
-                Vacant(free) => {
-                    // Skip block of contiguous vacant slots.
-                    let idx = free.other_end as usize + 1;
-                    if idx >= self.sm.slots.len() {
-                        return None;
-                    }
-                    (idx, self.sm.slots[idx].version)
-                }
-            }
+        // Skip ahead to next element. Must do this before removing.
+        let idx = self.cur;
+        self.cur = match self.sm.slots.get(idx + 1).map(|s| s.get()) {
+            Some(Occupied(_)) => idx + 1,
+            Some(Vacant(free)) => free.other_end as usize + 1,
+            None => 0,
         };
 
-        self.cur = idx + 1;
-        self.num_left -= 1;
-        let key = KeyData::new(idx as u32, version).into();
-        Some((key, unsafe { self.sm.remove_from_slot(idx) }))
+        let key = KeyData::new(idx as u32, unsafe { self.sm.slots.get_unchecked(idx).version });
+        Some((key.into(), unsafe { self.sm.remove_from_slot(idx) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.num_left, Some(self.num_left))
+        (self.sm.len(), Some(self.sm.len()))
     }
 }
 
@@ -1097,7 +1170,7 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
                     return None;
                 }
                 idx
-            }
+            },
         };
 
         self.cur = idx + 1;
@@ -1157,7 +1230,7 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
                     return None;
                 }
                 idx
-            }
+            },
         };
 
         self.cur = idx + 1;
@@ -1285,8 +1358,9 @@ impl<K: Key, V> FromIterator<V> for HopSlotMap<K, V> {
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
-    use super::*;
     use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     struct SerdeSlot<T> {
@@ -1415,9 +1489,11 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::{HashMap, HashSet};
+
     use quickcheck::quickcheck;
-    use std::collections::HashMap;
+
+    use super::*;
 
     #[derive(Clone)]
     struct CountDrop<'a>(&'a std::cell::RefCell<usize>);
@@ -1535,6 +1611,14 @@ mod tests {
 
                     // Delete.
                     1 => {
+                        // 10% of the time test clear.
+                        if val % 10 == 0 {
+                            let hmvals: HashSet<_> = hm.drain().map(|(_, v)| v).collect();
+                            let smvals: HashSet<_> = sm.drain().map(|(_, v)| v).collect();
+                            if hmvals != smvals {
+                                return false;
+                            }
+                        }
                         if hm_keys.is_empty() { continue; }
 
                         let idx = val as usize % hm_keys.len();

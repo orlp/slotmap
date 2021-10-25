@@ -1,6 +1,5 @@
 //! Contains the secondary map implementation.
 
-use super::{is_older_version, Key, KeyData};
 #[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
@@ -13,6 +12,9 @@ use core::mem::MaybeUninit;
 use core::num::NonZeroU32;
 use core::ops::{Index, IndexMut};
 
+use super::{Key, KeyData};
+use crate::util::is_older_version;
+
 // This representation works because we don't have to store the versions
 // of removed elements.
 #[derive(Debug, Clone)]
@@ -22,8 +24,7 @@ enum Slot<T> {
     Vacant,
 }
 
-use self::Slot::Occupied;
-use self::Slot::Vacant;
+use self::Slot::{Occupied, Vacant};
 
 impl<T> Slot<T> {
     pub fn new_occupied(version: u32, value: T) -> Self {
@@ -457,11 +458,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(v, vec![(k, 1)]);
     /// ```
     pub fn drain(&mut self) -> Drain<K, V> {
-        Drain {
-            cur: 1,
-            num_left: self.len(),
-            sm: self,
-        }
+        Drain { cur: 1, sm: self }
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -606,7 +603,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
                     ptrs[i] = MaybeUninit::new(&mut *value);
                     slot_versions[i] = MaybeUninit::new(version.get());
                     *version = NonZeroU32::new(2).unwrap();
-                }
+                },
 
                 _ => break,
             }
@@ -621,7 +618,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
                 match self.slots.get_mut(idx) {
                     Some(Occupied { version, .. }) => {
                         *version = NonZeroU32::new_unchecked(slot_versions[j].assume_init());
-                    }
+                    },
                     _ => unreachable_unchecked(),
                 }
             }
@@ -886,11 +883,8 @@ impl<K: Key, V: PartialEq> PartialEq for SecondaryMap<K, V> {
             return false;
         }
 
-        self.iter().all(|(key, value)| {
-            other
-                .get(key)
-                .map_or(false, |other_value| *value == *other_value)
-        })
+        self.iter()
+            .all(|(key, value)| other.get(key).map_or(false, |other_value| *value == *other_value))
     }
 }
 
@@ -1040,7 +1034,7 @@ impl<'a, K: Key, V> Entry<'a, K, V> {
             Entry::Occupied(mut entry) => {
                 f(entry.get_mut());
                 Entry::Occupied(entry)
-            }
+            },
             Entry::Vacant(entry) => Entry::Vacant(entry),
         }
     }
@@ -1297,7 +1291,6 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
 /// This iterator is created by [`SecondaryMap::drain`].
 #[derive(Debug)]
 pub struct Drain<'a, K: Key + 'a, V: 'a> {
-    num_left: usize,
     sm: &'a mut SecondaryMap<K, V>,
     cur: usize,
 }
@@ -1323,6 +1316,16 @@ pub struct Iter<'a, K: Key + 'a, V: 'a> {
     _k: PhantomData<fn(K) -> K>,
 }
 
+impl<'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
+    fn clone(&self) -> Self {
+        Iter {
+            num_left: self.num_left,
+            slots: self.slots.clone(),
+            _k: self._k,
+        }
+    }
+}
+
 /// A mutable iterator over the key-value pairs in a [`SecondaryMap`].
 ///
 /// This iterator is created by [`SecondaryMap::iter_mut`].
@@ -1341,12 +1344,28 @@ pub struct Keys<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
 }
 
+impl<'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
+    fn clone(&self) -> Self {
+        Keys {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 /// An iterator over the values in a [`SecondaryMap`].
 ///
 /// This iterator is created by [`SecondaryMap::values`].
 #[derive(Debug)]
 pub struct Values<'a, K: Key + 'a, V: 'a> {
     inner: Iter<'a, K, V>,
+}
+
+impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+    fn clone(&self) -> Self {
+        Values {
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 /// A mutable iterator over the values in a [`SecondaryMap`].
@@ -1361,15 +1380,11 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
-        let len = self.sm.slots.len();
-        while self.cur < len {
+        while let Some(slot) = self.sm.slots.get_mut(self.cur) {
             let idx = self.cur;
             self.cur += 1;
-
-            let slot = unsafe { self.sm.slots.get_unchecked_mut(idx) };
             if let Occupied { value, version } = replace(slot, Slot::new_vacant()) {
                 self.sm.num_elems -= 1;
-                self.num_left -= 1;
                 let key = KeyData::new(idx as u32, version.get()).into();
                 return Some((key, value));
             }
@@ -1379,7 +1394,7 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.num_left, Some(self.num_left))
+        (self.sm.len(), Some(self.sm.len()))
     }
 }
 
@@ -1538,8 +1553,9 @@ impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
-    use super::*;
     use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     struct SerdeSlot<T> {
@@ -1622,9 +1638,11 @@ mod serialize {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
-    use quickcheck::quickcheck;
     use std::collections::HashMap;
+
+    use quickcheck::quickcheck;
+
+    use crate::*;
 
     #[cfg(all(nightly, feature = "unstable"))]
     #[test]

@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/slotmap/1.0.3")]
+#![doc(html_root_url = "https://docs.rs/slotmap/1.0.6")]
 #![crate_name = "slotmap"]
 #![cfg_attr(all(nightly, feature = "unstable"), feature(try_reserve))]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
@@ -219,25 +219,22 @@ pub mod hop;
 pub mod secondary;
 #[cfg(feature = "std")]
 pub mod sparse_secondary;
-
-#[doc(inline)]
-pub use crate::basic::SlotMap;
-
-#[doc(inline)]
-pub use crate::dense::DenseSlotMap;
-
-#[doc(inline)]
-pub use crate::hop::HopSlotMap;
-
-#[doc(inline)]
-pub use crate::secondary::SecondaryMap;
-
-#[cfg(feature = "std")]
-#[doc(inline)]
-pub use crate::sparse_secondary::SparseSecondaryMap;
+pub(crate) mod util;
 
 use core::fmt::{self, Debug, Formatter};
 use core::num::NonZeroU32;
+
+#[doc(inline)]
+pub use crate::basic::SlotMap;
+#[doc(inline)]
+pub use crate::dense::DenseSlotMap;
+#[doc(inline)]
+pub use crate::hop::HopSlotMap;
+#[doc(inline)]
+pub use crate::secondary::SecondaryMap;
+#[cfg(feature = "std")]
+#[doc(inline)]
+pub use crate::sparse_secondary::SparseSecondaryMap;
 
 // Keep Slottable for backwards compatibility, but warn about deprecation
 // and hide from documentation.
@@ -328,7 +325,13 @@ impl Default for KeyData {
 /// To prevent this, it is suggested to have a unique key type for each slot
 /// map. You can create new key types using [`new_key_type!`], which makes a
 /// new type identical to [`DefaultKey`], just with a different name.
-pub trait Key:
+///
+/// This trait is intended to be a thin wrapper around [`KeyData`], and all
+/// methods must behave exactly as if we're operating on a [`KeyData`] directly.
+/// The internal unsafe code relies on this, therefore this trait is `unsafe` to
+/// implement. It is strongly suggested to simply use [`new_key_type!`] instead
+/// of implementing this trait yourself.
+pub unsafe trait Key:
     From<KeyData>
     + Copy
     + Clone
@@ -450,7 +453,7 @@ macro_rules! new_key_type {
             }
         }
 
-        impl $crate::Key for $name {
+        unsafe impl $crate::Key for $name {
             fn data(&self) -> $crate::KeyData {
                 self.0
             }
@@ -503,18 +506,12 @@ new_key_type! {
     pub struct DefaultKey;
 }
 
-// Returns if a is an older version than b, taking into account wrapping of
-// versions.
-fn is_older_version(a: u32, b: u32) -> bool {
-    let diff = a.wrapping_sub(b);
-    diff >= (1 << 31)
-}
-
 // Serialization with serde.
 #[cfg(feature = "serde")]
 mod serialize {
-    use super::*;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::*;
 
     #[derive(Serialize, Deserialize)]
     pub struct SerKey {
@@ -570,7 +567,7 @@ mod tests {
 
     #[test]
     fn check_is_older_version() {
-        use super::*;
+        use super::util::is_older_version;
 
         let is_older = |a, b| is_older_version(a, b);
         assert!(!is_older(42, 42));
@@ -578,6 +575,38 @@ mod tests {
         assert!(is_older(0, 1 << 31));
         assert!(!is_older(0, (1 << 31) + 1));
         assert!(is_older(u32::MAX, 0));
+    }
+
+    #[test]
+    fn iters_cloneable() {
+        use super::*;
+
+        struct NoClone;
+
+        let mut sm = SlotMap::new();
+        let mut hsm = HopSlotMap::new();
+        let mut dsm = DenseSlotMap::new();
+        let mut scm = SecondaryMap::new();
+        let mut sscm = SparseSecondaryMap::new();
+        scm.insert(sm.insert(NoClone), NoClone);
+        sscm.insert(hsm.insert(NoClone), NoClone);
+        dsm.insert(NoClone);
+
+        let _ = sm.keys().clone();
+        let _ = sm.values().clone();
+        let _ = sm.iter().clone();
+        let _ = hsm.keys().clone();
+        let _ = hsm.values().clone();
+        let _ = hsm.iter().clone();
+        let _ = dsm.keys().clone();
+        let _ = dsm.values().clone();
+        let _ = dsm.iter().clone();
+        let _ = scm.keys().clone();
+        let _ = scm.values().clone();
+        let _ = scm.iter().clone();
+        let _ = sscm.keys().clone();
+        let _ = sscm.values().clone();
+        let _ = sscm.iter().clone();
     }
 
     #[cfg(feature = "serde")]

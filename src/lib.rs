@@ -207,10 +207,12 @@
 extern crate alloc;
 
 // So our macros can refer to these.
-#[cfg(feature = "serde")]
 #[doc(hidden)]
 pub mod __impl {
+    #[cfg(feature = "serde")]
     pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    pub use core::convert::From;
+    pub use core::result::Result;
 }
 
 pub mod basic;
@@ -447,7 +449,7 @@ macro_rules! new_key_type {
         #[repr(transparent)]
         $vis struct $name($crate::KeyData);
 
-        impl From<$crate::KeyData> for $name {
+        impl $crate::__impl::From<$crate::KeyData> for $name {
             fn from(k: $crate::KeyData) -> Self {
                 $name(k)
             }
@@ -473,7 +475,7 @@ macro_rules! new_key_type {
 macro_rules! __serialize_key {
     ( $name:ty ) => {
         impl $crate::__impl::Serialize for $name {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            fn serialize<S>(&self, serializer: S) -> $crate::__impl::Result<S::Ok, S::Error>
             where
                 S: $crate::__impl::Serializer,
             {
@@ -482,7 +484,7 @@ macro_rules! __serialize_key {
         }
 
         impl<'de> $crate::__impl::Deserialize<'de> for $name {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            fn deserialize<D>(deserializer: D) -> $crate::__impl::Result<Self, D::Error>
             where
                 D: $crate::__impl::Deserializer<'de>,
             {
@@ -556,7 +558,18 @@ mod tests {
     // in the *users* scope, which might not have that.
     #[test]
     fn macro_expansion() {
+        #![allow(dead_code)]
         use super::new_key_type;
+
+        // Clobber namespace with clashing names - should still work.
+        trait Serialize { }
+        trait Deserialize { }
+        trait Serializer { }
+        trait Deserializer { }
+        trait Key { }
+        trait From { }
+        struct Result;
+        struct KeyData;
 
         new_key_type! {
             struct A;

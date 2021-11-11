@@ -4,7 +4,6 @@
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 #![cfg_attr(all(nightly, doc), feature(doc_cfg))]
 #![warn(
-    invalid_html_tags,
     missing_debug_implementations,
     trivial_casts,
     trivial_numeric_casts,

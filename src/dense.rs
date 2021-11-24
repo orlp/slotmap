@@ -234,6 +234,11 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             .map_or(false, |slot| slot.version == kd.version.get())
     }
 
+    /// Return a (unordered) slice of the values
+    pub fn values_as_slice(&self) -> &[V] {
+        &self.values
+    }
+
     /// Inserts a value into the slot map. Returns a unique key that can be used
     /// to access this value.
     ///
@@ -759,8 +764,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let check: HashSet<_> = vec![&10, &20, &30].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values(&self) -> Values<K, V> {
-        Values { inner: self.iter() }
+    pub fn values(&self) -> Values<V> {
+        Values { inner: self.values.iter() }
     }
 
     /// An iterator visiting all values mutably in arbitrary order. The iterator
@@ -780,9 +785,9 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let check: HashSet<_> = vec![3, 6, 9].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values_mut(&mut self) -> ValuesMut<K, V> {
+    pub fn values_mut(&mut self) -> ValuesMut<V> {
         ValuesMut {
-            inner: self.iter_mut(),
+            inner: self.values.iter_mut(),
         }
     }
 }
@@ -900,11 +905,11 @@ impl<'a, K: 'a + Key, V: 'a> Clone for Keys<'a, K, V> {
 ///
 /// This iterator is created by [`DenseSlotMap::values`].
 #[derive(Debug)]
-pub struct Values<'a, K: 'a + Key, V> {
-    inner: Iter<'a, K, V>,
+pub struct Values<'a, V> {
+    inner: core::slice::Iter<'a, V>,
 }
 
-impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
+impl<'a, V: 'a> Clone for Values<'a, V> {
     fn clone(&self) -> Self {
         Values {
             inner: self.inner.clone(),
@@ -916,8 +921,8 @@ impl<'a, K: 'a + Key, V: 'a> Clone for Values<'a, K, V> {
 ///
 /// This iterator is created by [`DenseSlotMap::values_mut`].
 #[derive(Debug)]
-pub struct ValuesMut<'a, K: 'a + Key, V: 'a> {
-    inner: IterMut<'a, K, V>,
+pub struct ValuesMut<'a, V: 'a> {
+    inner: core::slice::IterMut<'a, V>,
 }
 
 impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
@@ -1017,11 +1022,11 @@ impl<'a, K: 'a + Key, V> Iterator for Keys<'a, K, V> {
     }
 }
 
-impl<'a, K: 'a + Key, V> Iterator for Values<'a, K, V> {
+impl<'a, V> Iterator for Values<'a, V> {
     type Item = &'a V;
 
     fn next(&mut self) -> Option<&'a V> {
-        self.inner.next().map(|(_, value)| value)
+        self.inner.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1029,11 +1034,11 @@ impl<'a, K: 'a + Key, V> Iterator for Values<'a, K, V> {
     }
 }
 
-impl<'a, K: 'a + Key, V> Iterator for ValuesMut<'a, K, V> {
+impl<'a, V> Iterator for ValuesMut<'a, V> {
     type Item = &'a mut V;
 
     fn next(&mut self) -> Option<&'a mut V> {
-        self.inner.next().map(|(_, value)| value)
+        self.inner.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1074,16 +1079,16 @@ impl<K: Key, V> IntoIterator for DenseSlotMap<K, V> {
 impl<'a, K: 'a + Key, V> FusedIterator for Iter<'a, K, V> {}
 impl<'a, K: 'a + Key, V> FusedIterator for IterMut<'a, K, V> {}
 impl<'a, K: 'a + Key, V> FusedIterator for Keys<'a, K, V> {}
-impl<'a, K: 'a + Key, V> FusedIterator for Values<'a, K, V> {}
-impl<'a, K: 'a + Key, V> FusedIterator for ValuesMut<'a, K, V> {}
+impl<'a, V> FusedIterator for Values<'a, V> {}
+impl<'a, V> FusedIterator for ValuesMut<'a, V> {}
 impl<'a, K: 'a + Key, V> FusedIterator for Drain<'a, K, V> {}
 impl<K: Key, V> FusedIterator for IntoIter<K, V> {}
 
 impl<'a, K: 'a + Key, V> ExactSizeIterator for Iter<'a, K, V> {}
 impl<'a, K: 'a + Key, V> ExactSizeIterator for IterMut<'a, K, V> {}
 impl<'a, K: 'a + Key, V> ExactSizeIterator for Keys<'a, K, V> {}
-impl<'a, K: 'a + Key, V> ExactSizeIterator for Values<'a, K, V> {}
-impl<'a, K: 'a + Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {}
+impl<'a, V> ExactSizeIterator for Values<'a, V> {}
+impl<'a, V> ExactSizeIterator for ValuesMut<'a, V> {}
 impl<'a, K: 'a + Key, V> ExactSizeIterator for Drain<'a, K, V> {}
 impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
 

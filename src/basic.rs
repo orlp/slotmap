@@ -47,6 +47,7 @@ impl<T> Slot<T> {
     // Is this slot occupied?
     #[inline(always)]
     pub fn occupied(&self) -> bool {
+        // Oddness check, Even = vacant, odd = occupied.
         self.version % 2 > 0
     }
 
@@ -404,6 +405,7 @@ impl<K: Key, V> SlotMap<K, V> {
         }
 
         if let Some(slot) = self.slots.get_mut(self.free_head as usize) {
+            // By bitwise ORing by 1 on an even number we get an odd number, signifying that the slot is occupied.
             let occupied_version = slot.version | 1;
             let kd = KeyData::new(self.free_head, occupied_version);
 
@@ -448,6 +450,9 @@ impl<K: Key, V> SlotMap<K, V> {
         slot.u.next_free = self.free_head;
         self.free_head = idx as u32;
         self.num_elems -= 1;
+        // Increment the slot version.
+        // By adding 1 on an odd number we get an even number, 
+        // signifying that the slot is vacant.
         slot.version = slot.version.wrapping_add(1);
 
         value

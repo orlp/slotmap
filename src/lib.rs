@@ -208,10 +208,10 @@ extern crate alloc;
 // So our macros can refer to these.
 #[doc(hidden)]
 pub mod __impl {
-    #[cfg(feature = "serde")]
-    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
     pub use core::convert::From;
     pub use core::result::Result;
+    #[cfg(feature = "serde")]
+    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
 }
 
 pub mod basic;
@@ -262,7 +262,10 @@ pub struct KeyData {
 }
 
 impl KeyData {
-    fn new(idx: u32, version: u32) -> Self {
+    /// KeyData used for `Key::NULL`
+    pub const NULL: KeyData = Self::new(core::u32::MAX, 1);
+
+    const fn new(idx: u32, version: u32) -> Self {
         debug_assert!(version > 0);
 
         Self {
@@ -271,6 +274,8 @@ impl KeyData {
         }
     }
 
+    #[deprecated]
+    /// **Deprecated**: Use `KeyData::NULL` instead
     fn null() -> Self {
         Self::new(core::u32::MAX, 1)
     }
@@ -313,8 +318,9 @@ impl Debug for KeyData {
 }
 
 impl Default for KeyData {
+    #[inline]
     fn default() -> Self {
-        Self::null()
+        Self::NULL
     }
 }
 
@@ -344,6 +350,26 @@ pub unsafe trait Key:
     + core::hash::Hash
     + core::fmt::Debug
 {
+    /// A key that is always invalid and distinct from any non-null
+    /// key.
+    ///
+    /// A null key is always invalid, but an invalid key (that is, a key that
+    /// has been removed from the slot map) does not become a null key. A null
+    /// is safe to use with any safe method of any slot map instance.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let k = sm.insert(42);
+    /// let nk = DefaultKey::NULL;
+    /// assert!(nk.is_null());
+    /// assert!(k != nk);
+    /// assert_eq!(sm.get(nk), None);
+    /// ```
+    const NULL: Self;
+
     /// Creates a new key that is always invalid and distinct from any non-null
     /// key. A null key can only be created through this method (or default
     /// initialization of keys made with [`new_key_type!`], which calls this
@@ -352,6 +378,8 @@ pub unsafe trait Key:
     /// A null key is always invalid, but an invalid key (that is, a key that
     /// has been removed from the slot map) does not become a null key. A null
     /// is safe to use with any safe method of any slot map instance.
+    ///
+    /// **Deprecated**: Use `DefaultKey::NULL` instead
     ///
     /// # Examples
     ///
@@ -364,6 +392,8 @@ pub unsafe trait Key:
     /// assert!(k != nk);
     /// assert_eq!(sm.get(nk), None);
     /// ```
+    #[deprecated]
+    #[allow(deprecated)]
     fn null() -> Self {
         KeyData::null().into()
     }
@@ -455,6 +485,8 @@ macro_rules! new_key_type {
         }
 
         unsafe impl $crate::Key for $name {
+            const NULL: Self = $name($crate::KeyData::NULL);
+
             fn data(&self) -> $crate::KeyData {
                 self.0
             }
@@ -561,12 +593,12 @@ mod tests {
         use super::new_key_type;
 
         // Clobber namespace with clashing names - should still work.
-        trait Serialize { }
-        trait Deserialize { }
-        trait Serializer { }
-        trait Deserializer { }
-        trait Key { }
-        trait From { }
+        trait Serialize {}
+        trait Deserialize {}
+        trait Serializer {}
+        trait Deserializer {}
+        trait Key {}
+        trait From {}
         struct Result;
         struct KeyData;
 

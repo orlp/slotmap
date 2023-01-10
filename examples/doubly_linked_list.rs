@@ -23,8 +23,8 @@ impl<T> List<T> {
     pub fn new() -> Self {
         Self {
             sm: SlotMap::with_key(),
-            head: ListKey::null(),
-            tail: ListKey::null(),
+            head: ListKey::NULL,
+            tail: ListKey::NULL,
         }
     }
 
@@ -35,7 +35,7 @@ impl<T> List<T> {
     pub fn push_head(&mut self, value: T) -> ListKey {
         let k = self.sm.insert(Node {
             value,
-            prev: ListKey::null(),
+            prev: ListKey::NULL,
             next: self.head,
         });
 
@@ -52,7 +52,7 @@ impl<T> List<T> {
         let k = self.sm.insert(Node {
             value,
             prev: self.tail,
-            next: ListKey::null(),
+            next: ListKey::NULL,
         });
 
         if let Some(old_tail) = self.sm.get_mut(self.tail) {

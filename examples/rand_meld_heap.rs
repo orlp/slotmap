@@ -28,7 +28,7 @@ impl<T: Ord + std::fmt::Debug> RandMeldHeap<T> {
         Self {
             sm: SlotMap::with_key(),
             rng: std::num::Wrapping(0xdead_beef),
-            root: HeapKey::null(),
+            root: HeapKey::NULL,
         }
     }
 
@@ -41,8 +41,8 @@ impl<T: Ord + std::fmt::Debug> RandMeldHeap<T> {
     pub fn insert(&mut self, value: T) -> NodeHandle {
         let k = self.sm.insert(Node {
             value,
-            children: [HeapKey::null(), HeapKey::null()],
-            parent: HeapKey::null(),
+            children: [HeapKey::NULL, HeapKey::NULL],
+            parent: HeapKey::NULL,
         });
 
         let root = self.root;
@@ -55,7 +55,7 @@ impl<T: Ord + std::fmt::Debug> RandMeldHeap<T> {
         self.sm.remove(self.root).map(|root| {
             self.root = self.meld(root.children[0], root.children[1]);
             if let Some(new_root) = self.sm.get_mut(self.root) {
-                new_root.parent = HeapKey::null();
+                new_root.parent = HeapKey::NULL;
             }
 
             root.value
@@ -75,8 +75,8 @@ impl<T: Ord + std::fmt::Debug> RandMeldHeap<T> {
         self.unlink_node(node);
         self.sm[node] = Node {
             value,
-            children: [HeapKey::null(), HeapKey::null()],
-            parent: HeapKey::null(),
+            children: [HeapKey::NULL, HeapKey::NULL],
+            parent: HeapKey::NULL,
         };
         let root = self.root;
         self.root = self.meld(node, root);

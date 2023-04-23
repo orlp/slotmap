@@ -223,6 +223,7 @@ pub mod sparse_secondary;
 pub(crate) mod util;
 
 use core::fmt::{self, Debug, Formatter};
+use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
 
 #[doc(inline)]
@@ -255,7 +256,7 @@ impl<T> Slottable for T {}
 /// This implements [`Ord`](std::cmp::Ord) so keys can be stored in e.g.
 /// [`BTreeMap`](std::collections::BTreeMap), but the order of keys is
 /// unspecified.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct KeyData {
     idx: u32,
     version: NonZeroU32,
@@ -315,6 +316,16 @@ impl Debug for KeyData {
 impl Default for KeyData {
     fn default() -> Self {
         Self::null()
+    }
+}
+
+impl Hash for KeyData
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // A derived Hash impl would call write_u32 twice. We call write_u64
+        // once, which is beneficial if the hasher implements write_u64
+        // explicitly.
+        state.write_u64(self.as_ffi())
     }
 }
 

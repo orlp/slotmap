@@ -471,20 +471,35 @@ macro_rules! new_key_type {
         $vis struct $name($crate::KeyData);
 
         #[derive(Copy, Clone, Default,
-            Eq, PartialEq, Ord, PartialOrd,
-            Hash, Debug)]
+            Eq, Ord, PartialOrd, Debug)]
         #[cfg(debug_assertions)]
         $(#[$outer])*
         $vis struct $name {
             key_data: $crate::KeyData,
             location: Option<&'static core::panic::Location<'static>>
+        }        
+
+        #[cfg(debug_assertions)]
+        impl PartialEq for $name {
+            #[inline]
+            fn eq(&self, other: &$name) -> bool {
+                self.key_data == other.key_data
+            }
+        }
+
+        #[cfg(debug_assertions)]
+        impl core::hash::Hash for $name {
+            #[inline]
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                self.key_data.hash(state);
+            }
         }
 
         impl $crate::__impl::From<$crate::KeyData> for $name {
             fn from(k: $crate::KeyData) -> Self {
                 $name {
                     key_data: k,
-                    location: Some(core::panic::Location::caller())
+                    location: None
                 }
             }
         }

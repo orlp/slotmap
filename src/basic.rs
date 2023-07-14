@@ -17,7 +17,7 @@ use core::ops::{Index, IndexMut};
 use core::panic::Location;
 
 use crate::util::{Never, UnwrapUnchecked};
-use crate::{DefaultKey, Key, KeyData};
+use crate::{DefaultKey, Key, KeyData, new_key};
 
 // Storage inside a slot or metadata for the freelist when vacant.
 union SlotUnion<T> {
@@ -419,7 +419,7 @@ impl<K: Key, V> SlotMap<K, V> {
             let kd = KeyData::new(self.free_head, occupied_version);
 
             // Get value first in case f panics or returns an error.
-            let value = f(kd.into())?;
+            let value = f(new_key!(kd, self))?;
 
             // Update.
             unsafe {
@@ -704,7 +704,7 @@ impl<K: Key, V> SlotMap<K, V> {
         let mut i = 0;
         while i < N {
             let kd = keys[i].data();
-            if !self.contains_key(kd.into()) {
+            if !self.contains_key(new_key!(kd, self)) {
                 break;
             }
 
@@ -1629,5 +1629,24 @@ mod tests {
         sm2.insert(3);
 
         sm2.get(k1);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn slotmap_key_iter_mut() {
+        let mut sm1 = SlotMap::new();
+        let k1 = sm1.insert(10);
+        let k2 = sm1.insert(20);
+        let k3 = sm1.insert(30);
+
+        for (k, v) in sm1.iter_mut() {
+            println!("k: {k:?}");
+            if k != k2 {
+                *v *= -1
+            }
+        }
+        assert_eq!(sm1[k1], -10);
+        assert_eq!(sm1[k2], 20);
+        assert_eq!(sm1[k3], -30);
     }
 }

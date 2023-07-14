@@ -497,16 +497,30 @@ macro_rules! new_key_type {
 
         impl $crate::__impl::From<$crate::KeyData> for $name {
             fn from(k: $crate::KeyData) -> Self {
-                $name {
-                    key_data: k,
-                    location: None
+                #[cfg(debug_assertions)]
+                {
+                    $name {
+                        key_data: k,
+                        location: None
+                    }
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    $name(k)
                 }
             }
         }
 
         unsafe impl $crate::Key for $name {
             fn data(&self) -> $crate::KeyData {
-                self.key_data
+                #[cfg(debug_assertions)]    
+                {
+                    self.key_data
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    self.0
+                }
             }
             
             #[cfg(debug_assertions)]
@@ -574,17 +588,18 @@ new_key_type! {
 macro_rules! new_key {
     ($kd:ident, $self:ident) => {
         {
-            let mut key: K;
+            
             #[cfg(debug_assertions)]
             {
-                key = $kd.into();
-                key.set_location($self.unique_location)
+                let mut key: K = $kd.into();
+                key.set_location($self.unique_location);
+                key
             }
             #[cfg(not(debug_assertions))]
             {
-                key = kd.into()
+                Into::<K>::into($kd)
             }  
-            key
+            
         }
     };
 }

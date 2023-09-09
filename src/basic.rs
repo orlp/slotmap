@@ -47,7 +47,7 @@ impl<T> Slot<T> {
     // Is this slot occupied?
     #[inline(always)]
     pub fn occupied(&self) -> bool {
-        self.version % 2 > 0
+        self.version & 1 != 0
     }
 
     pub fn get(&self) -> SlotContent<T> {

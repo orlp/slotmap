@@ -1,7 +1,7 @@
 Version 1.0.6
 =============
 
- - Made Key trait unsafe, as it was erroneously safe to implement. 
+ - Made `Key` trait unsafe, as it was erroneously safe to implement.
 
 
 Version 1.0.5
@@ -38,7 +38,7 @@ Version 1.0.2
 Version 1.0.1
 =============
 
- - Fixed an instance where an uninitialized [u32; N] was created. The
+ - Fixed an instance where an uninitialized `[u32; N]` was created. The
    uninitialized values were never read - the code always initialized them
    before reading - but simply having the variable be uninitialized (despite all
    bit patterns being valid) is technically undefined behavior.

@@ -199,10 +199,11 @@ extern crate alloc;
 // So our macros can refer to these.
 #[doc(hidden)]
 pub mod __impl {
-    #[cfg(feature = "serde")]
-    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
     pub use core::convert::From;
     pub use core::result::Result;
+
+    #[cfg(feature = "serde")]
+    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
 }
 
 pub mod basic;
@@ -307,8 +308,7 @@ impl Default for KeyData {
     }
 }
 
-impl Hash for KeyData
-{
+impl Hash for KeyData {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // A derived Hash impl would call write_u32 twice. We call write_u64
         // once, which is beneficial if the hasher implements write_u64
@@ -560,12 +560,12 @@ mod tests {
         use super::new_key_type;
 
         // Clobber namespace with clashing names - should still work.
-        trait Serialize { }
-        trait Deserialize { }
-        trait Serializer { }
-        trait Deserializer { }
-        trait Key { }
-        trait From { }
+        trait Serialize {}
+        trait Deserialize {}
+        trait Serializer {}
+        trait Deserializer {}
+        trait Key {}
+        trait From {}
         struct Result;
         struct KeyData;
 

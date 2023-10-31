@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
 use super::{Key, KeyData};
-use crate::util::{is_older_version, UnwrapUnchecked};
+use crate::util::is_older_version;
 
 #[derive(Debug, Clone)]
 struct Slot<T> {
@@ -249,7 +249,9 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub fn contains_key(&self, key: K) -> bool {
         let kd = key.data();
-        self.slots.get(&kd.idx).map_or(false, |slot| slot.version == kd.version.get())
+        self.slots
+            .get(&kd.idx)
+            .map_or(false, |slot| slot.version == kd.version.get())
     }
 
     /// Inserts a value into the secondary map at the given `key`. Can silently
@@ -296,10 +298,13 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             return None;
         }
 
-        self.slots.insert(kd.idx, Slot {
-            version: kd.version.get(),
-            value,
-        });
+        self.slots.insert(
+            kd.idx,
+            Slot {
+                version: kd.version.get(),
+                value,
+            },
+        );
 
         None
     }
@@ -467,7 +472,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
         debug_assert!(self.contains_key(key));
-        self.get(key).unwrap_unchecked_()
+        self.get(key).unwrap_unchecked()
     }
 
     /// Returns a mutable reference to the value corresponding to the key.
@@ -516,7 +521,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        self.get_mut(key).unwrap_unchecked_()
+        self.get_mut(key).unwrap_unchecked()
     }
 
     /// Returns mutable references to the values corresponding to the given
@@ -860,8 +865,11 @@ where
             return false;
         }
 
-        self.iter()
-            .all(|(key, value)| other.get(key).map_or(false, |other_value| *value == *other_value))
+        self.iter().all(|(key, value)| {
+            other
+                .get(key)
+                .map_or(false, |other_value| *value == *other_value)
+        })
     }
 }
 
@@ -1588,7 +1596,10 @@ mod tests {
         sec.insert(key1, 1234);
         assert_eq!(sec[key1], 1234);
         assert_eq!(sec.len(), 1);
-        let sec2 = sec.iter().map(|(k, &v)| (k, v)).collect::<FastSparseSecondaryMap<_, _>>();
+        let sec2 = sec
+            .iter()
+            .map(|(k, &v)| (k, v))
+            .collect::<FastSparseSecondaryMap<_, _>>();
         assert_eq!(sec, sec2);
     }
 

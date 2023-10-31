@@ -44,3 +44,10 @@ impl<T, E: Debug> UnwrapUnchecked<T> for Result<T, E> {
         }
     }
 }
+
+pub struct PanicOnDrop(pub &'static str);
+impl Drop for PanicOnDrop {
+    fn drop(&mut self) {
+        panic!("{}", self.0);
+    }
+}

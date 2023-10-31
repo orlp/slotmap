@@ -14,7 +14,7 @@ use core::iter::FusedIterator;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, UnwrapUnchecked};
+use crate::util::{Never, UnwrapUnchecked, PanicOnDrop};
 use crate::{DefaultKey, Key, KeyData};
 
 // A slot, which represents storage for an index and a current version.
@@ -789,10 +789,14 @@ where
     }
 
     fn clone_from(&mut self, source: &Self) {
-        self.keys.clone_from(&source.keys);
+        // There is no way to recover from a botched clone of slots due to a
+        // panic. So we abort by double-panicking.
+        let guard = PanicOnDrop("abort - a panic during DenseSlotMap::clone_from is unrecoverable");
         self.values.clone_from(&source.values);
+        self.keys.clone_from(&source.keys);
         self.slots.clone_from(&source.slots);
         self.free_head = source.free_head;
+        core::mem::forget(guard);
     }
 }
 

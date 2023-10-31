@@ -13,7 +13,7 @@ use core::marker::PhantomData;
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, UnwrapUnchecked};
+use crate::util::{Never, UnwrapUnchecked, PanicOnDrop};
 use crate::{DefaultKey, Key, KeyData};
 
 // Storage inside a slot or metadata for the freelist when vacant.
@@ -98,15 +98,19 @@ impl<T: Clone> Clone for Slot<T> {
     fn clone_from(&mut self, source: &Self) {
         match (self.get_mut(), source.get()) {
             (OccupiedMut(self_val), Occupied(source_val)) => self_val.clone_from(source_val),
+            (OccupiedMut(_), Vacant(&next_free)) => unsafe {
+                // SAFETY: we are occupied.
+                ManuallyDrop::drop(&mut self.u.value);
+                self.u = SlotUnion { next_free };
+            },
             (VacantMut(self_next_free), Vacant(&source_next_free)) => {
                 *self_next_free = source_next_free
             },
-            (_, Occupied(value)) => {
+            (VacantMut(_), Occupied(value)) => {
                 self.u = SlotUnion {
                     value: ManuallyDrop::new(value.clone()),
                 }
             },
-            (_, Vacant(&next_free)) => self.u = SlotUnion { next_free },
         }
         self.version = source.version;
     }
@@ -888,9 +892,13 @@ where
     }
 
     fn clone_from(&mut self, source: &Self) {
+        // There is no way to recover from a botched clone of slots due to a
+        // panic. So we abort by double-panicking.
+        let guard = PanicOnDrop("abort - a panic during SlotMap::clone_from is unrecoverable");
         self.slots.clone_from(&source.slots);
         self.free_head = source.free_head;
         self.num_elems = source.num_elems;
+        core::mem::forget(guard);
     }
 }
 

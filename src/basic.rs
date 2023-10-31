@@ -198,19 +198,9 @@ impl<K: Key, V> SlotMap<K, V> {
     /// let hello = messages.insert("Hello");
     /// ```
     pub fn with_capacity_and_key(capacity: usize) -> Self {
-        // Create slots with a sentinel at index 0.
-        // We don't actually use the sentinel for anything currently, but
-        // HopSlotMap does, and if we want keys to remain valid through
-        // conversion we have to have one as well.
-        let mut slots = Vec::with_capacity(capacity + 1);
-        slots.push(Slot {
-            u: SlotUnion { next_free: 0 },
-            version: 0,
-        });
-
         Self {
-            slots,
-            free_head: 1,
+            slots: Vec::with_capacity(capacity),
+            free_head: 0,
             num_elems: 0,
             _k: PhantomData,
         }
@@ -259,8 +249,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm.capacity(), 10);
     /// ```
     pub fn capacity(&self) -> usize {
-        // One slot is reserved for the sentinel.
-        self.slots.capacity() - 1
+        self.slots.capacity()
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted
@@ -281,8 +270,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert!(sm.capacity() >= 33);
     /// ```
     pub fn reserve(&mut self, additional: usize) {
-        // One slot is reserved for the sentinel.
-        let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
+        let needed = (self.len() + additional).saturating_sub(self.slots.len());
         self.slots.reserve(needed);
     }
 
@@ -302,8 +290,7 @@ impl<K: Key, V> SlotMap<K, V> {
     #[cfg(all(nightly, any(doc, feature = "unstable")))]
     #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
-        // One slot is reserved for the sentinel.
-        let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
+        let needed = (self.len() + additional).saturating_sub(self.slots.len());
         self.slots.try_reserve(needed)
     }
 
@@ -505,7 +492,7 @@ impl<K: Key, V> SlotMap<K, V> {
     where
         F: FnMut(K, &mut V) -> bool,
     {
-        for i in 1..self.slots.len() {
+        for i in 0..self.slots.len() {
             // This is safe because removing elements does not shrink slots.
             let slot = unsafe { self.slots.get_unchecked_mut(i) };
             let version = slot.version;
@@ -567,7 +554,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(v, vec![(k, 0)]);
     /// ```
     pub fn drain(&mut self) -> Drain<K, V> {
-        Drain { cur: 1, sm: self }
+        Drain { cur: 0, sm: self }
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -775,10 +762,8 @@ impl<K: Key, V> SlotMap<K, V> {
     /// }
     /// ```
     pub fn iter(&self) -> Iter<K, V> {
-        let mut it = self.slots.iter().enumerate();
-        it.next(); // Skip sentinel.
         Iter {
-            slots: it,
+            slots: self.slots.iter().enumerate(),
             num_left: self.len(),
             _k: PhantomData,
         }
@@ -811,12 +796,9 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm[k2], -30);
     /// ```
     pub fn iter_mut(&mut self) -> IterMut<K, V> {
-        let len = self.len();
-        let mut it = self.slots.iter_mut().enumerate();
-        it.next(); // Skip sentinel.
         IterMut {
-            num_left: len,
-            slots: it,
+            num_left: self.len(),
+            slots: self.slots.iter_mut().enumerate(),
             _k: PhantomData,
         }
     }
@@ -1189,12 +1171,9 @@ impl<K: Key, V> IntoIterator for SlotMap<K, V> {
     type IntoIter = IntoIter<K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let len = self.len();
-        let mut it = self.slots.into_iter().enumerate();
-        it.next(); // Skip sentinel.
         IntoIter {
-            num_left: len,
-            slots: it,
+            num_left: self.len(),
+            slots: self.slots.into_iter().enumerate(),
             _k: PhantomData,
         }
     }
@@ -1294,23 +1273,15 @@ mod serialize {
                 return Err(de::Error::custom(&"too many slots"));
             }
 
-            // Ensure the first slot exists and is empty for the sentinel.
-            if slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
-                return Err(de::Error::custom(&"first slot not empty"));
-            }
-
-            slots[0].version = 0;
-            slots[0].u.next_free = 0;
-
             // We have our slots, rebuild freelist.
             let mut num_elems = 0;
             let mut next_free = slots.len();
-            for (i, slot) in slots[1..].iter_mut().enumerate() {
+            for (i, slot) in slots.iter_mut().enumerate() {
                 if slot.occupied() {
                     num_elems += 1;
                 } else {
                     slot.u.next_free = next_free as u32;
-                    next_free = i + 1;
+                    next_free = i;
                 }
             }
 

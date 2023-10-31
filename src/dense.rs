@@ -103,21 +103,11 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let hello = messages.insert("Hello");
     /// ```
     pub fn with_capacity_and_key(capacity: usize) -> Self {
-        // Create slots with a sentinel at index 0.
-        // We don't actually use the sentinel for anything currently, but
-        // HopSlotMap does, and if we want keys to remain valid through
-        // conversion we have to have one as well.
-        let mut slots = Vec::with_capacity(capacity + 1);
-        slots.push(Slot {
-            idx_or_free: 0,
-            version: 0,
-        });
-
         DenseSlotMap {
             keys: Vec::with_capacity(capacity),
             values: Vec::with_capacity(capacity),
-            slots,
-            free_head: 1,
+            slots: Vec::with_capacity(capacity),
+            free_head: 0,
         }
     }
 
@@ -187,8 +177,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     pub fn reserve(&mut self, additional: usize) {
         self.keys.reserve(additional);
         self.values.reserve(additional);
-        // One slot is reserved for the sentinel.
-        let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
+        let needed = (self.len() + additional).saturating_sub(self.slots.len());
         self.slots.reserve(needed);
     }
 
@@ -210,8 +199,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.keys.try_reserve(additional)?;
         self.values.try_reserve(additional)?;
-        // One slot is reserved for the sentinel.
-        let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
+        let needed = (self.len() + additional).saturating_sub(self.slots.len());
         self.slots.try_reserve(needed)
     }
 
@@ -1131,22 +1119,13 @@ mod serialize {
                 return Err(de::Error::custom(&"too many slots"));
             }
 
-            // Ensure the first slot exists and is empty for the sentinel.
-            if serde_slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
-                return Err(de::Error::custom(&"first slot not empty"));
-            }
-
             // Rebuild slots, key and values.
             let mut keys = Vec::new();
             let mut values = Vec::new();
             let mut slots = Vec::new();
-            slots.push(Slot {
-                idx_or_free: 0,
-                version: 0,
-            });
 
             let mut next_free = serde_slots.len();
-            for (i, serde_slot) in serde_slots.into_iter().enumerate().skip(1) {
+            for (i, serde_slot) in serde_slots.into_iter().enumerate() {
                 let occupied = serde_slot.version % 2 == 1;
                 if occupied ^ serde_slot.value.is_some() {
                     return Err(de::Error::custom(&"inconsistent occupation in Slot"));

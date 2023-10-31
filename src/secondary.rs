@@ -153,10 +153,8 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// let mut sec: SecondaryMap<DefaultKey, i32> = SecondaryMap::with_capacity(sm.capacity());
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
-        let mut slots = Vec::with_capacity(capacity + 1); // Sentinel.
-        slots.push(Slot::new_vacant());
         Self {
-            slots,
+            slots: Vec::with_capacity(capacity),
             num_elems: 0,
             _k: PhantomData,
         }
@@ -203,7 +201,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert!(sec.capacity() >= 10);
     /// ```
     pub fn capacity(&self) -> usize {
-        self.slots.capacity() - 1 // Sentinel.
+        self.slots.capacity()
     }
 
     /// Sets the capacity of the [`SecondaryMap`] to `new_capacity`, if it is
@@ -228,7 +226,6 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert!(sec.capacity() >= 1000);
     /// ```
     pub fn set_capacity(&mut self, new_capacity: usize) {
-        let new_capacity = new_capacity + 1; // Sentinel.
         if new_capacity > self.slots.capacity() {
             let needed = new_capacity - self.slots.len();
             self.slots.reserve(needed);
@@ -255,7 +252,6 @@ impl<K: Key, V> SecondaryMap<K, V> {
     #[cfg(all(nightly, any(doc, feature = "unstable")))]
     #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_set_capacity(&mut self, new_capacity: usize) -> Result<(), TryReserveError> {
-        let new_capacity = new_capacity + 1; // Sentinel.
         if new_capacity > self.slots.capacity() {
             let needed = new_capacity - self.slots.len();
             self.slots.try_reserve(needed)
@@ -458,7 +454,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(v, vec![(k, 1)]);
     /// ```
     pub fn drain(&mut self) -> Drain<K, V> {
-        Drain { cur: 1, sm: self }
+        Drain { cur: 0, sm: self }
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -1524,11 +1520,9 @@ impl<K: Key, V> IntoIterator for SecondaryMap<K, V> {
 
     fn into_iter(self) -> Self::IntoIter {
         let len = self.len();
-        let mut it = self.slots.into_iter().enumerate();
-        it.next(); // Skip sentinel.
         IntoIter {
             num_left: len,
-            slots: it,
+            slots: self.slots.into_iter().enumerate(),
             _k: PhantomData,
         }
     }
@@ -1614,19 +1608,12 @@ mod serialize {
         where
             D: Deserializer<'de>,
         {
-            let mut slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
+            let slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
             if slots.len() >= (u32::max_value() - 1) as usize {
                 return Err(de::Error::custom(&"too many slots"));
             }
 
-            // Ensure the first slot exists and is empty for the sentinel.
-            if slots.get(0).map_or(true, |slot| slot.occupied()) {
-                return Err(de::Error::custom(&"first slot not empty"));
-            }
-
-            slots[0] = Slot::new_vacant();
             let num_elems = slots.iter().map(|s| s.occupied() as usize).sum();
-
             Ok(Self {
                 num_elems,
                 slots,

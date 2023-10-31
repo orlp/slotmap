@@ -130,11 +130,10 @@
 //! 2<sup>32</sup> - 2 elements at a time.
 //!
 //! The memory usage for each slot in [`SlotMap`] is `4 + max(sizeof(T), 4)`
-//! rounded up to the alignment of `T`. Similarly it is `4 + max(sizeof(T), 12)`
-//! for [`HopSlotMap`]. [`DenseSlotMap`] has an overhead of 8 bytes per element
-//! and 8 bytes per slot.
+//! rounded up to the alignment of `T`. [`DenseSlotMap`] has an overhead of 8
+//! bytes per element and 8 bytes per slot.
 //!
-//! # Choosing [`SlotMap`], [`HopSlotMap`] or [`DenseSlotMap`]
+//! # Choosing [`SlotMap`] or [`DenseSlotMap`]
 //!
 //! A [`SlotMap`] is the fastest for most operations, except iteration. It can
 //! never shrink the size of its underlying storage, because it must remember
@@ -142,19 +141,11 @@
 //! is empty now. This means that iteration can be slow as it must iterate over
 //! potentially a lot of empty slots.
 //!
-//! [`HopSlotMap`] solves this by maintaining more information on
-//! insertion/removal, allowing it to iterate only over filled slots by 'hopping
-//! over' contiguous blocks of vacant slots. This can give it significantly
-//! better iteration speed.  If you expect to iterate over all elements in a
-//! [`SlotMap`] a lot, and potentially have a lot of deleted elements, choose
-//! [`HopSlotMap`]. The downside is that insertion and removal is roughly twice
-//! as slow. Random access is the same speed for both.
-//!
 //! [`DenseSlotMap`] goes even further and stores all elements on a contiguous
 //! block of memory. It uses two indirections per random access; the slots
 //! contain indices used to access the contiguous memory. This means random
-//! access is slower than both [`SlotMap`] and [`HopSlotMap`], but iteration is
-//! significantly faster, as fast as a normal [`Vec`].
+//! access is slower than [`SlotMap`], but iteration is significantly faster, as
+//! fast as a normal [`Vec`].
 //!
 //! # Choosing [`SecondaryMap`] or [`SparseSecondaryMap`]
 //!
@@ -216,7 +207,6 @@ pub mod __impl {
 
 pub mod basic;
 pub mod dense;
-pub mod hop;
 pub mod secondary;
 #[cfg(feature = "std")]
 pub mod sparse_secondary;
@@ -230,8 +220,6 @@ use core::num::NonZeroU32;
 pub use crate::basic::SlotMap;
 #[doc(inline)]
 pub use crate::dense::DenseSlotMap;
-#[doc(inline)]
-pub use crate::hop::HopSlotMap;
 #[doc(inline)]
 pub use crate::secondary::SecondaryMap;
 #[cfg(feature = "std")]
@@ -607,20 +595,15 @@ mod tests {
         struct NoClone;
 
         let mut sm = SlotMap::new();
-        let mut hsm = HopSlotMap::new();
         let mut dsm = DenseSlotMap::new();
         let mut scm = SecondaryMap::new();
         let mut sscm = SparseSecondaryMap::new();
         scm.insert(sm.insert(NoClone), NoClone);
-        sscm.insert(hsm.insert(NoClone), NoClone);
-        dsm.insert(NoClone);
+        sscm.insert(dsm.insert(NoClone), NoClone);
 
         let _ = sm.keys().clone();
         let _ = sm.values().clone();
         let _ = sm.iter().clone();
-        let _ = hsm.keys().clone();
-        let _ = hsm.values().clone();
-        let _ = hsm.iter().clone();
         let _ = dsm.keys().clone();
         let _ = dsm.values().clone();
         let _ = dsm.iter().clone();

@@ -7,7 +7,7 @@ deletion and access all take O(1) time with low overhead. Great for storing
 collections of objects that need stable, safe references but have no clear
 ownership otherwise, such as game entities or graph nodes. Two secondary maps,
 `SecondaryMap` and `SparseSecondaryMap` are also provided that allow you to map
-further objects to the keys created by one of the slot maps. Please refer to the
+further objects to the keys created by one of the slot maps. Please refer to
 [**the documentation**](https://docs.rs/slotmap) for more information.
 
 The minimum required stable Rust version for `slotmap` is 1.49. To start using

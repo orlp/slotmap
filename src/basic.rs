@@ -19,7 +19,7 @@ use crate::{DefaultKey, Key, KeyData};
 // Storage inside a slot or metadata for the freelist when vacant.
 union SlotUnion<T> {
     value: ManuallyDrop<T>,
-    next_free: u32,
+    next_index: u32,
 }
 
 // A slot, which represents storage for a value and a current version.
@@ -55,7 +55,7 @@ impl<T> Slot<T> {
             if self.occupied() {
                 Occupied(&*self.u.value)
             } else {
-                Vacant(&self.u.next_free)
+                Vacant(&self.u.next_index)
             }
         }
     }
@@ -65,7 +65,7 @@ impl<T> Slot<T> {
             if self.occupied() {
                 OccupiedMut(&mut *self.u.value)
             } else {
-                VacantMut(&mut self.u.next_free)
+                VacantMut(&mut self.u.next_index)
             }
         }
     }
@@ -89,7 +89,7 @@ impl<T: Clone> Clone for Slot<T> {
                 Occupied(value) => SlotUnion {
                     value: ManuallyDrop::new(value.clone()),
                 },
-                Vacant(&next_free) => SlotUnion { next_free },
+                Vacant(&next_index) => SlotUnion { next_index },
             },
             version: self.version,
         }
@@ -98,15 +98,15 @@ impl<T: Clone> Clone for Slot<T> {
     fn clone_from(&mut self, source: &Self) {
         match (self.get_mut(), source.get()) {
             (OccupiedMut(self_val), Occupied(source_val)) => self_val.clone_from(source_val),
-            (VacantMut(self_next_free), Vacant(&source_next_free)) => {
-                *self_next_free = source_next_free
-            },
+            (VacantMut(self_next_index), Vacant(&source_next_index)) => {
+                *self_next_index = source_next_index;
+            }
             (_, Occupied(value)) => {
                 self.u = SlotUnion {
                     value: ManuallyDrop::new(value.clone()),
                 }
-            },
-            (_, Vacant(&next_free)) => self.u = SlotUnion { next_free },
+            }
+            (_, Vacant(&next_index)) => self.u = SlotUnion { next_index },
         }
         self.version = source.version;
     }
@@ -118,7 +118,7 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
         builder.field("version", &self.version);
         match self.get() {
             Occupied(value) => builder.field("value", value).finish(),
-            Vacant(next_free) => builder.field("next_free", next_free).finish(),
+            Vacant(next_index) => builder.field("next_index", next_index).finish(),
         }
     }
 }
@@ -130,6 +130,7 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 pub struct SlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
     free_head: u32,
+    retire_head: u32,
     num_elems: u32,
     _k: PhantomData<fn(K) -> K>,
 }
@@ -204,13 +205,14 @@ impl<K: Key, V> SlotMap<K, V> {
         // conversion we have to have one as well.
         let mut slots = Vec::with_capacity(capacity + 1);
         slots.push(Slot {
-            u: SlotUnion { next_free: 0 },
+            u: SlotUnion { next_index: 0 },
             version: 0,
         });
 
         Self {
             slots,
             free_head: 1,
+            retire_head: 0,
             num_elems: 0,
             _k: PhantomData,
         }
@@ -412,7 +414,7 @@ impl<K: Key, V> SlotMap<K, V> {
 
             // Update.
             unsafe {
-                self.free_head = slot.u.next_free;
+                self.free_head = slot.u.next_index;
                 slot.u.value = ManuallyDrop::new(value);
                 slot.version = occupied_version;
             }
@@ -444,11 +446,17 @@ impl<K: Key, V> SlotMap<K, V> {
         let slot = self.slots.get_unchecked_mut(idx);
         let value = ManuallyDrop::take(&mut slot.u.value);
 
-        // Maintain freelist.
-        slot.u.next_free = self.free_head;
-        self.free_head = idx as u32;
+        // If the version wraps around, the slot goes in the retired list. Otherwise it goes in the
+        // free list.
         self.num_elems -= 1;
         slot.version = slot.version.wrapping_add(1);
+        if slot.version == 0 {
+            slot.u.next_index = self.retire_head;
+            self.retire_head = idx as u32;
+        } else {
+            slot.u.next_index = self.free_head;
+            self.free_head = idx as u32;
+        }
 
         value
     }
@@ -543,6 +551,29 @@ impl<K: Key, V> SlotMap<K, V> {
     /// ```
     pub fn clear(&mut self) {
         self.drain();
+    }
+
+    /// Reset the version of all empty slots to zero, including retired slots.
+    pub fn recycle_empty_slots(&mut self) {
+        // Set the version of all free slots to zero.
+        let mut free_index = self.free_head;
+        while let Some(slot) = self.slots.get_mut(free_index as usize) {
+            debug_assert_eq!(slot.version % 2, 0);
+            slot.version = 0;
+            free_index = unsafe { slot.u.next_index };
+        }
+
+        // Add all retired slots (which already have their version set to zero) to the free list.
+        while self.retire_head != 0 {
+            let slot = &mut self.slots[self.retire_head as usize];
+            debug_assert_eq!(slot.version, 0);
+            unsafe {
+                let next_retired = slot.u.next_index;
+                slot.u.next_index = self.free_head;
+                self.free_head = self.retire_head;
+                self.retire_head = next_retired;
+            }
+        }
     }
 
     /// Clears the slot map, returning all key-value pairs in arbitrary order as
@@ -1264,7 +1295,7 @@ mod serialize {
                     Some(value) => SlotUnion {
                         value: ManuallyDrop::new(value),
                     },
-                    None => SlotUnion { next_free: 0 },
+                    None => SlotUnion { next_index: 0 },
                 },
                 version: serde_slot.version,
             })
@@ -1300,24 +1331,24 @@ mod serialize {
             }
 
             slots[0].version = 0;
-            slots[0].u.next_free = 0;
+            slots[0].u.next_index = 0;
 
             // We have our slots, rebuild freelist.
             let mut num_elems = 0;
-            let mut next_free = slots.len();
+            let mut next_index = slots.len();
             for (i, slot) in slots[1..].iter_mut().enumerate() {
                 if slot.occupied() {
                     num_elems += 1;
                 } else {
-                    slot.u.next_free = next_free as u32;
-                    next_free = i + 1;
+                    slot.u.next_index = next_index as u32;
+                    next_index = i + 1;
                 }
             }
 
             Ok(Self {
                 num_elems,
                 slots,
-                free_head: next_free as u32,
+                free_head: next_index as u32,
                 _k: PhantomData,
             })
         }
@@ -1537,5 +1568,33 @@ mod tests {
         de.insert(1);
         de.insert(2);
         assert_eq!(de.len(), 3);
+    }
+
+    #[test]
+    fn test_retire_list() {
+        let mut sm = SlotMap::new();
+        sm.insert(42i32);
+        assert_eq!(sm.free_head, 2);
+        // Force the generation to be just short of u32::MAX.
+        assert_eq!(sm.slots.len(), 2);
+        sm.slots[1].version = u32::MAX - 2;
+        // Remove the key. The slot should be added to the free list.
+        let k = sm.keys().next().unwrap();
+        let v = sm.remove(k);
+        assert_eq!(v, Some(42));
+        assert_eq!(sm.free_head, 1);
+        assert_eq!(sm.retire_head, 0);
+        // Reinsert the key and remove it again. This time the version wraps and the slot should be
+        // added to the retire list.
+        let k = sm.insert(42);
+        let v = sm.remove(k);
+        assert_eq!(v, Some(42));
+        assert_eq!(sm.free_head, 2);
+        assert_eq!(sm.retire_head, 1);
+        // Recycle the retired slot.
+        sm.recycle_empty_slots();
+        assert_eq!(sm.free_head, 1);
+        assert_eq!(sm.retire_head, 0);
+        assert_eq!(sm.slots[1].version, 0);
     }
 }

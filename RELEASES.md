@@ -1,3 +1,13 @@
+Version 1.0.7
+=============
+
+ - Added `clone_from` implementations for all slot maps.
+ - Added `try_insert_with_key` methods that accept a fallible closure.
+ - Improved performance of insertion and key hashing.
+ - Made `new_key_type` resistant to shadowing.
+ - Made iterators clonable regardless of item type clonability.
+
+
 Version 1.0.6
 =============
 

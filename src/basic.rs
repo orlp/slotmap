@@ -13,8 +13,11 @@ use core::marker::PhantomData;
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
+#[cfg(debug_assertions)]
+use core::panic::Location;
+
 use crate::util::{Never, UnwrapUnchecked};
-use crate::{DefaultKey, Key, KeyData};
+use crate::{DefaultKey, Key, KeyData, new_key};
 
 // Storage inside a slot or metadata for the freelist when vacant.
 union SlotUnion<T> {
@@ -132,6 +135,8 @@ pub struct SlotMap<K: Key, V> {
     free_head: u32,
     num_elems: u32,
     _k: PhantomData<fn(K) -> K>,
+    #[cfg(debug_assertions)]
+    unique_location: &'static Location<'static>
 }
 
 impl<V> SlotMap<DefaultKey, V> {
@@ -143,6 +148,7 @@ impl<V> SlotMap<DefaultKey, V> {
     /// # use slotmap::*;
     /// let mut sm: SlotMap<_, i32> = SlotMap::new();
     /// ```
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn new() -> Self {
         Self::with_capacity_and_key(0)
     }
@@ -158,6 +164,7 @@ impl<V> SlotMap<DefaultKey, V> {
     /// # use slotmap::*;
     /// let mut sm: SlotMap<_, i32> = SlotMap::with_capacity(10);
     /// ```
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn with_capacity(capacity: usize) -> Self {
         Self::with_capacity_and_key(capacity)
     }
@@ -175,6 +182,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// }
     /// let mut positions: SlotMap<PositionKey, i32> = SlotMap::with_key();
     /// ```
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn with_key() -> Self {
         Self::with_capacity_and_key(0)
     }
@@ -197,6 +205,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// let good_day = messages.insert("Good day");
     /// let hello = messages.insert("Hello");
     /// ```
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn with_capacity_and_key(capacity: usize) -> Self {
         // Create slots with a sentinel at index 0.
         // We don't actually use the sentinel for anything currently, but
@@ -213,6 +222,8 @@ impl<K: Key, V> SlotMap<K, V> {
             free_head: 1,
             num_elems: 0,
             _k: PhantomData,
+            #[cfg(debug_assertions)]
+            unique_location: Location::caller()
         }
     }
 
@@ -408,7 +419,7 @@ impl<K: Key, V> SlotMap<K, V> {
             let kd = KeyData::new(self.free_head, occupied_version);
 
             // Get value first in case f panics or returns an error.
-            let value = f(kd.into())?;
+            let value = f(new_key!(kd, self))?;
 
             // Update.
             unsafe {
@@ -417,7 +428,7 @@ impl<K: Key, V> SlotMap<K, V> {
                 slot.version = occupied_version;
             }
             self.num_elems = new_num_elems;
-            return Ok(kd.into());
+            return Ok(crate::new_key!(kd, self));
         }
 
         let version = 1;
@@ -426,14 +437,15 @@ impl<K: Key, V> SlotMap<K, V> {
         // Create new slot before adjusting freelist in case f or the allocation panics or errors.
         self.slots.push(Slot {
             u: SlotUnion {
-                value: ManuallyDrop::new(f(kd.into())?),
+                value: ManuallyDrop::new(f(crate::new_key!(kd, self))?),
             },
             version,
         });
 
         self.free_head = kd.idx + 1;
         self.num_elems = new_num_elems;
-        Ok(kd.into())
+
+        Ok(crate::new_key!(kd, self))
     }
 
     // Helper function to remove a value from a slot. Safe iff the slot is
@@ -583,6 +595,9 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm.get(key), None);
     /// ```
     pub fn get(&self, key: K) -> Option<&V> {
+        #[cfg(debug_assertions)]
+        debug_assert_eq!(key.location(), self.unique_location, "A key created by a specific SlotMap is used for another SlotMap.");
+
         let kd = key.data();
         self.slots
             .get(kd.idx as usize)
@@ -689,7 +704,7 @@ impl<K: Key, V> SlotMap<K, V> {
         let mut i = 0;
         while i < N {
             let kd = keys[i].data();
-            if !self.contains_key(kd.into()) {
+            if !self.contains_key(new_key!(kd, self)) {
                 break;
             }
 
@@ -1537,5 +1552,101 @@ mod tests {
         de.insert(1);
         de.insert(2);
         assert_eq!(de.len(), 3);
+    }
+
+    #[cfg(debug_assertions)]
+    pub struct Map<K: Key, V> {
+        slot_map: SlotMap<K, V>
+    }
+
+    #[cfg(debug_assertions)]
+    impl<V> Map<DefaultKey, V> {
+        fn new() -> Self {
+            Map {
+                slot_map: SlotMap::new()
+            }
+        }
+
+        #[track_caller]
+        fn new_tracked() -> Self {
+            Map {
+                slot_map: SlotMap::new()
+            }
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn wrapped_slotmap_type_untracked_key_exchange() {
+        let mut map1 = Map::new();
+        let k1 = map1.slot_map.insert(4);
+        
+        let mut map2 = Map::new();
+        
+        map2.slot_map.insert(4);
+
+        map2.slot_map.get(k1).unwrap();
+    }
+
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    #[test]
+    fn wrapped_slotmap_type_tracked_key_exchange() {
+        let mut map1 = Map::new_tracked();
+        let k1 = map1.slot_map.insert(4);
+        
+        let mut map2 = Map::new_tracked();
+        
+        map2.slot_map.insert(4);
+
+        map2.slot_map.get(k1);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn slotmap_key_own_map() {
+        let mut sm1 = SlotMap::new();
+
+        let k1 = sm1.insert(5);
+
+
+        let mut sm2 = SlotMap::new();
+        sm2.insert(3);
+
+        sm1.get(k1).unwrap();
+    }
+
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    #[test]
+    fn slotmap_key_exchange() {
+        let mut sm1 = SlotMap::new();
+
+        let k1 = sm1.insert(5);
+
+
+        let mut sm2 = SlotMap::new();
+        sm2.insert(3);
+
+        sm2.get(k1);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn slotmap_key_iter_mut() {
+        let mut sm1 = SlotMap::new();
+        let k1 = sm1.insert(10);
+        let k2 = sm1.insert(20);
+        let k3 = sm1.insert(30);
+
+        for (k, v) in sm1.iter_mut() {
+            println!("k: {k:?}");
+            if k != k2 {
+                *v *= -1
+            }
+        }
+        assert_eq!(sm1[k1], -10);
+        assert_eq!(sm1[k2], 20);
+        assert_eq!(sm1[k3], -30);
     }
 }

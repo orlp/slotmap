@@ -408,7 +408,16 @@ pub unsafe trait Key:
     /// assert_eq!(dk.data(), mk.data());
     /// ```
     fn data(&self) -> KeyData;
+
+    #[cfg(debug_assertions)]
+    /// Sets the location in the source code of a used slot map.
+    fn set_location(&mut self, location: &'static core::panic::Location<'static>);
+
+    #[cfg(debug_assertions)]
+    /// Returns the location in the source code of a used slot map.
+    fn location(&self) -> &'static core::panic::Location<'static>;
 }
+
 
 /// A helper macro to create new key types. If you use a new key type for each
 /// slot map you create you can entirely prevent using the wrong key on the
@@ -456,20 +465,76 @@ macro_rules! new_key_type {
         #[derive(Copy, Clone, Default,
                  Eq, PartialEq, Ord, PartialOrd,
                  Hash, Debug)]
+
+        #[cfg(not(debug_assertions))]
         #[repr(transparent)]
         $vis struct $name($crate::KeyData);
 
+        #[derive(Copy, Clone, Default,
+            Eq, Ord, PartialOrd, Debug)]
+        #[cfg(debug_assertions)]
+        $(#[$outer])*
+        $vis struct $name {
+            key_data: $crate::KeyData,
+            location: Option<&'static core::panic::Location<'static>>
+        }        
+
+        #[cfg(debug_assertions)]
+        impl PartialEq for $name {
+            #[inline]
+            fn eq(&self, other: &$name) -> bool {
+                self.key_data == other.key_data
+            }
+        }
+
+        #[cfg(debug_assertions)]
+        impl core::hash::Hash for $name {
+            #[inline]
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                self.key_data.hash(state);
+            }
+        }
+
         impl $crate::__impl::From<$crate::KeyData> for $name {
             fn from(k: $crate::KeyData) -> Self {
-                $name(k)
+                #[cfg(debug_assertions)]
+                {
+                    $name {
+                        key_data: k,
+                        location: None
+                    }
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    $name(k)
+                }
             }
         }
 
         unsafe impl $crate::Key for $name {
             fn data(&self) -> $crate::KeyData {
-                self.0
+                #[cfg(debug_assertions)]    
+                {
+                    self.key_data
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    self.0
+                }
+            }
+            
+            #[cfg(debug_assertions)]
+            #[inline]
+            fn set_location(&mut self, location: &'static core::panic::Location<'static>) {
+                self.location = Some(location);
+            }
+            #[cfg(debug_assertions)]
+            #[inline]
+            fn location(&self) -> &'static core::panic::Location<'static> {
+                self.location.expect("Should be set during key instantiation while in debug mode")
             }
         }
+
 
         $crate::__serialize_key!($name);
 
@@ -516,6 +581,27 @@ macro_rules! __serialize_key {
 new_key_type! {
     /// The default slot map key type.
     pub struct DefaultKey;
+}
+
+#[macro_export]
+/// TODO
+macro_rules! new_key {
+    ($kd:ident, $self:ident) => {
+        {
+            
+            #[cfg(debug_assertions)]
+            {
+                let mut key: K = $kd.into();
+                key.set_location($self.unique_location);
+                key
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                Into::<K>::into($kd)
+            }  
+            
+        }
+    };
 }
 
 // Serialization with serde.

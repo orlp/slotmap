@@ -420,7 +420,6 @@ pub unsafe trait Key:
 /// # Examples
 ///
 /// ```
-/// # extern crate slotmap;
 /// # use slotmap::*;
 /// new_key_type! {
 ///     // A private key type.

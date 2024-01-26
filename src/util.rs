@@ -32,15 +32,15 @@ impl<T> UnwrapUnchecked<T> for Option<T> {
     }
 }
 
-impl<T, E: Debug> UnwrapUnchecked<T> for Result<T, E> {
-    unsafe fn unwrap_unchecked_(self) -> T {
-        if cfg!(debug_assertions) {
-            self.unwrap()
-        } else {
-            match self {
-                Ok(x) => x,
-                Err(_) => unreachable_unchecked(),
-            }
+pub trait UnwrapNever<T> {
+    fn unwrap_never(self) -> T;
+}
+
+impl<T> UnwrapNever<T> for Result<T, Never> {
+    fn unwrap_never(self) -> T {
+        match self {
+            Ok(t) => t,
+            Err(e) => match e {},
         }
     }
 }

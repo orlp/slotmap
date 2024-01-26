@@ -25,7 +25,7 @@ use core::mem::ManuallyDrop;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, UnwrapUnchecked};
+use crate::util::{Never, UnwrapNever};
 use crate::{DefaultKey, Key, KeyData};
 
 // Metadata to maintain the freelist.
@@ -363,7 +363,8 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// ```
     #[inline(always)]
     pub fn insert(&mut self, value: V) -> K {
-        unsafe { self.try_insert_with_key::<_, Never>(move |_| Ok(value)).unwrap_unchecked_() }
+        self.try_insert_with_key::<_, Never>(move |_| Ok(value))
+            .unwrap_never()
     }
 
     // Helper function to make using the freelist painless.
@@ -395,7 +396,8 @@ impl<K: Key, V> HopSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        unsafe { self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap_unchecked_() }
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
+            .unwrap_never()
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the

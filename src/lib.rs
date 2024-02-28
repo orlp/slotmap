@@ -11,26 +11,24 @@
     unused_import_braces
 )]
 #![deny(missing_docs, unaligned_references)]
-#![cfg_attr(feature = "cargo-clippy", allow(renamed_and_removed_lints))]
-#![cfg_attr(feature = "cargo-clippy", deny(clippy, clippy_pedantic))]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(
+#![allow(clippy::renamed_and_removed_lints)]
+#![deny(clippy::clippy, clippy_pedantic)]
+#![allow(
         // Style differences.
-        module_name_repetitions,
-        redundant_closure_for_method_calls,
-        unseparated_literal_suffix,
+        clippy::module_name_repetitions,
+        clippy::redundant_closure_for_method_calls,
+        clippy::unseparated_literal_suffix,
 
         // I know what I'm doing and want these.
-        wildcard_imports,
-        inline_always,
-        cast_possible_truncation,
-        needless_pass_by_value,
+        clippy::wildcard_imports,
+        clippy::inline_always,
+        clippy::cast_possible_truncation,
+        clippy::needless_pass_by_value,
 
         // Very noisy.
-        missing_errors_doc,
-        must_use_candidate
-    ))]
+        clippy::missing_errors_doc,
+        clippy::must_use_candidate
+    )]
 
 //! # slotmap
 //!
@@ -208,10 +206,10 @@ extern crate alloc;
 // So our macros can refer to these.
 #[doc(hidden)]
 pub mod __impl {
-    #[cfg(feature = "serde")]
-    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
     pub use core::convert::From;
     pub use core::result::Result;
+    #[cfg(feature = "serde")]
+    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
 }
 
 pub mod basic;
@@ -319,8 +317,7 @@ impl Default for KeyData {
     }
 }
 
-impl Hash for KeyData
-{
+impl Hash for KeyData {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // A derived Hash impl would call write_u32 twice. We call write_u64
         // once, which is beneficial if the hasher implements write_u64
@@ -572,12 +569,12 @@ mod tests {
         use super::new_key_type;
 
         // Clobber namespace with clashing names - should still work.
-        trait Serialize { }
-        trait Deserialize { }
-        trait Serializer { }
-        trait Deserializer { }
-        trait Key { }
-        trait From { }
+        trait Serialize {}
+        trait Deserialize {}
+        trait Serializer {}
+        trait Deserializer {}
+        trait Key {}
+        trait From {}
         struct Result;
         struct KeyData;
 

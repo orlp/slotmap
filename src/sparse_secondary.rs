@@ -249,7 +249,9 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// ```
     pub fn contains_key(&self, key: K) -> bool {
         let kd = key.data();
-        self.slots.get(&kd.idx).map_or(false, |slot| slot.version == kd.version.get())
+        self.slots
+            .get(&kd.idx)
+            .map_or(false, |slot| slot.version == kd.version.get())
     }
 
     /// Inserts a value into the secondary map at the given `key`. Can silently
@@ -296,10 +298,13 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             return None;
         }
 
-        self.slots.insert(kd.idx, Slot {
-            version: kd.version.get(),
-            value,
-        });
+        self.slots.insert(
+            kd.idx,
+            Slot {
+                version: kd.version.get(),
+                value,
+            },
+        );
 
         None
     }
@@ -560,7 +565,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
                     // gives us a linear time disjointness check.
                     ptrs[i] = MaybeUninit::new(&mut *value);
                     *version ^= 1;
-                },
+                }
 
                 _ => break,
             }
@@ -573,7 +578,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
             match self.slots.get_mut(&k.data().idx) {
                 Some(Slot { version, .. }) => {
                     *version ^= 1;
-                },
+                }
                 _ => unsafe { core::hint::unreachable_unchecked() },
             }
         }
@@ -801,7 +806,7 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
                     kd,
                     _k: PhantomData,
                 })
-            },
+            }
             hash_map::Entry::Vacant(inner) => Entry::Vacant(VacantEntry {
                 inner,
                 kd,
@@ -860,8 +865,11 @@ where
             return false;
         }
 
-        self.iter()
-            .all(|(key, value)| other.get(key).map_or(false, |other_value| *value == *other_value))
+        self.iter().all(|(key, value)| {
+            other
+                .get(key)
+                .map_or(false, |other_value| *value == *other_value)
+        })
     }
 }
 
@@ -1030,7 +1038,7 @@ impl<'a, K: Key, V> Entry<'a, K, V> {
             Entry::Occupied(mut entry) => {
                 f(entry.get_mut());
                 Entry::Occupied(entry)
-            },
+            }
             Entry::Vacant(entry) => Entry::Vacant(entry),
         }
     }
@@ -1588,7 +1596,10 @@ mod tests {
         sec.insert(key1, 1234);
         assert_eq!(sec[key1], 1234);
         assert_eq!(sec.len(), 1);
-        let sec2 = sec.iter().map(|(k, &v)| (k, v)).collect::<FastSparseSecondaryMap<_, _>>();
+        let sec2 = sec
+            .iter()
+            .map(|(k, &v)| (k, v))
+            .collect::<FastSparseSecondaryMap<_, _>>();
         assert_eq!(sec, sec2);
     }
 

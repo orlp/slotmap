@@ -298,7 +298,7 @@ impl KeyData {
         (u64::from(self.version.get()) << 32) | u64::from(self.idx)
     }
 
-    /// Iff `value` is a value received from `k.as_ffi()`, returns a key equal
+    /// If `value` is a value received from `k.as_ffi()`, returns a key equal
     /// to `k`. Otherwise the behavior is safe but unspecified.
     pub fn from_ffi(value: u64) -> Self {
         let idx = value & 0xffff_ffff;

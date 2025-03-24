@@ -3,6 +3,7 @@
 #[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
+use core::fmt;
 use core::hint::unreachable_unchecked;
 use core::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use core::marker::PhantomData;
@@ -13,7 +14,7 @@ use core::num::NonZeroU32;
 use core::ops::{Index, IndexMut};
 
 use super::{Key, KeyData};
-use crate::util::is_older_version;
+use crate::util::{debug_fmt_entries, is_older_version};
 
 // This representation works because we don't have to store the versions
 // of removed elements.
@@ -118,7 +119,7 @@ impl<T> Slot<T> {
 /// health[bob] -= ammo[alice] * 3;
 /// ammo[alice] = 0;
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SecondaryMap<K: Key, V> {
     slots: Vec<Slot<V>>,
     num_elems: usize,
@@ -913,6 +914,12 @@ impl<'a, K: Key, V: 'a + Copy> Extend<(K, &'a V)> for SecondaryMap<K, V> {
         for (k, v) in iter {
             self.insert(k, *v);
         }
+    }
+}
+
+impl<K: Key, V: fmt::Debug> fmt::Debug for SecondaryMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        debug_fmt_entries(self, f)
     }
 }
 

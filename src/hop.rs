@@ -25,7 +25,7 @@ use core::mem::ManuallyDrop;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, UnwrapUnchecked};
+use crate::util::{Never, UnwrapUnchecked, debug_fmt_entries};
 use crate::{DefaultKey, Key, KeyData};
 
 // Metadata to maintain the freelist.
@@ -144,7 +144,6 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 /// Hop slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
-#[derive(Debug)]
 pub struct HopSlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
     num_elems: u32,
@@ -1021,6 +1020,12 @@ impl<K: Key, V> IndexMut<K> for HopSlotMap<K, V> {
             Some(r) => r,
             None => panic!("invalid HopSlotMap key used"),
         }
+    }
+}
+
+impl<K: Key, V: fmt::Debug> fmt::Debug for HopSlotMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        debug_fmt_entries(self, f)
     }
 }
 

@@ -1,4 +1,5 @@
-use core::fmt::Debug;
+use crate::Key;
+use core::fmt;
 use core::hint::unreachable_unchecked;
 
 /// Internal stable replacement for !.
@@ -32,7 +33,7 @@ impl<T> UnwrapUnchecked<T> for Option<T> {
     }
 }
 
-impl<T, E: Debug> UnwrapUnchecked<T> for Result<T, E> {
+impl<T, E: fmt::Debug> UnwrapUnchecked<T> for Result<T, E> {
     unsafe fn unwrap_unchecked_(self) -> T {
         if cfg!(debug_assertions) {
             self.unwrap()
@@ -43,4 +44,17 @@ impl<T, E: Debug> UnwrapUnchecked<T> for Result<T, E> {
             }
         }
     }
+}
+
+/// Debug format a slot map.
+/// Keys are formatted without the name of the wrapper struct
+/// (`1v2` instead of `MyKey(1v2)`).
+pub fn debug_fmt_entries<I, K, V>(entries: I, f: &mut fmt::Formatter) -> fmt::Result
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: Key,
+    V: fmt::Debug
+{
+    let entries = entries.into_iter().map(|(k, v)| (k.data(), v));
+    f.debug_map().entries(entries).finish()
 }

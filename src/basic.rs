@@ -13,7 +13,7 @@ use core::marker::PhantomData;
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, UnwrapUnchecked};
+use crate::util::{Never, UnwrapUnchecked, debug_fmt_entries};
 use crate::{DefaultKey, Key, KeyData};
 
 // Storage inside a slot or metadata for the freelist when vacant.
@@ -126,7 +126,6 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 /// Slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
-#[derive(Debug)]
 pub struct SlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,
     free_head: u32,
@@ -935,6 +934,12 @@ impl<K: Key, V> IndexMut<K> for SlotMap<K, V> {
             Some(r) => r,
             None => panic!("invalid SlotMap key used"),
         }
+    }
+}
+
+impl<K: Key, V: fmt::Debug> fmt::Debug for SlotMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        debug_fmt_entries(self, f)
     }
 }
 

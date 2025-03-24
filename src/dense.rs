@@ -9,12 +9,13 @@
 #[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
+use core::fmt;
 use core::iter::FusedIterator;
 #[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, UnwrapUnchecked};
+use crate::util::{Never, UnwrapUnchecked, debug_fmt_entries};
 use crate::{DefaultKey, Key, KeyData};
 
 // A slot, which represents storage for an index and a current version.
@@ -31,7 +32,6 @@ struct Slot {
 /// Dense slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
-#[derive(Debug)]
 pub struct DenseSlotMap<K: Key, V> {
     keys: Vec<K>,
     values: Vec<V>,
@@ -831,6 +831,12 @@ impl<K: Key, V> IndexMut<K> for DenseSlotMap<K, V> {
             Some(r) => r,
             None => panic!("invalid DenseSlotMap key used"),
         }
+    }
+}
+
+impl<K: Key, V: fmt::Debug> fmt::Debug for DenseSlotMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        debug_fmt_entries(self, f)
     }
 }
 

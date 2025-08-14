@@ -892,6 +892,66 @@ impl<K: Key, V> SlotMap<K, V> {
             inner: self.iter_mut(),
         }
     }
+
+    /// Construct a new slotmap with the same keys but mapped values.
+    ///
+    /// The function `f` is called for each key-value pair in the slot map,
+    /// and the returned values form the new slot map. The keys remain the same.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let k1 = sm.insert(10);
+    /// let k2 = sm.insert(20);
+    /// let k3 = sm.insert(30);
+    ///
+    /// let mapped = sm.map(|k, v| v * 2);
+    /// assert_eq!(mapped[k1], 20);
+    /// assert_eq!(mapped[k2], 40);
+    /// assert_eq!(mapped[k3], 60);
+    /// ```
+    pub fn map<U, F>(&self, mut f: F) -> SlotMap<K, U>
+    where
+        F: FnMut(K, &V) -> U,
+    {
+        let mut new_slots = Vec::with_capacity(self.slots.capacity());
+
+        // Process each slot, preserving the structure
+        for (idx, slot) in self.slots.iter().enumerate() {
+            match slot.get() {
+                Occupied(value) => {
+                    let kd = KeyData::new(idx as u32, slot.version);
+                    let key = kd.into();
+
+                    // Extract the value safely
+                    let new_value = f(key, &value);
+
+                    new_slots.push(Slot {
+                        u: SlotUnion {
+                            value: ManuallyDrop::new(new_value),
+                        },
+                        version: slot.version,
+                    });
+                },
+                Vacant(&next_free) => {
+                    // For vacant slots, preserve the next_free index
+                    new_slots.push(Slot {
+                        u: SlotUnion { next_free },
+                        version: slot.version,
+                    });
+                },
+            }
+        }
+
+        SlotMap {
+            slots: new_slots,
+            free_head: self.free_head,
+            num_elems: self.num_elems,
+            _k: PhantomData,
+        }
+    }
 }
 
 impl<K: Key, V> Clone for SlotMap<K, V>
@@ -1537,5 +1597,37 @@ mod tests {
         de.insert(1);
         de.insert(2);
         assert_eq!(de.len(), 3);
+    }
+
+    #[test]
+    fn slotmap_map() {
+        let mut sm = SlotMap::new();
+        let k1 = sm.insert(10);
+        let k2 = sm.insert(20);
+        let k3 = sm.insert(30);
+
+        // Remove one element to test with vacant slots
+        sm.remove(k2);
+
+        // Insert another element to potentially reuse the slot
+        let k4 = sm.insert(40);
+
+        // Capture capacity before moving sm
+        let original_capacity = sm.capacity();
+
+        // Test the map function
+        let mapped = sm.map(|k, v| (format!("{k:?}"), v * 2));
+
+        // Verify the mapped values
+        assert_eq!(mapped[k1], (format!("{k1:?}"), 20));
+        assert_eq!(mapped[k3], (format!("{k3:?}"), 60));
+        assert_eq!(mapped[k4], (format!("{k4:?}"), 80));
+
+        // Verify k2 is still invalid in the mapped SlotMap
+        assert!(!mapped.contains_key(k2));
+
+        // Verify the structure is preserved
+        assert_eq!(mapped.len(), 3);
+        assert_eq!(mapped.capacity(), original_capacity);
     }
 }

@@ -877,6 +877,13 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     pub fn values_as_mut_slice(&mut self) -> &mut [V] {
         self.values.as_mut_slice()
     }
+
+    /// Returns two mutable slices for all the keys, and all the values,
+    /// respectively. The keys and values are in arbitrary order, but in the
+    /// _same_ arbitrary order.
+    pub fn keys_values_as_mut_slices(&mut self) -> (&mut [K], &mut [V]) {
+        (self.keys.as_mut_slice(), self.values.as_mut_slice())
+    }
 }
 
 impl<K: Key, V> Clone for DenseSlotMap<K, V>

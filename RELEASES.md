@@ -8,6 +8,9 @@ Version 1.1.0
  - Ensured that `is_null()` keys print as `null` in their `Debug` representation.
  - Made `KeyData::new` and `KeyData::from_ffi` const.
  - Resolved a Miri error in `get_disjoint_mut` under the Stacked Borrows model.
+ - Added `detach` and `reattach` methods to `SlotMap` and `DenseSlotMap` which
+   let you temporarily remove key/value pairs from the slot map before
+   adding them back.
 
 Version 1.0.7
 =============

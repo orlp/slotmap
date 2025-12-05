@@ -14,7 +14,7 @@ use core::iter::FusedIterator;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, UnwrapUnchecked, PanicOnDrop};
+use crate::util::{Never, PanicOnDrop};
 use crate::{DefaultKey, Key, KeyData};
 
 // A slot, which represents storage for an index and a current version.
@@ -252,7 +252,10 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// ```
     #[inline(always)]
     pub fn insert(&mut self, value: V) -> K {
-        unsafe { self.try_insert_with_key::<_, Never>(move |_| Ok(value)).unwrap_unchecked_() }
+        unsafe {
+            self.try_insert_with_key::<_, Never>(move |_| Ok(value))
+                .unwrap_unchecked()
+        }
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -277,7 +280,10 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        unsafe { self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap_unchecked_() }
+        unsafe {
+            self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
+                .unwrap_unchecked()
+        }
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -305,7 +311,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     where
         F: FnOnce(K) -> Result<V, E>,
     {
-        if self.len() >= (core::u32::MAX - 1) as usize {
+        if self.len() >= (u32::MAX - 1) as usize {
             panic!("DenseSlotMap number of elements overflow");
         }
 
@@ -417,8 +423,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         let mut i = 0;
         while i < self.keys.len() {
             let (should_keep, slot_idx) = {
-                let (kd, mut value) = (self.keys[i].data(), &mut self.values[i]);
-                (f(kd.into(), &mut value), kd.idx as usize)
+                let (kd, value) = (self.keys[i].data(), &mut self.values[i]);
+                (f(kd.into(), value), kd.idx as usize)
             };
 
             if should_keep {
@@ -467,7 +473,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(sm.len(), 0);
     /// assert_eq!(v, vec![(k, 0)]);
     /// ```
-    pub fn drain(&mut self) -> Drain<K, V> {
+    pub fn drain(&mut self) -> Drain<'_, K, V> {
         Drain { sm: self }
     }
 
@@ -515,8 +521,11 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked(&self, key: K) -> &V {
         debug_assert!(self.contains_key(key));
-        let idx = self.slots.get_unchecked(key.data().idx as usize).idx_or_free;
-        &self.values.get_unchecked(idx as usize)
+        let idx = self
+            .slots
+            .get_unchecked(key.data().idx as usize)
+            .idx_or_free;
+        self.values.get_unchecked(idx as usize)
     }
 
     /// Returns a mutable reference to the value corresponding to the key.
@@ -565,7 +574,10 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        let idx = self.slots.get_unchecked(key.data().idx as usize).idx_or_free;
+        let idx = self
+            .slots
+            .get_unchecked(key.data().idx as usize)
+            .idx_or_free;
         self.values.get_unchecked_mut(idx as usize)
     }
 
@@ -591,7 +603,6 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(has_min_const_generics)]
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
         // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
         // safe because the type we are claiming to have initialized here is a
@@ -656,7 +667,6 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(has_min_const_generics)]
     pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
         &mut self,
         keys: [K; N],
@@ -686,7 +696,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     ///     println!("key: {:?}, val: {}", k, v);
     /// }
     /// ```
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             inner_keys: self.keys.iter(),
             inner_values: self.values.iter(),
@@ -716,7 +726,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(sm[k1], 20);
     /// assert_eq!(sm[k2], -30);
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut {
             inner_keys: self.keys.iter(),
             inner_values: self.values.iter_mut(),
@@ -739,7 +749,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let check: HashSet<_> = vec![k0, k1, k2].into_iter().collect();
     /// assert_eq!(keys, check);
     /// ```
-    pub fn keys(&self) -> Keys<K, V> {
+    pub fn keys(&self) -> Keys<'_, K, V> {
         Keys { inner: self.iter() }
     }
 
@@ -759,7 +769,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let check: HashSet<_> = vec![&10, &20, &30].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values(&self) -> Values<K, V> {
+    pub fn values(&self) -> Values<'_, K, V> {
         Values { inner: self.iter() }
     }
 
@@ -780,7 +790,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// let check: HashSet<_> = vec![3, 6, 9].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values_mut(&mut self) -> ValuesMut<K, V> {
+    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         ValuesMut {
             inner: self.iter_mut(),
         }
@@ -1136,7 +1146,10 @@ mod serialize {
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if serde_slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
+            if serde_slots
+                .get(0)
+                .map_or(true, |slot| slot.version % 2 == 1)
+            {
                 return Err(de::Error::custom(&"first slot not empty"));
             }
 

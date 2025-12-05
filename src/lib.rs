@@ -10,27 +10,12 @@
     unused_lifetimes,
     unused_import_braces
 )]
-#![deny(missing_docs, unaligned_references)]
-#![cfg_attr(feature = "cargo-clippy", allow(renamed_and_removed_lints))]
-#![cfg_attr(feature = "cargo-clippy", deny(clippy, clippy_pedantic))]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(
-        // Style differences.
-        module_name_repetitions,
-        redundant_closure_for_method_calls,
-        unseparated_literal_suffix,
-
-        // I know what I'm doing and want these.
-        wildcard_imports,
-        inline_always,
-        cast_possible_truncation,
-        needless_pass_by_value,
-
-        // Very noisy.
-        missing_errors_doc,
-        must_use_candidate
-    ))]
+#![deny(missing_docs)]
+#![deny(clippy::all)]
+#![allow(
+    clippy::while_let_on_iterator, // Style differences.
+    clippy::unnecessary_map_or // Too high MSRV.
+)]
 
 //! # slotmap
 //!
@@ -208,10 +193,11 @@ extern crate alloc;
 // So our macros can refer to these.
 #[doc(hidden)]
 pub mod __impl {
-    #[cfg(feature = "serde")]
-    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
     pub use core::convert::From;
     pub use core::result::Result;
+
+    #[cfg(feature = "serde")]
+    pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
 }
 
 pub mod basic;
@@ -273,11 +259,11 @@ impl KeyData {
     }
 
     fn null() -> Self {
-        Self::new(core::u32::MAX, 1)
+        Self::new(u32::MAX, 1)
     }
 
     fn is_null(self) -> bool {
-        self.idx == core::u32::MAX
+        self.idx == u32::MAX
     }
 
     /// Returns the key data as a 64-bit integer. No guarantees about its value
@@ -319,8 +305,7 @@ impl Default for KeyData {
     }
 }
 
-impl Hash for KeyData
-{
+impl Hash for KeyData {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // A derived Hash impl would call write_u32 twice. We call write_u64
         // once, which is beneficial if the hasher implements write_u64
@@ -343,6 +328,10 @@ impl Hash for KeyData
 /// The internal unsafe code relies on this, therefore this trait is `unsafe` to
 /// implement. It is strongly suggested to simply use [`new_key_type!`] instead
 /// of implementing this trait yourself.
+///
+/// # Safety
+/// All methods and trait implementations must behave exactly as if we're
+/// operating on a [`KeyData`] directly.
 pub unsafe trait Key:
     From<KeyData>
     + Copy
@@ -572,12 +561,12 @@ mod tests {
         use super::new_key_type;
 
         // Clobber namespace with clashing names - should still work.
-        trait Serialize { }
-        trait Deserialize { }
-        trait Serializer { }
-        trait Deserializer { }
-        trait Key { }
-        trait From { }
+        trait Serialize {}
+        trait Deserialize {}
+        trait Serializer {}
+        trait Deserializer {}
+        trait Key {}
+        trait From {}
         struct Result;
         struct KeyData;
 

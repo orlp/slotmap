@@ -13,7 +13,7 @@ use core::marker::PhantomData;
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, UnwrapUnchecked, PanicOnDrop};
+use crate::util::{Never, PanicOnDrop};
 use crate::{DefaultKey, Key, KeyData};
 
 // Storage inside a slot or metadata for the freelist when vacant.
@@ -50,7 +50,7 @@ impl<T> Slot<T> {
         self.version % 2 > 0
     }
 
-    pub fn get(&self) -> SlotContent<T> {
+    pub fn get(&self) -> SlotContent<'_, T> {
         unsafe {
             if self.occupied() {
                 Occupied(&*self.u.value)
@@ -60,7 +60,7 @@ impl<T> Slot<T> {
         }
     }
 
-    pub fn get_mut(&mut self) -> SlotContentMut<T> {
+    pub fn get_mut(&mut self) -> SlotContentMut<'_, T> {
         unsafe {
             if self.occupied() {
                 OccupiedMut(&mut *self.u.value)
@@ -348,7 +348,10 @@ impl<K: Key, V> SlotMap<K, V> {
     /// ```
     #[inline(always)]
     pub fn insert(&mut self, value: V) -> K {
-        unsafe { self.try_insert_with_key::<_, Never>(move |_| Ok(value)).unwrap_unchecked_() }
+        unsafe {
+            self.try_insert_with_key::<_, Never>(move |_| Ok(value))
+                .unwrap_unchecked()
+        }
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -373,7 +376,10 @@ impl<K: Key, V> SlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        unsafe { self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap_unchecked_() }
+        unsafe {
+            self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
+                .unwrap_unchecked()
+        }
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -403,7 +409,7 @@ impl<K: Key, V> SlotMap<K, V> {
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
-        if new_num_elems == core::u32::MAX {
+        if new_num_elems == u32::MAX {
             panic!("SlotMap number of elements overflow");
         }
 
@@ -570,7 +576,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm.len(), 0);
     /// assert_eq!(v, vec![(k, 0)]);
     /// ```
-    pub fn drain(&mut self) -> Drain<K, V> {
+    pub fn drain(&mut self) -> Drain<'_, K, V> {
         Drain { cur: 1, sm: self }
     }
 
@@ -659,7 +665,11 @@ impl<K: Key, V> SlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        &mut self.slots.get_unchecked_mut(key.data().idx as usize).u.value
+        &mut self
+            .slots
+            .get_unchecked_mut(key.data().idx as usize)
+            .u
+            .value
     }
 
     /// Returns mutable references to the values corresponding to the given
@@ -683,7 +693,6 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(has_min_const_generics)]
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
         // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
         // safe because the type we are claiming to have initialized here is a
@@ -746,7 +755,6 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(has_min_const_generics)]
     pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
         &mut self,
         keys: [K; N],
@@ -778,7 +786,7 @@ impl<K: Key, V> SlotMap<K, V> {
     ///     println!("key: {:?}, val: {}", k, v);
     /// }
     /// ```
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         let mut it = self.slots.iter().enumerate();
         it.next(); // Skip sentinel.
         Iter {
@@ -814,7 +822,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm[k1], 20);
     /// assert_eq!(sm[k2], -30);
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         let len = self.len();
         let mut it = self.slots.iter_mut().enumerate();
         it.next(); // Skip sentinel.
@@ -844,7 +852,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// let check: HashSet<_> = vec![k0, k1, k2].into_iter().collect();
     /// assert_eq!(keys, check);
     /// ```
-    pub fn keys(&self) -> Keys<K, V> {
+    pub fn keys(&self) -> Keys<'_, K, V> {
         Keys { inner: self.iter() }
     }
 
@@ -867,7 +875,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// let check: HashSet<_> = vec![&10, &20, &30].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values(&self) -> Values<K, V> {
+    pub fn values(&self) -> Values<'_, K, V> {
         Values { inner: self.iter() }
     }
 
@@ -891,7 +899,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// let check: HashSet<_> = vec![3, 6, 9].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values_mut(&mut self) -> ValuesMut<K, V> {
+    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         ValuesMut {
             inner: self.iter_mut(),
         }
@@ -1121,7 +1129,7 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
     type Item = (K, &'a mut V);
 
     fn next(&mut self) -> Option<(K, &'a mut V)> {
-        while let Some((idx, slot)) = self.slots.next() {
+        for (idx, slot) in self.slots.by_ref() {
             let version = slot.version;
             if let OccupiedMut(value) = slot.get_mut() {
                 let kd = KeyData::new(idx as u32, version);

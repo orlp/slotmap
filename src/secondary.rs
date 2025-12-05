@@ -457,7 +457,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec.len(), 0);
     /// assert_eq!(v, vec![(k, 1)]);
     /// ```
-    pub fn drain(&mut self) -> Drain<K, V> {
+    pub fn drain(&mut self) -> Drain<'_, K, V> {
         Drain { cur: 1, sm: self }
     }
 
@@ -581,7 +581,6 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec[ka], "apples");
     /// assert_eq!(sec[kb], "butter");
     /// ```
-    #[cfg(has_min_const_generics)]
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
         // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
         // safe because the type we are claiming to have initialized here is a
@@ -655,7 +654,6 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec[ka], "apples");
     /// assert_eq!(sec[kb], "butter");
     /// ```
-    #[cfg(has_min_const_generics)]
     pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
         &mut self,
         keys: [K; N],
@@ -688,7 +686,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     ///     println!("key: {:?}, val: {}", k, v);
     /// }
     /// ```
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             num_left: self.num_elems,
             slots: self.slots.iter().enumerate(),
@@ -723,7 +721,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec[k1], 20);
     /// assert_eq!(sec[k2], -30);
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut {
             num_left: self.num_elems,
             slots: self.slots.iter_mut().enumerate(),
@@ -751,7 +749,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// let check: HashSet<_> = vec![k0, k1, k2].into_iter().collect();
     /// assert_eq!(keys, check);
     /// ```
-    pub fn keys(&self) -> Keys<K, V> {
+    pub fn keys(&self) -> Keys<'_, K, V> {
         Keys { inner: self.iter() }
     }
 
@@ -775,7 +773,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// let check: HashSet<_> = vec![&10, &20, &30].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values(&self) -> Values<K, V> {
+    pub fn values(&self) -> Values<'_, K, V> {
         Values { inner: self.iter() }
     }
 
@@ -800,7 +798,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// let check: HashSet<_> = vec![30, 60, 90].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values_mut(&mut self) -> ValuesMut<K, V> {
+    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         ValuesMut {
             inner: self.iter_mut(),
         }
@@ -820,7 +818,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// let v = sec.entry(k).unwrap().or_insert(10);
     /// assert_eq!(*v, 10);
     /// ```
-    pub fn entry(&mut self, key: K) -> Option<Entry<K, V>> {
+    pub fn entry(&mut self, key: K) -> Option<Entry<'_, K, V>> {
         if key.is_null() {
             return None;
         }
@@ -883,8 +881,11 @@ impl<K: Key, V: PartialEq> PartialEq for SecondaryMap<K, V> {
             return false;
         }
 
-        self.iter()
-            .all(|(key, value)| other.get(key).map_or(false, |other_value| *value == *other_value))
+        self.iter().all(|(key, value)| {
+            other
+                .get(key)
+                .map_or(false, |other_value| *value == *other_value)
+        })
     }
 }
 

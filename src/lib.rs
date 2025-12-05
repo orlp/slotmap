@@ -249,7 +249,7 @@ pub struct KeyData {
 }
 
 impl KeyData {
-    fn new(idx: u32, version: u32) -> Self {
+    const fn new(idx: u32, version: u32) -> Self {
         debug_assert!(version > 0);
 
         Self {
@@ -286,7 +286,7 @@ impl KeyData {
 
     /// Iff `value` is a value received from `k.as_ffi()`, returns a key equal
     /// to `k`. Otherwise the behavior is safe but unspecified.
-    pub fn from_ffi(value: u64) -> Self {
+    pub const fn from_ffi(value: u64) -> Self {
         let idx = value & 0xffff_ffff;
         let version = (value >> 32) | 1; // Ensure version is odd.
         Self::new(idx as u32, version as u32)

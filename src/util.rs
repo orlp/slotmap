@@ -4,6 +4,20 @@ use core::fmt::Debug;
 #[derive(Debug)]
 pub enum Never {}
 
+pub trait UnwrapNever<T> {
+    fn unwrap_never(self) -> T;
+}
+
+impl<T> UnwrapNever<T> for Result<T, Never> {
+    #[inline(always)]
+    fn unwrap_never(self) -> T {
+        match self {
+            Ok(x) => x,
+            Err(e) => match e {},
+        }
+    }
+}
+
 /// Returns if a is an older version than b, taking into account wrapping of
 /// versions.
 pub fn is_older_version(a: u32, b: u32) -> bool {

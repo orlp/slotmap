@@ -295,7 +295,11 @@ impl KeyData {
 
 impl Debug for KeyData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}v{}", self.idx, self.version.get())
+        if self.is_null() {
+            f.write_str("null")
+        } else {
+            write!(f, "{}v{}", self.idx, self.version.get())
+        }
     }
 }
 

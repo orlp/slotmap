@@ -8,7 +8,7 @@ use core::marker::PhantomData;
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, PanicOnDrop};
+use crate::util::{Never, PanicOnDrop, UnwrapNever};
 use crate::{DefaultKey, Key, KeyData};
 
 // Storage inside a slot or metadata for the freelist when vacant.
@@ -341,10 +341,8 @@ impl<K: Key, V> SlotMap<K, V> {
     /// ```
     #[inline(always)]
     pub fn insert(&mut self, value: V) -> K {
-        unsafe {
-            self.try_insert_with_key::<_, Never>(move |_| Ok(value))
-                .unwrap_unchecked()
-        }
+        self.try_insert_with_key::<_, Never>(move |_| Ok(value))
+            .unwrap_never()
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -369,10 +367,8 @@ impl<K: Key, V> SlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        unsafe {
-            self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
-                .unwrap_unchecked()
-        }
+        self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
+            .unwrap_never()
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the

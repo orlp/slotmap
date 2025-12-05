@@ -5,6 +5,7 @@ Version 1.1.0
  - Fixed memory leak in `clone_from`.
  - Added `keys_as_slice`, `values_as_slice`, and `values_as_mut_slice` to
    `DenseSlotMap`.
+ - Ensured that `is_null()` keys print as `null` in their `Debug` representation.
 
 Version 1.0.7
 =============

@@ -25,7 +25,7 @@ use core::mem::ManuallyDrop;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
-use crate::util::{Never, PanicOnDrop, UnwrapUnchecked};
+use crate::util::{Never, PanicOnDrop};
 use crate::{DefaultKey, Key, KeyData};
 
 // Metadata to maintain the freelist.
@@ -70,7 +70,7 @@ impl<T> Slot<T> {
         self.version % 2 == 1
     }
 
-    pub fn get(&self) -> SlotContent<T> {
+    pub fn get(&self) -> SlotContent<'_, T> {
         unsafe {
             if self.occupied() {
                 Occupied(&*self.u.value)
@@ -80,7 +80,7 @@ impl<T> Slot<T> {
         }
     }
 
-    pub fn get_mut(&mut self) -> SlotContentMut<T> {
+    pub fn get_mut(&mut self) -> SlotContentMut<'_, T> {
         unsafe {
             if self.occupied() {
                 OccupiedMut(&mut *self.u.value)
@@ -367,7 +367,10 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// ```
     #[inline(always)]
     pub fn insert(&mut self, value: V) -> K {
-        unsafe { self.try_insert_with_key::<_, Never>(move |_| Ok(value)).unwrap_unchecked_() }
+        unsafe {
+            self.try_insert_with_key::<_, Never>(move |_| Ok(value))
+                .unwrap_unchecked()
+        }
     }
 
     // Helper function to make using the freelist painless.
@@ -399,7 +402,10 @@ impl<K: Key, V> HopSlotMap<K, V> {
     where
         F: FnOnce(K) -> V,
     {
-        unsafe { self.try_insert_with_key::<_, Never>(move |k| Ok(f(k))).unwrap_unchecked_() }
+        unsafe {
+            self.try_insert_with_key::<_, Never>(move |k| Ok(f(k)))
+                .unwrap_unchecked()
+        }
     }
 
     /// Inserts a value given by `f` into the slot map. The key where the
@@ -429,7 +435,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     {
         // In case f panics, we don't make any changes until we have the value.
         let new_num_elems = self.num_elems + 1;
-        if new_num_elems == core::u32::MAX {
+        if new_num_elems == u32::MAX {
             panic!("HopSlotMap number of elements overflow");
         }
 
@@ -666,7 +672,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// assert_eq!(sm.len(), 0);
     /// assert_eq!(v, vec![(k, 0)]);
     /// ```
-    pub fn drain(&mut self) -> Drain<K, V> {
+    pub fn drain(&mut self) -> Drain<'_, K, V> {
         Drain {
             cur: unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 },
             sm: self,
@@ -762,7 +768,11 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: K) -> &mut V {
         debug_assert!(self.contains_key(key));
-        &mut self.slots.get_unchecked_mut(key.data().idx as usize).u.value
+        &mut self
+            .slots
+            .get_unchecked_mut(key.data().idx as usize)
+            .u
+            .value
     }
 
     /// Returns mutable references to the values corresponding to the given
@@ -787,7 +797,6 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(has_min_const_generics)]
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
         // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
         // safe because the type we are claiming to have initialized here is a
@@ -851,7 +860,6 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// assert_eq!(sm[ka], "apples");
     /// assert_eq!(sm[kb], "butter");
     /// ```
-    #[cfg(has_min_const_generics)]
     pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(
         &mut self,
         keys: [K; N],
@@ -880,7 +888,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     ///     println!("key: {:?}, val: {}", k, v);
     /// }
     /// ```
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             cur: unsafe { self.slots.get_unchecked(0).u.free.other_end as usize + 1 },
             num_left: self.len(),
@@ -912,7 +920,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// assert_eq!(sm[k1], 20);
     /// assert_eq!(sm[k2], -30);
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut {
             cur: 0,
             num_left: self.len(),
@@ -937,7 +945,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// let check: HashSet<_> = vec![k0, k1, k2].into_iter().collect();
     /// assert_eq!(keys, check);
     /// ```
-    pub fn keys(&self) -> Keys<K, V> {
+    pub fn keys(&self) -> Keys<'_, K, V> {
         Keys { inner: self.iter() }
     }
 
@@ -957,7 +965,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// let check: HashSet<_> = vec![&10, &20, &30].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values(&self) -> Values<K, V> {
+    pub fn values(&self) -> Values<'_, K, V> {
         Values { inner: self.iter() }
     }
 
@@ -978,7 +986,7 @@ impl<K: Key, V> HopSlotMap<K, V> {
     /// let check: HashSet<_> = vec![3, 6, 9].into_iter().collect();
     /// assert_eq!(values, check);
     /// ```
-    pub fn values_mut(&mut self) -> ValuesMut<K, V> {
+    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         ValuesMut {
             inner: self.iter_mut(),
         }
@@ -1071,7 +1079,7 @@ impl<'a, K: 'a + Key, V: 'a> Clone for Iter<'a, K, V> {
             cur: self.cur,
             num_left: self.num_left,
             slots: self.slots,
-            _k: self._k.clone(),
+            _k: self._k,
         }
     }
 }
@@ -1133,7 +1141,7 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
     fn next(&mut self) -> Option<(K, V)> {
         // All unchecked indices are safe due to the invariants of the freelist
         // and that self.sm.len() guarantees there is another element.
-        if self.sm.len() == 0 {
+        if self.sm.is_empty() {
             return None;
         }
 
@@ -1145,7 +1153,9 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
             None => 0,
         };
 
-        let key = KeyData::new(idx as u32, unsafe { self.sm.slots.get_unchecked(idx).version });
+        let key = KeyData::new(idx as u32, unsafe {
+            self.sm.slots.get_unchecked(idx).version
+        });
         Some((key.into(), unsafe { self.sm.remove_from_slot(idx) }))
     }
 

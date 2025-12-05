@@ -455,7 +455,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         self.drain();
     }
 
-    /// Clears the slot map, returning all key-value pairs in arbitrary order
+    /// Clears the slot map, returning all key-value pairs in an arbitrary order
     /// as an iterator. Keeps the allocated memory for reuse.
     ///
     /// When the iterator is dropped all elements in the slot map are removed,
@@ -679,7 +679,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
 
-    /// An iterator visiting all key-value pairs in arbitrary order. The
+    /// An iterator visiting all key-value pairs in an arbitrary order. The
     /// iterator element type is `(K, &'a V)`.
     ///
     /// # Examples
@@ -703,7 +703,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         }
     }
 
-    /// An iterator visiting all key-value pairs in arbitrary order, with
+    /// An iterator visiting all key-value pairs in an arbitrary order, with
     /// mutable references to the values. The iterator element type is
     /// `(K, &'a mut V)`.
     ///
@@ -733,8 +733,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         }
     }
 
-    /// An iterator visiting all keys in arbitrary order. The iterator element
-    /// type is K.
+    /// An iterator visiting all keys in an arbitrary order. The iterator
+    /// element type is K.
     ///
     /// # Examples
     ///
@@ -753,8 +753,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         Keys { inner: self.iter() }
     }
 
-    /// An iterator visiting all values in arbitrary order. The iterator element
-    /// type is `&'a V`.
+    /// An iterator visiting all values in an arbitrary order. The iterator
+    /// element type is `&'a V`.
     ///
     /// # Examples
     ///
@@ -773,8 +773,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         Values { inner: self.iter() }
     }
 
-    /// An iterator visiting all values mutably in arbitrary order. The iterator
-    /// element type is `&'a mut V`.
+    /// An iterator visiting all values mutably in an arbitrary order. The
+    /// iterator element type is `&'a mut V`.
     ///
     /// # Examples
     ///
@@ -794,6 +794,72 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         ValuesMut {
             inner: self.iter_mut(),
         }
+    }
+
+    /// Returns a slice containing all keys in the slot map in an arbitrary
+    /// order (but in the same order as [`values_as_slice`]).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::new();
+    /// let k1 = sm.insert(1);
+    /// let k2 = sm.insert(2);
+    /// sm.remove(k1);
+    /// sm.insert(3);
+    /// let key_slice = sm.keys_as_slice();
+    /// // The order is arbitrary, but we can check if the keys are present.
+    /// assert!(key_slice.contains(&k2));
+    /// assert_eq!(key_slice.len(), 2);
+    /// // The keys correspond to the values.
+    /// assert_eq!(sm.values_as_slice()[0], sm[key_slice[0]]);
+    /// ```
+    pub fn keys_as_slice(&self) -> &[K] {
+        self.keys.as_slice()
+    }
+
+    /// Returns a slice containing all values in the slot map in an arbitrary
+    /// order (but in the same order as [`keys_as_slice`]).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use std::collections::HashSet;
+    /// let mut sm = DenseSlotMap::new();
+    /// sm.insert(10);
+    /// sm.insert(20);
+    /// sm.insert(30);
+    /// let value_slice = sm.values_as_slice();
+    /// let values: HashSet<_> = value_slice.iter().collect();
+    /// let check: HashSet<_> = vec![&10, &20, &30].into_iter().collect();
+    /// assert_eq!(values, check);
+    /// // The keys correspond to the values.
+    /// assert_eq!(value_slice[0], sm[sm.keys_as_slice()[0]]);
+    /// ```
+    pub fn values_as_slice(&self) -> &[V] {
+        self.values.as_slice()
+    }
+
+    /// Returns a mutable slice containing all values in the slot map in
+    /// an arbitrary order (but in the same order as [`keys_as_slice`]).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// # use std::collections::HashSet;
+    /// let mut sm = DenseSlotMap::new();
+    /// sm.insert(1);
+    /// sm.insert(2);
+    /// sm.insert(3);
+    /// let slice = sm.values_as_mut_slice();
+    /// slice.iter_mut().for_each(|n| { *n *= 3 });
+    /// assert_eq!(slice, &[3, 6, 9]);
+    /// ```
+    pub fn values_as_mut_slice(&mut self) -> &mut [V] {
+        self.values.as_mut_slice()
     }
 }
 

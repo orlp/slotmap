@@ -3,6 +3,8 @@ Version 1.1.0
 
  - Bumped MSRV to 1.58.
  - Fixed memory leak in `clone_from`.
+ - Added `keys_as_slice`, `values_as_slice`, and `values_as_mut_slice` to
+   `DenseSlotMap`.
 
 Version 1.0.7
 =============

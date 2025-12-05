@@ -1,3 +1,9 @@
+Version 1.1.0
+=============
+
+ - Bumped MSRV to 1.58.
+ - Fixed memory leak in `clone_from`.
+
 Version 1.0.7
 =============
 

@@ -238,7 +238,7 @@ impl<T> Slottable for T {}
 
 /// The actual data stored in a [`Key`].
 ///
-/// This implements [`Ord`](std::cmp::Ord) so keys can be stored in e.g.
+/// This implements [`Ord`] so keys can be stored in e.g.
 /// [`BTreeMap`](std::collections::BTreeMap), but the order of keys is
 /// unspecified.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

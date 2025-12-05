@@ -328,8 +328,7 @@ impl<K: Key, V> SlotMap<K, V> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map equals
-    /// 2<sup>32</sup> - 2.
+    /// Panics if the slot map is full.
     ///
     /// # Examples
     ///
@@ -351,8 +350,7 @@ impl<K: Key, V> SlotMap<K, V> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map equals
-    /// 2<sup>32</sup> - 2.
+    /// Panics if the slot map is full.
     ///
     /// # Examples
     ///
@@ -379,8 +377,7 @@ impl<K: Key, V> SlotMap<K, V> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map equals
-    /// 2<sup>32</sup> - 2.
+    /// Panics if the slot map is full.
     ///
     /// # Examples
     ///
@@ -396,12 +393,6 @@ impl<K: Key, V> SlotMap<K, V> {
     where
         F: FnOnce(K) -> Result<V, E>,
     {
-        // In case f panics, we don't make any changes until we have the value.
-        let new_num_elems = self.num_elems + 1;
-        if new_num_elems == u32::MAX {
-            panic!("SlotMap number of elements overflow");
-        }
-
         if let Some(slot) = self.slots.get_mut(self.free_head as usize) {
             let occupied_version = slot.version | 1;
             let kd = KeyData::new(self.free_head, occupied_version);
@@ -415,8 +406,12 @@ impl<K: Key, V> SlotMap<K, V> {
                 slot.u.value = ManuallyDrop::new(value);
                 slot.version = occupied_version;
             }
-            self.num_elems = new_num_elems;
+            self.num_elems += 1;
             return Ok(kd.into());
+        }
+
+        if self.slots.len() >= u32::MAX as usize {
+            panic!("SlotMap is full");
         }
 
         let version = 1;
@@ -431,7 +426,7 @@ impl<K: Key, V> SlotMap<K, V> {
         });
 
         self.free_head = kd.idx + 1;
-        self.num_elems = new_num_elems;
+        self.num_elems += 1;
         Ok(kd.into())
     }
 
@@ -472,6 +467,81 @@ impl<K: Key, V> SlotMap<K, V> {
         } else {
             None
         }
+    }
+    
+    /// Temporarily removes a key from the slot map, returning the value at the
+    /// key if the key was not previously removed.
+    /// 
+    /// The key becomes invalid and cannot be used until
+    /// [`reattach`](Self::reattach) is called with that key and a new value.
+    /// 
+    /// Unfortunately, detached keys become permanently removed in a
+    /// deserialized copy if the slot map is serialized while they are detached.
+    /// Preserving detached keys across serialization is a possible future
+    /// enhancement, you must not rely on this behavior.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let key = sm.insert(42);
+    /// assert_eq!(sm.detach(key), Some(42));
+    /// assert_eq!(sm.get(key), None);
+    /// sm.reattach(key, 100);
+    /// assert_eq!(sm.get(key), Some(&100));
+    /// ```
+    pub fn detach(&mut self, key: K) -> Option<V> {
+        let kd = key.data();
+        if self.contains_key(key) {
+            unsafe {
+                // Remove value from slot before overwriting union.
+                let slot = self.slots.get_unchecked_mut(kd.idx as usize);
+                let value = ManuallyDrop::take(&mut slot.u.value);
+
+                // Don't add slot to freelist, mark it as detached.
+                slot.u.next_free = u32::MAX;
+                slot.version = slot.version.wrapping_add(1);
+                self.num_elems -= 1;
+                Some(value)
+            }
+        } else {
+            None
+        }
+    }
+    
+    /// Reattaches a previously detached key with a new value. See
+    /// [`detach`](Self::detach) for details.
+    /// 
+    /// # Panics
+    /// 
+    /// Panics if the key is not detached.
+    /// 
+    /// # Examples
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let key = sm.insert(42);
+    /// assert_eq!(sm.detach(key), Some(42));
+    /// assert_eq!(sm.get(key), None);
+    /// sm.reattach(key, 100);
+    /// assert_eq!(sm.get(key), Some(&100));
+    /// ```
+    pub fn reattach(&mut self, detached_key: K, value: V) {
+        let kd = detached_key.data();
+        let slot = self.slots.get_mut(kd.idx as usize)
+            .filter(|slot| slot.version == kd.version.get().wrapping_add(1))
+            .filter(|slot| unsafe {
+                // SAFETY: we already implicitly checked just above that the
+                // version is even, meaning we are unoccupied.
+                slot.u.next_free == u32::MAX
+            })
+            .expect("key is not detached");
+
+        // Reattach the slot.
+        slot.u.value = ManuallyDrop::new(value);
+        slot.version = slot.version.wrapping_sub(1);
+        self.num_elems += 1;
     }
 
     /// Retains only the elements specified by the predicate.

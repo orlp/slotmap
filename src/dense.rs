@@ -235,8 +235,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map equals
-    /// 2<sup>32</sup> - 2.
+    /// Panics if the slot map is full.
     ///
     /// # Examples
     ///
@@ -258,8 +257,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map equals
-    /// 2<sup>32</sup> - 2.
+    /// Panics if the slot map is full.
     ///
     /// # Examples
     ///
@@ -303,15 +301,9 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     where
         F: FnOnce(K) -> Result<V, E>,
     {
-        if self.len() >= (u32::MAX - 1) as usize {
-            panic!("DenseSlotMap number of elements overflow");
-        }
-
-        let idx = self.free_head;
-
-        if let Some(slot) = self.slots.get_mut(idx as usize) {
+        if let Some(slot) = self.slots.get_mut(self.free_head as usize) {
             let occupied_version = slot.version | 1;
-            let key = KeyData::new(idx, occupied_version).into();
+            let key = KeyData::new(self.free_head, occupied_version).into();
 
             // Push value before adjusting slots/freelist in case f panics or returns an error.
             self.values.push(f(key)?);
@@ -322,8 +314,12 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             return Ok(key);
         }
 
+        if self.slots.len() >= u32::MAX as usize {
+            panic!("DenseSlotMap is full");
+        }
+
         // Push value before adjusting slots/freelist in case f panics or returns an error.
-        let key = KeyData::new(idx, 1).into();
+        let key = KeyData::new(self.slots.len() as u32, 1).into();
         self.values.push(f(key)?);
         self.keys.push(key);
         self.slots.push(Slot {
@@ -352,7 +348,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     fn remove_from_slot(&mut self, slot_idx: usize) -> V {
         let value_idx = self.free_slot(slot_idx);
 
-        // Remove values/slot_indices by swapping to end.
+        // Remove value/key by swapping to end.
         let _ = self.keys.swap_remove(value_idx as usize);
         let value = self.values.swap_remove(value_idx as usize);
 
@@ -383,6 +379,86 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         } else {
             None
         }
+    }
+
+    /// Temporarily removes a key from the slot map, returning the value at the
+    /// key if the key was not previously removed.
+    /// 
+    /// The key becomes invalid and cannot be used until
+    /// [`reattach`](Self::reattach) is called with that key and a new value.
+    /// 
+    /// Unfortunately, detached keys become permanently removed in a
+    /// deserialized copy if the slot map is serialized while they are detached.
+    /// Preserving detached keys across serialization is a possible future
+    /// enhancement, you must not rely on this behavior.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::new();
+    /// let key = sm.insert(42);
+    /// assert_eq!(sm.detach(key), Some(42));
+    /// assert_eq!(sm.get(key), None);
+    /// sm.reattach(key, 100);
+    /// assert_eq!(sm.get(key), Some(&100));
+    /// ```
+    pub fn detach(&mut self, key: K) -> Option<V> {
+        let kd = key.data();
+        if self.contains_key(key) {
+            // Don't add slot to freelist, mark it as detached.
+            let slot = &mut self.slots[kd.idx as usize];
+            let value_idx = slot.idx_or_free;
+            slot.version = slot.version.wrapping_add(1);
+            slot.idx_or_free = u32::MAX;
+                
+            // Remove value/key by swapping to end.
+            let _ = self.keys.swap_remove(value_idx as usize);
+            let value = self.values.swap_remove(value_idx as usize);
+
+            // Did something take our place? Update its slot to new position.
+            if let Some(k) = self.keys.get(value_idx as usize) {
+                self.slots[k.data().idx as usize].idx_or_free = value_idx;
+            }
+
+            Some(value)
+        } else {
+            None
+        }
+    }
+    
+    /// Reattaches a previously detached key with a new value. See
+    /// [`detach`](Self::detach) for details.
+    /// 
+    /// # Panics
+    /// 
+    /// Panics if the key is not detached or if the slot map is full.
+    /// 
+    /// # Examples
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::new();
+    /// let key = sm.insert(42);
+    /// assert_eq!(sm.detach(key), Some(42));
+    /// assert_eq!(sm.get(key), None);
+    /// sm.reattach(key, 100);
+    /// assert_eq!(sm.get(key), Some(&100));
+    /// ```
+    pub fn reattach(&mut self, detached_key: K, value: V) {
+        if self.len() >= (u32::MAX - 1) as usize {
+            panic!("DenseSlotMap number of elements overflow");
+        }
+
+        let kd = detached_key.data();
+        let slot = self.slots.get_mut(kd.idx as usize)
+            .filter(|slot| slot.version == kd.version.get().wrapping_add(1))
+            .filter(|slot| slot.idx_or_free == u32::MAX)
+            .expect("key is not detached");
+        
+        self.keys.push(detached_key);
+        self.values.push(value);
+        slot.idx_or_free = self.keys.len() as u32 - 1;
+        slot.version = slot.version.wrapping_sub(1);
     }
 
     /// Retains only the elements specified by the predicate.
@@ -785,7 +861,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     }
 
     /// Returns a slice containing all keys in the slot map in an arbitrary
-    /// order (but in the same order as [`values_as_slice`]).
+    /// order (but in the same order as
+    /// [`values_as_slice`](Self::values_as_slice)).
     ///
     /// # Examples
     ///
@@ -808,7 +885,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     }
 
     /// Returns a slice containing all values in the slot map in an arbitrary
-    /// order (but in the same order as [`keys_as_slice`]).
+    /// order (but in the same order as [`keys_as_slice`](Self::keys_as_slice)).
     ///
     /// # Examples
     ///
@@ -831,7 +908,8 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     }
 
     /// Returns a mutable slice containing all values in the slot map in
-    /// an arbitrary order (but in the same order as [`keys_as_slice`]).
+    /// an arbitrary order (but in the same order as
+    /// [`keys_as_slice`](Self::keys_as_slice)).
     ///
     /// # Examples
     ///

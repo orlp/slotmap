@@ -555,8 +555,8 @@ impl<K: Key, V> SlotMap<K, V> {
         self.drain();
     }
 
-    /// Clears the slot map, returning all key-value pairs in arbitrary order as
-    /// an iterator. Keeps the allocated memory for reuse.
+    /// Clears the slot map, returning all key-value pairs in an arbitrary order
+    /// as an iterator. Keeps the allocated memory for reuse.
     ///
     /// When the iterator is dropped all elements in the slot map are removed,
     /// even if the iterator was not fully consumed. If the iterator is not
@@ -767,7 +767,7 @@ impl<K: Key, V> SlotMap<K, V> {
         core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
 
-    /// An iterator visiting all key-value pairs in arbitrary order. The
+    /// An iterator visiting all key-value pairs in an arbitrary order. The
     /// iterator element type is `(K, &'a V)`.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
@@ -796,7 +796,7 @@ impl<K: Key, V> SlotMap<K, V> {
         }
     }
 
-    /// An iterator visiting all key-value pairs in arbitrary order, with
+    /// An iterator visiting all key-value pairs in an arbitrary order, with
     /// mutable references to the values. The iterator element type is
     /// `(K, &'a mut V)`.
     ///
@@ -833,8 +833,8 @@ impl<K: Key, V> SlotMap<K, V> {
         }
     }
 
-    /// An iterator visiting all keys in arbitrary order. The iterator element
-    /// type is `K`.
+    /// An iterator visiting all keys in an arbitrary order. The iterator
+    /// element type is `K`.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -856,8 +856,8 @@ impl<K: Key, V> SlotMap<K, V> {
         Keys { inner: self.iter() }
     }
 
-    /// An iterator visiting all values in arbitrary order. The iterator element
-    /// type is `&'a V`.
+    /// An iterator visiting all values in an arbitrary order. The iterator
+    /// element type is `&'a V`.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.
@@ -879,8 +879,8 @@ impl<K: Key, V> SlotMap<K, V> {
         Values { inner: self.iter() }
     }
 
-    /// An iterator visiting all values mutably in arbitrary order. The iterator
-    /// element type is `&'a mut V`.
+    /// An iterator visiting all values mutably in an arbitrary order. The
+    /// iterator element type is `&'a mut V`.
     ///
     /// This function must iterate over all slots, empty or not. In the face of
     /// many deleted elements it can be inefficient.

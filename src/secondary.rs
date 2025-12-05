@@ -582,24 +582,18 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// assert_eq!(sec[kb], "butter");
     /// ```
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
-        // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
-        // safe because the type we are claiming to have initialized here is a
-        // bunch of `MaybeUninit`s, which do not require initialization.
-        let mut ptrs: [MaybeUninit<*mut V>; N] = unsafe { MaybeUninit::uninit().assume_init() };
-        let mut slot_versions: [MaybeUninit<u32>; N] =
-            unsafe { MaybeUninit::uninit().assume_init() };
+        let mut slot_versions: [MaybeUninit<u32>; N] = [(); N].map(|_| MaybeUninit::uninit());
 
         let mut i = 0;
         while i < N {
             let kd = keys[i].data();
 
             match self.slots.get_mut(kd.idx as usize) {
-                Some(Occupied { version, value }) if *version == kd.version => {
+                Some(Occupied { version, .. }) if *version == kd.version => {
                     // This key is valid, and the slot is occupied. Temporarily
                     // set the version to 2 so duplicate keys would show up as
                     // invalid, since keys always have an odd version. This
                     // gives us a linear time disjointness check.
-                    ptrs[i] = MaybeUninit::new(&mut *value);
                     slot_versions[i] = MaybeUninit::new(version.get());
                     *version = NonZeroU32::new(2).unwrap();
                 },
@@ -610,12 +604,16 @@ impl<K: Key, V> SecondaryMap<K, V> {
             i += 1;
         }
 
-        // Undo temporary unoccupied markings.
+        // Undo temporary unoccupied markings and gather references.
+        let mut ptrs: [MaybeUninit<*mut V>; N] = [(); N].map(|_| MaybeUninit::uninit());
+        let slots_ptr = self.slots.as_mut_ptr();
         for j in 0..i {
-            let idx = keys[j].data().idx as usize;
             unsafe {
-                match self.slots.get_mut(idx) {
-                    Some(Occupied { version, .. }) => {
+                let idx = keys[j].data().idx as usize;
+                let slot = &mut *slots_ptr.add(idx);
+                match slot {
+                    Occupied { version, value } => {
+                        ptrs[j] = MaybeUninit::new(value);
                         *version = NonZeroU32::new_unchecked(slot_versions[j].assume_init());
                     },
                     _ => unreachable_unchecked(),
@@ -625,7 +623,7 @@ impl<K: Key, V> SecondaryMap<K, V> {
 
         if i == N {
             // All were valid and disjoint.
-            Some(unsafe { core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs) })
+            Some(ptrs.map(|p| unsafe { &mut *p.assume_init() }))
         } else {
             None
         }
@@ -658,12 +656,11 @@ impl<K: Key, V> SecondaryMap<K, V> {
         &mut self,
         keys: [K; N],
     ) -> [&mut V; N] {
-        // Safe, see get_disjoint_mut.
-        let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
-        for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i]));
-        }
-        core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
+        let slots_ptr = self.slots.as_mut_ptr();
+        keys.map(|k| unsafe {
+            let slot = &mut *slots_ptr.add(k.data().idx as usize);
+            slot.get_unchecked_mut()
+        })
     }
 
     /// An iterator visiting all key-value pairs in an arbitrary order. The

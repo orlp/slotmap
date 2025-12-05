@@ -6,6 +6,8 @@ Version 1.1.0
  - Added `keys_as_slice`, `values_as_slice`, and `values_as_mut_slice` to
    `DenseSlotMap`.
  - Ensured that `is_null()` keys print as `null` in their `Debug` representation.
+ - Made `KeyData::new` and `KeyData::from_ffi` const.
+ - Resolved a Miri error in `get_disjoint_mut` under the Stacked Borrows model.
 
 Version 1.0.7
 =============

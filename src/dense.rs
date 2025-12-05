@@ -604,14 +604,11 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// assert_eq!(sm[kb], "butter");
     /// ```
     pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> Option<[&mut V; N]> {
-        // Create an uninitialized array of `MaybeUninit`. The `assume_init` is
-        // safe because the type we are claiming to have initialized here is a
-        // bunch of `MaybeUninit`s, which do not require initialization.
-        let mut ptrs: [MaybeUninit<*mut V>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+        let mut ptrs: [MaybeUninit<*mut V>; N] = [(); N].map(|_| MaybeUninit::uninit());
+        let values_ptr = self.values.as_mut_ptr();
 
         let mut i = 0;
         while i < N {
-            // We can avoid this clone after min_const_generics and array_map.
             let kd = keys[i].data();
             if !self.contains_key(kd.into()) {
                 break;
@@ -623,7 +620,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             unsafe {
                 let slot = self.slots.get_unchecked_mut(kd.idx as usize);
                 slot.version ^= 1;
-                let ptr = self.values.get_unchecked_mut(slot.idx_or_free as usize);
+                let ptr = values_ptr.add(slot.idx_or_free as usize);
                 ptrs[i] = MaybeUninit::new(ptr);
             }
             i += 1;
@@ -639,7 +636,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
 
         if i == N {
             // All were valid and disjoint.
-            Some(unsafe { core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs) })
+            Some(ptrs.map(|p| unsafe { &mut *p.assume_init() }))
         } else {
             None
         }
@@ -671,12 +668,11 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         &mut self,
         keys: [K; N],
     ) -> [&mut V; N] {
-        // Safe, see get_disjoint_mut.
-        let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
-        for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(keys[i]));
-        }
-        core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
+        let values_ptr = self.values.as_mut_ptr();
+        keys.map(|k| unsafe {
+            let slot = self.slots.get_unchecked(k.data().idx as usize);
+            &mut *values_ptr.add(slot.idx_or_free as usize)
+        })
     }
 
     /// An iterator visiting all key-value pairs in an arbitrary order. The

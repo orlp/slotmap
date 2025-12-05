@@ -6,11 +6,9 @@
 // are valid. Keys that are received from the user are not trusted (as they
 // might have come from a different slot map or malicious serde deseralization).
 
-#[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
 use core::iter::FusedIterator;
-#[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
@@ -205,8 +203,6 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// sm.try_reserve(32).unwrap();
     /// assert!(sm.capacity() >= 33);
     /// ```
-    #[cfg(all(nightly, any(doc, feature = "unstable")))]
-    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.keys.try_reserve(additional)?;
         self.values.try_reserve(additional)?;
@@ -1313,7 +1309,6 @@ mod tests {
         assert_eq!(*drops.borrow(), 1750);
     }
 
-    #[cfg(all(nightly, feature = "unstable"))]
     #[test]
     fn disjoint() {
         // Intended to be run with miri to find any potential UB.

@@ -1,8 +1,6 @@
 //! Contains the sparse secondary map implementation.
 
-#[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
-#[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::MaybeUninit;
 use std::collections::hash_map::{self, HashMap};
 use std::hash;
@@ -228,8 +226,6 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
     /// sec.try_reserve(10).unwrap();
     /// assert!(sec.capacity() >= 10);
     /// ```
-    #[cfg(all(nightly, any(doc, feature = "unstable")))]
-    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.slots.try_reserve(additional)
     }
@@ -1597,7 +1593,6 @@ mod tests {
         assert_eq!(sec, sec2);
     }
 
-    #[cfg(all(nightly, feature = "unstable"))]
     #[test]
     fn disjoint() {
         // Intended to be run with miri to find any potential UB.

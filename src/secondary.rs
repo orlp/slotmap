@@ -1,14 +1,11 @@
 //! Contains the secondary map implementation.
 
-#[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
 use core::hint::unreachable_unchecked;
 use core::iter::{Enumerate, Extend, FromIterator, FusedIterator};
 use core::marker::PhantomData;
-use core::mem::replace;
-#[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
-use core::mem::MaybeUninit;
+use core::mem::{replace, MaybeUninit};
 use core::num::NonZeroU32;
 use core::ops::{Index, IndexMut};
 
@@ -252,8 +249,6 @@ impl<K: Key, V> SecondaryMap<K, V> {
     /// sec.try_set_capacity(1000).unwrap();
     /// assert!(sec.capacity() >= 1000);
     /// ```
-    #[cfg(all(nightly, any(doc, feature = "unstable")))]
-    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_set_capacity(&mut self, new_capacity: usize) -> Result<(), TryReserveError> {
         let new_capacity = new_capacity + 1; // Sentinel.
         if new_capacity > self.slots.capacity() {
@@ -1642,7 +1637,6 @@ mod tests {
 
     use crate::*;
 
-    #[cfg(all(nightly, feature = "unstable"))]
     #[test]
     fn disjoint() {
         // Intended to be run with miri to find any potential UB.

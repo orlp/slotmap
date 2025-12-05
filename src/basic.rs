@@ -1,15 +1,10 @@
-// Needed because assigning to non-Copy union is unsafe in stable but not in nightly.
-#![allow(unused_unsafe)]
-
 //! Contains the slot map implementation.
 
-#[cfg(all(nightly, any(doc, feature = "unstable")))]
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
 use core::fmt;
 use core::iter::{Enumerate, FusedIterator};
 use core::marker::PhantomData;
-#[allow(unused_imports)] // MaybeUninit is only used on nightly at the moment.
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
@@ -303,8 +298,6 @@ impl<K: Key, V> SlotMap<K, V> {
     /// sm.try_reserve(32).unwrap();
     /// assert!(sm.capacity() >= 33);
     /// ```
-    #[cfg(all(nightly, any(doc, feature = "unstable")))]
-    #[cfg_attr(all(nightly, doc), doc(cfg(feature = "unstable")))]
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         // One slot is reserved for the sentinel.
         let needed = (self.len() + additional).saturating_sub(self.slots.len() - 1);
@@ -1354,7 +1347,6 @@ mod tests {
         }
     }
 
-    #[cfg(all(nightly, feature = "unstable"))]
     #[test]
     fn check_drops() {
         let drops = std::cell::RefCell::new(0usize);
@@ -1393,7 +1385,6 @@ mod tests {
         assert_eq!(*drops.borrow(), 1750);
     }
 
-    #[cfg(all(nightly, feature = "unstable"))]
     #[test]
     fn disjoint() {
         // Intended to be run with miri to find any potential UB.

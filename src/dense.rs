@@ -383,17 +383,17 @@ impl<K: Key, V> DenseSlotMap<K, V> {
 
     /// Temporarily removes a key from the slot map, returning the value at the
     /// key if the key was not previously removed.
-    /// 
+    ///
     /// The key becomes invalid and cannot be used until
     /// [`reattach`](Self::reattach) is called with that key and a new value.
-    /// 
+    ///
     /// Unfortunately, detached keys become permanently removed in a
     /// deserialized copy if the slot map is serialized while they are detached.
     /// Preserving detached keys across serialization is a possible future
     /// enhancement, you must not rely on this behavior.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// # use slotmap::*;
     /// let mut sm = DenseSlotMap::new();
@@ -411,7 +411,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             let value_idx = slot.idx_or_free;
             slot.version = slot.version.wrapping_add(1);
             slot.idx_or_free = u32::MAX;
-                
+
             // Remove value/key by swapping to end.
             let _ = self.keys.swap_remove(value_idx as usize);
             let value = self.values.swap_remove(value_idx as usize);
@@ -426,14 +426,14 @@ impl<K: Key, V> DenseSlotMap<K, V> {
             None
         }
     }
-    
+
     /// Reattaches a previously detached key with a new value. See
     /// [`detach`](Self::detach) for details.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Panics if the key is not detached or if the slot map is full.
-    /// 
+    ///
     /// # Examples
     /// ```
     /// # use slotmap::*;
@@ -450,11 +450,13 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         }
 
         let kd = detached_key.data();
-        let slot = self.slots.get_mut(kd.idx as usize)
+        let slot = self
+            .slots
+            .get_mut(kd.idx as usize)
             .filter(|slot| slot.version == kd.version.get().wrapping_add(1))
             .filter(|slot| slot.idx_or_free == u32::MAX)
             .expect("key is not detached");
-        
+
         self.keys.push(detached_key);
         self.values.push(value);
         slot.idx_or_free = self.keys.len() as u32 - 1;

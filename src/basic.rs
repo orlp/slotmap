@@ -468,20 +468,20 @@ impl<K: Key, V> SlotMap<K, V> {
             None
         }
     }
-    
+
     /// Temporarily removes a key from the slot map, returning the value at the
     /// key if the key was not previously removed.
-    /// 
+    ///
     /// The key becomes invalid and cannot be used until
     /// [`reattach`](Self::reattach) is called with that key and a new value.
-    /// 
+    ///
     /// Unfortunately, detached keys become permanently removed in a
     /// deserialized copy if the slot map is serialized while they are detached.
     /// Preserving detached keys across serialization is a possible future
     /// enhancement, you must not rely on this behavior.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// # use slotmap::*;
     /// let mut sm = SlotMap::new();
@@ -509,14 +509,14 @@ impl<K: Key, V> SlotMap<K, V> {
             None
         }
     }
-    
+
     /// Reattaches a previously detached key with a new value. See
     /// [`detach`](Self::detach) for details.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Panics if the key is not detached.
-    /// 
+    ///
     /// # Examples
     /// ```
     /// # use slotmap::*;
@@ -529,7 +529,9 @@ impl<K: Key, V> SlotMap<K, V> {
     /// ```
     pub fn reattach(&mut self, detached_key: K, value: V) {
         let kd = detached_key.data();
-        let slot = self.slots.get_mut(kd.idx as usize)
+        let slot = self
+            .slots
+            .get_mut(kd.idx as usize)
             .filter(|slot| slot.version == kd.version.get().wrapping_add(1))
             .filter(|slot| unsafe {
                 // SAFETY: we already implicitly checked just above that the

@@ -216,6 +216,7 @@ pub use crate::basic::SlotMap;
 #[doc(inline)]
 pub use crate::dense::DenseSlotMap;
 #[doc(inline)]
+#[allow(deprecated)]
 pub use crate::hop::HopSlotMap;
 #[doc(inline)]
 pub use crate::secondary::SecondaryMap;
@@ -560,7 +561,6 @@ mod tests {
     #[test]
     fn macro_expansion() {
         #![allow(dead_code)]
-        use super::new_key_type;
 
         // Clobber namespace with clashing names - should still work.
         trait Serialize {}
@@ -598,6 +598,7 @@ mod tests {
         struct NoClone;
 
         let mut sm = SlotMap::new();
+        #[allow(deprecated)]
         let mut hsm = HopSlotMap::new();
         let mut dsm = DenseSlotMap::new();
         let mut scm = SecondaryMap::new();

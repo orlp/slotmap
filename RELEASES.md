@@ -11,6 +11,7 @@ Version 1.1.0
  - Added `detach` and `reattach` methods to `SlotMap` and `DenseSlotMap` which
    let you temporarily remove key/value pairs from the slot map before
    adding them back.
+ - Deprecated `HopSlotMap`, preparing for removal in 2.0.
 
 Version 1.0.7
 =============

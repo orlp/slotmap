@@ -11,6 +11,8 @@
 //!
 //! [`SlotMap`]: crate::SlotMap
 
+#![allow(deprecated)]
+
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
 use core::fmt;
@@ -142,6 +144,10 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 /// Hop slot map, storage with stable unique keys.
 ///
 /// See [crate documentation](crate) for more details.
+#[deprecated(
+    since = "1.1.0",
+    note = "Use `SlotMap` or `DenseSlotMap` instead, the `HopSlotMap` is no longer maintained and will be removed in 2.0."
+)]
 #[derive(Debug)]
 pub struct HopSlotMap<K: Key, V> {
     slots: Vec<Slot<V>>,

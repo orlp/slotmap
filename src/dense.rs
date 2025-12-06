@@ -924,10 +924,58 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     /// sm.insert(3);
     /// let slice = sm.values_as_mut_slice();
     /// slice.iter_mut().for_each(|n| { *n *= 3 });
-    /// assert_eq!(slice, &[3, 6, 9]);
+    /// let values: HashSet<_> = sm.into_iter().map(|(_k, v)| v).collect();
+    /// let check: HashSet<_> = vec![3, 6, 9].into_iter().collect();
+    /// assert_eq!(values, check);
     /// ```
     pub fn values_as_mut_slice(&mut self) -> &mut [V] {
         self.values.as_mut_slice()
+    }
+
+    /// Returns slices containing all keys and values in the slot map in an
+    /// arbitrary order (but in the same order for both slices).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::new();
+    /// sm.insert(10);
+    /// sm.insert(8);
+    /// sm.insert(6);
+    /// let (keys, values) = sm.as_slices();
+    /// for (k, v) in keys.iter().zip(values) {
+    ///     assert_eq!(sm[*k], *v);
+    /// }
+    /// ```
+    pub fn as_slices(&self) -> (&[K], &[V]) {
+        (self.keys.as_slice(), self.values.as_slice())
+    }
+
+    /// Returns slices containing all keys and values in the slot map in an
+    /// arbitrary order (but in the same order for both slices). The values
+    /// slice is mutable.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::new();
+    /// sm.insert(40);
+    /// sm.insert(50);
+    /// let k = sm.insert(60);
+    /// let (keys, values) = sm.as_mut_slices();
+    /// let mut retired = Vec::new();
+    /// for (k, v) in keys.iter().zip(values) {
+    ///     *v += 5;
+    ///     if *v >= 65 {
+    ///         retired.push(*k);
+    ///     }
+    /// }
+    /// assert_eq!(retired, vec![k]);
+    /// ```
+    pub fn as_mut_slices(&mut self) -> (&[K], &mut [V]) {
+        (self.keys.as_slice(), self.values.as_mut_slice())
     }
 }
 

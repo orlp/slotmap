@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/slotmap/1.1.0")]
+#![doc(html_root_url = "https://docs.rs/slotmap/1.1.1")]
 #![crate_name = "slotmap"]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 #![cfg_attr(all(nightly, doc), feature(doc_cfg))]

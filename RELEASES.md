@@ -1,3 +1,10 @@
+Version 1.1.1
+=============
+
+  - Added `as_slices` and `as_mut_slices` to `DenseSlotMap`. The other methods
+    added in 1.1.0 (`keys_as_slice`, `values_as_slice` and
+    `values_as_mut_slice`) will likely be removed in 2.0.
+
 Version 1.1.0
 =============
 

@@ -1383,7 +1383,7 @@ mod serialize {
             let serde_slot: SerdeSlot<T> = Deserialize::deserialize(deserializer)?;
             let occupied = serde_slot.version % 2 == 1;
             if occupied ^ serde_slot.value.is_some() {
-                return Err(de::Error::custom(&"inconsistent occupation in Slot"));
+                return Err(de::Error::custom("inconsistent occupation in Slot"));
             }
 
             Ok(Self {
@@ -1419,13 +1419,13 @@ mod serialize {
             D: Deserializer<'de>,
         {
             let mut slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
-            if slots.len() >= u32::max_value() as usize {
-                return Err(de::Error::custom(&"too many slots"));
+            if slots.len() >= u32::MAX as usize {
+                return Err(de::Error::custom("too many slots"));
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if slots.get(0).map_or(true, |slot| slot.version % 2 == 1) {
-                return Err(de::Error::custom(&"first slot not empty"));
+            if slots.first().map_or(true, |slot| slot.version % 2 == 1) {
+                return Err(de::Error::custom("first slot not empty"));
             }
 
             slots[0].u.free = FreeListEntry {
@@ -1447,15 +1447,13 @@ mod serialize {
                 let back = i - 1;
 
                 // Update freelist.
-                unsafe {
-                    slots[back].u.free.other_end = front as u32;
-                    slots[prev].u.free.next = front as u32;
-                    slots[front].u.free = FreeListEntry {
-                        next: 0,
-                        prev: prev as u32,
-                        other_end: back as u32,
-                    };
-                }
+                slots[back].u.free.other_end = front as u32;
+                slots[prev].u.free.next = front as u32;
+                slots[front].u.free = FreeListEntry {
+                    next: 0,
+                    prev: prev as u32,
+                    other_end: back as u32,
+                };
 
                 prev = front;
 

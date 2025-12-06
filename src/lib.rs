@@ -544,7 +544,7 @@ mod serialize {
             let mut ser_key: SerKey = Deserialize::deserialize(deserializer)?;
 
             // Ensure a.is_null() && b.is_null() implies a == b.
-            if ser_key.idx == core::u32::MAX {
+            if ser_key.idx == u32::MAX {
                 ser_key.version = 1;
             }
 

@@ -1583,7 +1583,7 @@ mod serialize {
             let serde_slot: SerdeSlot<T> = Deserialize::deserialize(deserializer)?;
             let occupied = serde_slot.version % 2 == 1;
             if occupied ^ serde_slot.value.is_some() {
-                return Err(de::Error::custom(&"inconsistent occupation in Slot"));
+                return Err(de::Error::custom("inconsistent occupation in Slot"));
             }
 
             Ok(match serde_slot.value {
@@ -1608,13 +1608,13 @@ mod serialize {
             D: Deserializer<'de>,
         {
             let mut slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
-            if slots.len() >= (u32::max_value() - 1) as usize {
-                return Err(de::Error::custom(&"too many slots"));
+            if slots.len() >= (u32::MAX - 1) as usize {
+                return Err(de::Error::custom("too many slots"));
             }
 
             // Ensure the first slot exists and is empty for the sentinel.
-            if slots.get(0).map_or(true, |slot| slot.occupied()) {
-                return Err(de::Error::custom(&"first slot not empty"));
+            if slots.first().map_or(true, |slot| slot.occupied()) {
+                return Err(de::Error::custom("first slot not empty"));
             }
 
             slots[0] = Slot::new_vacant();

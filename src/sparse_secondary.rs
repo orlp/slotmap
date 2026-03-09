@@ -230,6 +230,44 @@ impl<K: Key, V, S: hash::BuildHasher> SparseSecondaryMap<K, V, S> {
         self.slots.try_reserve(additional)
     }
 
+    /// Shrinks the capacity of the secondary map as much as possible.
+    ///
+    /// It will drop down as close as possible to the length but the allocator
+    /// may still inform the secondary map that there is space for a few more
+    /// elements.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sec: SparseSecondaryMap<DefaultKey, i32> = SparseSecondaryMap::with_capacity(10);
+    /// assert!(sec.capacity() >= 10);
+    /// sec.shrink_to_fit();
+    /// ```
+    pub fn shrink_to_fit(&mut self) {
+        self.slots.shrink_to_fit();
+    }
+
+    /// Shrinks the capacity of the secondary map with a lower bound.
+    ///
+    /// The capacity will remain at least as large as both the length and the
+    /// supplied value.
+    ///
+    /// If the current capacity is less than the lower limit, this is a no-op.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sec: SparseSecondaryMap<DefaultKey, i32> = SparseSecondaryMap::with_capacity(10);
+    /// assert!(sec.capacity() >= 10);
+    /// sec.shrink_to(4);
+    /// assert!(sec.capacity() >= 4);
+    /// ```
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.slots.shrink_to(min_capacity);
+    }
+
     /// Returns [`true`] if the secondary map contains `key`.
     ///
     /// # Examples

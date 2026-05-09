@@ -211,6 +211,54 @@ impl<K: Key, V> DenseSlotMap<K, V> {
         self.slots.try_reserve(needed)
     }
 
+    /// Shrinks the capacity of the slot map as much as possible.
+    ///
+    /// It will drop down as close as possible to the length but the allocator
+    /// may still inform the slot map that there is space for a few more
+    /// elements.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::with_capacity(10);
+    /// sm.insert("foo");
+    /// sm.insert("bar");
+    /// assert!(sm.capacity() >= 10);
+    /// sm.shrink_to_fit();
+    /// assert!(sm.capacity() >= 2);
+    /// ```
+    pub fn shrink_to_fit(&mut self) {
+        self.keys.shrink_to_fit();
+        self.values.shrink_to_fit();
+        self.slots.shrink_to_fit();
+    }
+
+    /// Shrinks the capacity of the slot map with a lower bound.
+    ///
+    /// The capacity will remain at least as large as both the length and the
+    /// supplied value.
+    ///
+    /// If the current capacity is less than the lower limit, this is a no-op.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = DenseSlotMap::with_capacity(10);
+    /// sm.insert("foo");
+    /// sm.insert("bar");
+    /// assert!(sm.capacity() >= 10);
+    /// sm.shrink_to(4);
+    /// assert!(sm.capacity() >= 4);
+    /// ```
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.keys.shrink_to(min_capacity);
+        self.values.shrink_to(min_capacity);
+        // One slot is reserved for the sentinel.
+        self.slots.shrink_to(min_capacity + 1);
+    }
+
     /// Returns [`true`] if the slot map contains `key`.
     ///
     /// # Examples

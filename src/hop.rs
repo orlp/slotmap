@@ -555,9 +555,9 @@ impl<K: Key, V> HopSlotMap<K, V> {
                 self.freelist(0).prev = i;
                 self.freelist(old_tail).next = i;
                 *self.freelist(i) = FreeListEntry {
-                    other_end: i,
                     next: 0,
                     prev: old_tail,
+                    other_end: i,
                 };
             },
 
@@ -575,8 +575,12 @@ impl<K: Key, V> HopSlotMap<K, V> {
             (true, false) => {
                 // Append to vacant block on left.
                 let front = self.freelist(i - 1).other_end;
-                self.freelist(i).other_end = front;
                 self.freelist(front).other_end = i;
+                *self.freelist(i) = FreeListEntry {
+                    next: 0, // Unused.
+                    prev: 0, // Unused.
+                    other_end: front,
+                };
             },
 
             (true, true) => {
@@ -591,6 +595,12 @@ impl<K: Key, V> HopSlotMap<K, V> {
                 let back = right.other_end;
                 self.freelist(front).other_end = back;
                 self.freelist(back).other_end = front;
+
+                *self.freelist(i) = FreeListEntry {
+                    next: 0,      // Unused.
+                    prev: 0,      // Unused.
+                    other_end: 0, // Unused.
+                };
             },
         }
 
@@ -1621,13 +1631,8 @@ mod tests {
             let mut sm = HopSlotMap::new();
             let mut sm_keys = Vec::new();
 
-            #[cfg(not(feature = "serde"))]
-            let num_ops = 3;
-            #[cfg(feature = "serde")]
-            let num_ops = 4;
-
             for (op, val) in operations {
-                match op % num_ops {
+                match op % 4 {
                     // Insert.
                     0 => {
                         hm.insert(unique_key, val);
@@ -1667,11 +1672,17 @@ mod tests {
                         }
                     }
 
-                    // Serde round-trip.
-                    #[cfg(feature = "serde")]
+                    // Round-trip/clone.
                     3 => {
-                        let ser = serde_json::to_string(&sm).unwrap();
-                        sm = serde_json::from_str(&ser).unwrap();
+                        if val % 2 == 0 {
+                            #[cfg(feature = "serde")]
+                            {
+                                let ser = serde_json::to_string(&sm).unwrap();
+                                sm = serde_json::from_str(&ser).unwrap();
+                            }
+                        } else {
+                            sm = sm.clone();
+                        }
                     }
 
                     _ => unreachable!(),

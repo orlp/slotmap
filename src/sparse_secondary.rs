@@ -1613,6 +1613,7 @@ mod tests {
 
     use quickcheck::quickcheck;
 
+    use crate::sparse_secondary::SparseSecondaryMap;
     use crate::*;
 
     #[test]

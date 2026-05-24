@@ -2,6 +2,7 @@
 #![crate_name = "slotmap"]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 #![cfg_attr(all(nightly, doc), feature(doc_cfg))]
+#![cfg_attr(all(feature = "nightly"), feature(allocator_api))]
 #![warn(
     missing_debug_implementations,
     trivial_casts,
@@ -199,12 +200,15 @@ pub mod __impl {
     pub use serde::{Deserialize, Deserializer, Serialize, Serializer};
 }
 
+pub(crate) mod alloc_impl;
 pub mod basic;
 pub mod dense;
 pub mod hop;
 pub mod secondary;
 #[cfg(feature = "std")]
 pub mod sparse_secondary;
+#[cfg(all(test, not(feature = "std")))]
+mod sparse_secondary; // If we're testing without std, we still want access to SparseSecondaryMap so tests using it can compile
 pub(crate) mod util;
 
 use core::fmt::{self, Debug, Formatter};
@@ -593,6 +597,7 @@ mod tests {
 
     #[test]
     fn iters_cloneable() {
+        use super::sparse_secondary::SparseSecondaryMap;
         use super::*;
 
         struct NoClone;

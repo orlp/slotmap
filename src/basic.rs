@@ -1,13 +1,12 @@
 //! Contains the slot map implementation.
 
-use alloc::collections::TryReserveError;
-use alloc::vec::Vec;
 use core::fmt;
 use core::iter::{Enumerate, FusedIterator};
 use core::marker::PhantomData;
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Index, IndexMut};
 
+use crate::alloc_impl::*;
 use crate::util::{Never, PanicOnDrop, UnwrapNever};
 use crate::{DefaultKey, Key, KeyData};
 
@@ -126,14 +125,14 @@ impl<T: fmt::Debug> fmt::Debug for Slot<T> {
 ///
 /// See [crate documentation](crate) for more details.
 #[derive(Debug)]
-pub struct SlotMap<K: Key, V> {
-    slots: Vec<Slot<V>>,
+pub struct SlotMap<K: Key, V, A: Allocator = Global> {
+    slots: VecWrap<Slot<V>, A>,
     free_head: u32,
     num_elems: u32,
     _k: PhantomData<fn(K) -> K>,
 }
 
-impl<V> SlotMap<DefaultKey, V> {
+impl<V> SlotMap<DefaultKey, V, Global> {
     /// Constructs a new, empty [`SlotMap`].
     ///
     /// # Examples
@@ -162,7 +161,7 @@ impl<V> SlotMap<DefaultKey, V> {
     }
 }
 
-impl<K: Key, V> SlotMap<K, V> {
+impl<K: Key, V> SlotMap<K, V, Global> {
     /// Constructs a new, empty [`SlotMap`] with a custom key type.
     ///
     /// # Examples
@@ -201,7 +200,7 @@ impl<K: Key, V> SlotMap<K, V> {
         // We don't actually use the sentinel for anything currently, but
         // HopSlotMap does, and if we want keys to remain valid through
         // conversion we have to have one as well.
-        let mut slots = Vec::with_capacity(capacity + 1);
+        let mut slots = VecWrap::wrap(Vec::with_capacity(capacity + 1));
         slots.push(Slot {
             u: SlotUnion { next_free: 0 },
             version: 0,
@@ -213,6 +212,54 @@ impl<K: Key, V> SlotMap<K, V> {
             num_elems: 0,
             _k: PhantomData,
         }
+    }
+}
+
+impl<V, A: Allocator> SlotMap<DefaultKey, V, A> {
+    /// Constructs a new, empty [`SlotMap`] in the given Allocator.
+    pub fn new_in(allocator: A) -> Result<Self, TryReserveError> {
+        Self::with_capacity_and_key_in(0, allocator)
+    }
+    /// Creates an empty [`SlotMap`] with the given capacity in the given Allocator.
+    ///
+    /// The slot map will not reallocate until it holds at least `capacity`
+    /// elements.
+    pub fn with_capacity_in(capacity: usize, allocator: A) -> Result<Self, TryReserveError> {
+        Self::with_capacity_and_key_in(capacity, allocator)
+    }
+}
+
+impl<K: Key, V, A: Allocator> SlotMap<K, V, A> {
+    /// Constructs a new, empty [`SlotMap`] with a custom key type in the given Allocator.
+    pub fn with_key_in(allocator: A) -> Result<Self, TryReserveError> {
+        Self::with_capacity_and_key_in(0, allocator)
+    }
+
+    /// Creates an empty [`SlotMap`] with the given capacity and a custom key
+    /// type inside the given Allocator.
+    ///
+    /// The slot map will not reallocate until it holds at least `capacity`
+    /// elements.
+    pub fn with_capacity_and_key_in(
+        capacity: usize,
+        allocator: A,
+    ) -> Result<Self, TryReserveError> {
+        // Create slots with a sentinel at index 0.
+        // We don't actually use the sentinel for anything currently, but
+        // HopSlotMap does, and if we want keys to remain valid through
+        // conversion we have to have one as well.
+        let mut slots = VecWrap::try_with_capacity_in(capacity + 1, allocator)?;
+        slots.push(Slot {
+            u: SlotUnion { next_free: 0 },
+            version: 0,
+        });
+
+        Ok(Self {
+            slots,
+            free_head: 1,
+            num_elems: 0,
+            _k: PhantomData,
+        })
     }
 
     /// Returns the number of elements in the slot map.
@@ -681,7 +728,7 @@ impl<K: Key, V> SlotMap<K, V> {
     /// assert_eq!(sm.len(), 0);
     /// assert_eq!(v, vec![(k, 0)]);
     /// ```
-    pub fn drain(&mut self) -> Drain<'_, K, V> {
+    pub fn drain(&mut self) -> Drain<'_, K, V, A> {
         Drain { cur: 1, sm: self }
     }
 
@@ -1008,9 +1055,10 @@ impl<K: Key, V> SlotMap<K, V> {
     }
 }
 
-impl<K: Key, V> Clone for SlotMap<K, V>
+impl<K: Key, V, A: Allocator> Clone for SlotMap<K, V, A>
 where
     V: Clone,
+    A: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -1030,13 +1078,13 @@ where
     }
 }
 
-impl<K: Key, V> Default for SlotMap<K, V> {
+impl<K: Key, V> Default for SlotMap<K, V, Global> {
     fn default() -> Self {
         Self::with_key()
     }
 }
 
-impl<K: Key, V> Index<K> for SlotMap<K, V> {
+impl<K: Key, V, A: Allocator> Index<K> for SlotMap<K, V, A> {
     type Output = V;
 
     fn index(&self, key: K) -> &V {
@@ -1047,7 +1095,7 @@ impl<K: Key, V> Index<K> for SlotMap<K, V> {
     }
 }
 
-impl<K: Key, V> IndexMut<K> for SlotMap<K, V> {
+impl<K: Key, V, A: Allocator> IndexMut<K> for SlotMap<K, V, A> {
     fn index_mut(&mut self, key: K) -> &mut V {
         match self.get_mut(key) {
             Some(r) => r,
@@ -1061,8 +1109,8 @@ impl<K: Key, V> IndexMut<K> for SlotMap<K, V> {
 ///
 /// This iterator is created by [`SlotMap::drain`].
 #[derive(Debug)]
-pub struct Drain<'a, K: 'a + Key, V: 'a> {
-    sm: &'a mut SlotMap<K, V>,
+pub struct Drain<'a, K: 'a + Key, V: 'a, A: Allocator + 'a = Global> {
+    sm: &'a mut SlotMap<K, V, A>,
     cur: usize,
 }
 
@@ -1071,9 +1119,9 @@ pub struct Drain<'a, K: 'a + Key, V: 'a> {
 /// This iterator is created by calling the `into_iter` method on [`SlotMap`],
 /// provided by the [`IntoIterator`] trait.
 #[derive(Debug, Clone)]
-pub struct IntoIter<K: Key, V> {
+pub struct IntoIter<K: Key, V, A: Allocator = Global> {
     num_left: usize,
-    slots: Enumerate<alloc::vec::IntoIter<Slot<V>>>,
+    slots: Enumerate<VecIntoIterWrap<Slot<V>, A>>,
     _k: PhantomData<fn(K) -> K>,
 }
 
@@ -1147,7 +1195,7 @@ pub struct ValuesMut<'a, K: 'a + Key, V: 'a> {
     inner: IterMut<'a, K, V>,
 }
 
-impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
+impl<'a, K: Key, V, A: Allocator> Iterator for Drain<'a, K, V, A> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
@@ -1174,13 +1222,13 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
     }
 }
 
-impl<'a, K: Key, V> Drop for Drain<'a, K, V> {
+impl<'a, K: Key, V, A: Allocator> Drop for Drain<'a, K, V, A> {
     fn drop(&mut self) {
         self.for_each(|_drop| {});
     }
 }
 
-impl<K: Key, V> Iterator for IntoIter<K, V> {
+impl<K: Key, V, A: Allocator> Iterator for IntoIter<K, V, A> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
@@ -1284,7 +1332,7 @@ impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
     }
 }
 
-impl<'a, K: Key, V> IntoIterator for &'a SlotMap<K, V> {
+impl<'a, K: Key, V, A: Allocator> IntoIterator for &'a SlotMap<K, V, A> {
     type Item = (K, &'a V);
     type IntoIter = Iter<'a, K, V>;
 
@@ -1293,7 +1341,7 @@ impl<'a, K: Key, V> IntoIterator for &'a SlotMap<K, V> {
     }
 }
 
-impl<'a, K: Key, V> IntoIterator for &'a mut SlotMap<K, V> {
+impl<'a, K: Key, V, A: Allocator> IntoIterator for &'a mut SlotMap<K, V, A> {
     type Item = (K, &'a mut V);
     type IntoIter = IterMut<'a, K, V>;
 
@@ -1302,13 +1350,13 @@ impl<'a, K: Key, V> IntoIterator for &'a mut SlotMap<K, V> {
     }
 }
 
-impl<K: Key, V> IntoIterator for SlotMap<K, V> {
+impl<K: Key, V, A: Allocator> IntoIterator for SlotMap<K, V, A> {
     type Item = (K, V);
-    type IntoIter = IntoIter<K, V>;
+    type IntoIter = IntoIter<K, V, A>;
 
     fn into_iter(self) -> Self::IntoIter {
         let len = self.len();
-        let mut it = self.slots.into_iter().enumerate();
+        let mut it = VecIntoIterWrap::wrap(self.slots.into_iter()).enumerate();
         it.next(); // Skip sentinel.
         IntoIter {
             num_left: len,
@@ -1323,16 +1371,16 @@ impl<'a, K: Key, V> FusedIterator for IterMut<'a, K, V> {}
 impl<'a, K: Key, V> FusedIterator for Keys<'a, K, V> {}
 impl<'a, K: Key, V> FusedIterator for Values<'a, K, V> {}
 impl<'a, K: Key, V> FusedIterator for ValuesMut<'a, K, V> {}
-impl<'a, K: Key, V> FusedIterator for Drain<'a, K, V> {}
-impl<K: Key, V> FusedIterator for IntoIter<K, V> {}
+impl<'a, K: Key, V, A: Allocator> FusedIterator for Drain<'a, K, V, A> {}
+impl<K: Key, V, A: Allocator> FusedIterator for IntoIter<K, V, A> {}
 
 impl<'a, K: Key, V> ExactSizeIterator for Iter<'a, K, V> {}
 impl<'a, K: Key, V> ExactSizeIterator for IterMut<'a, K, V> {}
 impl<'a, K: Key, V> ExactSizeIterator for Keys<'a, K, V> {}
 impl<'a, K: Key, V> ExactSizeIterator for Values<'a, K, V> {}
 impl<'a, K: Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {}
-impl<'a, K: Key, V> ExactSizeIterator for Drain<'a, K, V> {}
-impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
+impl<'a, K: Key, V, A: Allocator> ExactSizeIterator for Drain<'a, K, V, A> {}
+impl<K: Key, V, A: Allocator> ExactSizeIterator for IntoIter<K, V, A> {}
 
 // Serialization with serde.
 #[cfg(feature = "serde")]
@@ -1389,7 +1437,7 @@ mod serialize {
         }
     }
 
-    impl<K: Key, V: Serialize> Serialize for SlotMap<K, V> {
+    impl<K: Key, V: Serialize, A: Allocator> Serialize for SlotMap<K, V, A> {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
@@ -1407,7 +1455,9 @@ mod serialize {
         where
             D: Deserializer<'de>,
         {
-            let mut slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
+            let slots: Vec<Slot<V>> = Deserialize::deserialize(deserializer)?;
+            let mut slots = VecWrap::wrap(slots);
+
             if slots.len() >= u32::MAX as usize {
                 return Err(de::Error::custom("too many slots"));
             }
@@ -1538,8 +1588,50 @@ mod tests {
         }
     }
 
+    #[cfg(any(feature = "nightly", feature = "allocator-api2"))]
+    #[test]
+    fn custom_allocator() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        struct TestAlloc {
+            allocated_bytes: AtomicUsize,
+        }
+        unsafe impl Allocator for TestAlloc {
+            fn allocate(
+                &self,
+                layout: core::alloc::Layout,
+            ) -> Result<core::ptr::NonNull<[u8]>, AllocError> {
+                self.allocated_bytes
+                    .fetch_add(layout.size(), Ordering::AcqRel);
+                Global.allocate(layout)
+            }
+            unsafe fn deallocate(&self, ptr: core::ptr::NonNull<u8>, layout: core::alloc::Layout) {
+                self.allocated_bytes
+                    .fetch_sub(layout.size(), Ordering::AcqRel);
+                Global.deallocate(ptr, layout);
+            }
+        }
+
+        let alloc = TestAlloc {
+            allocated_bytes: AtomicUsize::new(0),
+        };
+
+        let mut sm: SlotMap<DefaultKey, usize, &TestAlloc> =
+            SlotMap::new_in(&alloc).expect("Failed to allocate initial map");
+        // Ensure initial allocation is tracked
+        assert!(alloc.allocated_bytes.load(Ordering::Acquire) > 0);
+        // Ensure tracked allocation is big enough and makes sense with how many things we inserted
+        for i in 0..1000 {
+            sm.insert(i * i);
+        }
+        assert!(alloc.allocated_bytes.load(Ordering::Acquire) > 1000 * size_of::<usize>());
+        // Ensure that when we drop, everything is freed using the allocator
+        drop(sm);
+        assert!(alloc.allocated_bytes.load(Ordering::Acquire) == 0);
+    }
+
     quickcheck! {
-        fn qc_slotmap_equiv_hashmap(operations: Vec<(u8, u32)>) -> bool {
+        fn qc_slotmap_equiv_hashmap(operations: alloc::vec::Vec<(u8, u32)>) -> bool {
             let mut hm = HashMap::new();
             let mut hm_keys = Vec::new();
             let mut unique_key = 0u32;

@@ -61,7 +61,7 @@
 //! }
 //! ```
 //!
-//! # Serialization through [`serde`], [`no_std`] support and unstable features
+//! # Serialization through [`serde`], [`rayon`], [`no_std`] support and unstable features
 //!
 //! Both keys and the slot maps have full (de)seralization support through
 //! the [`serde`] library. A key remains valid for a slot map even after one or
@@ -73,6 +73,13 @@
 //!
 //! ```text
 //! slotmap = { version = "1.0", features = ["serde"] }
+//! ```
+//!
+//! If you want parallel iteration support through [`rayon`], enable the
+//! `rayon` feature flag:
+//!
+//! ```text
+//! slotmap = { version = "1.0", features = ["rayon"] }
 //! ```
 //!
 //! This crate also supports [`no_std`] environments, but does require the
@@ -182,6 +189,7 @@
 //! [`Vec`]: std::vec::Vec
 //! [`BTreeMap`]: std::collections::BTreeMap
 //! [`HashMap`]: std::collections::HashMap
+//! [`rayon`]: https://github.com/rayon-rs/rayon
 //! [`serde`]: https://github.com/serde-rs/serde
 //! [`slab`]: https://crates.io/crates/slab
 //! [`stable-vec`]: https://crates.io/crates/stable-vec

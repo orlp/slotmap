@@ -12,6 +12,9 @@ use core::iter::FusedIterator;
 use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut};
 
+#[cfg(feature = "rayon")]
+use rayon::prelude::*;
+
 use crate::util::{Never, PanicOnDrop, UnwrapNever};
 use crate::{DefaultKey, Key, KeyData};
 
@@ -1025,6 +1028,69 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     pub fn as_mut_slices(&mut self) -> (&[K], &mut [V]) {
         (self.keys.as_slice(), self.values.as_mut_slice())
     }
+
+    /// A parallel iterator visiting all key-value pairs in an arbitrary order. The
+    /// iterator element type is `(K, &'a V)`.
+    #[cfg(feature = "rayon")]
+    pub fn par_iter(&self) -> ParIter<'_, K, V>
+    where
+        K: Send + Sync,
+        V: Sync,
+    {
+        ParIter {
+            inner: self.keys.par_iter().copied().zip(self.values.par_iter()),
+        }
+    }
+
+    /// A parallel iterator visiting all key-value pairs in an arbitrary order, with
+    /// mutable references to the values. The iterator element type is
+    /// `(K, &'a mut V)`.
+    #[cfg(feature = "rayon")]
+    pub fn par_iter_mut(&mut self) -> ParIterMut<'_, K, V>
+    where
+        K: Send + Sync,
+        V: Send,
+    {
+        ParIterMut {
+            inner: self.keys.par_iter().copied().zip(self.values.par_iter_mut()),
+        }
+    }
+
+    /// A parallel iterator visiting all keys in an arbitrary order. The iterator
+    /// element type is K.
+    #[cfg(feature = "rayon")]
+    pub fn par_keys(&self) -> ParKeys<'_, K>
+    where
+        K: Send + Sync,
+    {
+        ParKeys {
+            inner: self.keys.par_iter().copied(),
+        }
+    }
+
+    /// A parallel iterator visiting all values in an arbitrary order. The iterator
+    /// element type is `&'a V`.
+    #[cfg(feature = "rayon")]
+    pub fn par_values(&self) -> ParValues<'_, V>
+    where
+        V: Sync,
+    {
+        ParValues {
+            inner: self.values.par_iter(),
+        }
+    }
+
+    /// A parallel iterator visiting all values mutably in an arbitrary order. The
+    /// iterator element type is `&'a mut V`.
+    #[cfg(feature = "rayon")]
+    pub fn par_values_mut(&mut self) -> ParValuesMut<'_, V>
+    where
+        V: Send,
+    {
+        ParValuesMut {
+            inner: self.values.par_iter_mut(),
+        }
+    }
 }
 
 impl<K: Key, V> Clone for DenseSlotMap<K, V>
@@ -1330,6 +1396,381 @@ impl<'a, K: 'a + Key, V> ExactSizeIterator for Values<'a, K, V> {}
 impl<'a, K: 'a + Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {}
 impl<'a, K: 'a + Key, V> ExactSizeIterator for Drain<'a, K, V> {}
 impl<K: Key, V> ExactSizeIterator for IntoIter<K, V> {}
+
+/// A parallel iterator over the key-value pairs in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::par_iter`].
+#[cfg(feature = "rayon")]
+#[derive(Debug)]
+pub struct ParIter<'a, K: 'a + Key, V: 'a> {
+    inner: rayon::iter::Zip<
+        rayon::iter::Copied<rayon::slice::Iter<'a, K>>,
+        rayon::slice::Iter<'a, V>,
+    >,
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K: 'a + Key, V: 'a> Clone for ParIter<'a, K, V> {
+    fn clone(&self) -> Self {
+        ParIter {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K, V> ParallelIterator for ParIter<'a, K, V>
+where
+    K: Key + Send + Sync,
+    V: Sync,
+{
+    type Item = (K, &'a V);
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+    {
+        self.drive(consumer)
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K, V> IndexedParallelIterator for ParIter<'a, K, V>
+where
+    K: Key + Send + Sync,
+    V: Sync,
+{
+    fn drive<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::Consumer<Self::Item>,
+    {
+        self.inner.drive(consumer)
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn with_producer<CB>(self, callback: CB) -> CB::Output
+    where
+        CB: rayon::iter::plumbing::ProducerCallback<Self::Item>,
+    {
+        self.inner.with_producer(callback)
+    }
+}
+
+/// A parallel mutable iterator over the key-value pairs in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::par_iter_mut`].
+#[cfg(feature = "rayon")]
+#[derive(Debug)]
+pub struct ParIterMut<'a, K: 'a + Key, V: 'a> {
+    inner: rayon::iter::Zip<
+        rayon::iter::Copied<rayon::slice::Iter<'a, K>>,
+        rayon::slice::IterMut<'a, V>,
+    >,
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K, V> ParallelIterator for ParIterMut<'a, K, V>
+where
+    K: Key + Send + Sync,
+    V: Send,
+{
+    type Item = (K, &'a mut V);
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+    {
+        self.drive(consumer)
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K, V> IndexedParallelIterator for ParIterMut<'a, K, V>
+where
+    K: Key + Send + Sync,
+    V: Send,
+{
+    fn drive<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::Consumer<Self::Item>,
+    {
+        self.inner.drive(consumer)
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn with_producer<CB>(self, callback: CB) -> CB::Output
+    where
+        CB: rayon::iter::plumbing::ProducerCallback<Self::Item>,
+    {
+        self.inner.with_producer(callback)
+    }
+}
+
+/// A parallel iterator over the keys in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::par_keys`].
+#[cfg(feature = "rayon")]
+#[derive(Debug)]
+pub struct ParKeys<'a, K: 'a + Key> {
+    inner: rayon::iter::Copied<rayon::slice::Iter<'a, K>>,
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K: 'a + Key> Clone for ParKeys<'a, K> {
+    fn clone(&self) -> Self {
+        ParKeys {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K> ParallelIterator for ParKeys<'a, K>
+where
+    K: Key + Send + Sync,
+{
+    type Item = K;
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+    {
+        self.drive(consumer)
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K> IndexedParallelIterator for ParKeys<'a, K>
+where
+    K: Key + Send + Sync,
+{
+    fn drive<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::Consumer<Self::Item>,
+    {
+        self.inner.drive(consumer)
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn with_producer<CB>(self, callback: CB) -> CB::Output
+    where
+        CB: rayon::iter::plumbing::ProducerCallback<Self::Item>,
+    {
+        self.inner.with_producer(callback)
+    }
+}
+
+/// An iterator over the values in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::values`].
+#[cfg(feature = "rayon")]
+#[derive(Debug)]
+pub struct ParValues<'a, V: 'a> {
+    inner: rayon::slice::Iter<'a, V>,
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, V: 'a> Clone for ParValues<'a, V> {
+    fn clone(&self) -> Self {
+        ParValues {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, V> ParallelIterator for ParValues<'a, V>
+where
+    V: Sync,
+{
+    type Item = &'a V;
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+    {
+        self.drive(consumer)
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, V> IndexedParallelIterator for ParValues<'a, V>
+where
+    V: Sync,
+{
+    fn drive<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::Consumer<Self::Item>,
+    {
+        self.inner.drive(consumer)
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn with_producer<CB>(self, callback: CB) -> CB::Output
+    where
+        CB: rayon::iter::plumbing::ProducerCallback<Self::Item>,
+    {
+        self.inner.with_producer(callback)
+    }
+}
+
+/// A parallel mutable iterator over the values in a [`DenseSlotMap`].
+///
+/// This iterator is created by [`DenseSlotMap::par_values_mut`].
+#[cfg(feature = "rayon")]
+#[derive(Debug)]
+pub struct ParValuesMut<'a, V: 'a> {
+    inner: rayon::slice::IterMut<'a, V>,
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, V> ParallelIterator for ParValuesMut<'a, V>
+where
+    V: Send,
+{
+    type Item = &'a mut V;
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+    {
+        self.drive(consumer)
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, V> IndexedParallelIterator for ParValuesMut<'a, V>
+where
+    V: Send,
+{
+    fn drive<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::Consumer<Self::Item>,
+    {
+        self.inner.drive(consumer)
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn with_producer<CB>(self, callback: CB) -> CB::Output
+    where
+        CB: rayon::iter::plumbing::ProducerCallback<Self::Item>,
+    {
+        self.inner.with_producer(callback)
+    }
+}
+
+/// A parallel iterator that moves key-value pairs out of a [`DenseSlotMap`].
+///
+/// This iterator is created by calling the `into_par_iter` method on [`DenseSlotMap`],
+/// provided by the [`IntoParallelIterator`] trait.
+#[cfg(feature = "rayon")]
+#[derive(Debug, Clone)]
+pub struct IntoParIter<K, V> {
+    inner: rayon::iter::Zip<
+        rayon::vec::IntoIter<K>,
+        rayon::vec::IntoIter<V>,
+    >,
+}
+
+#[cfg(feature = "rayon")]
+impl<K, V> ParallelIterator for IntoParIter<K, V>
+where
+    K: Key + Send + Sync,
+    V: Send,
+{
+    type Item = (K, V);
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+    {
+        self.drive(consumer)
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<K, V> IndexedParallelIterator for IntoParIter<K, V>
+where
+    K: Key + Send + Sync,
+    V: Send,
+{
+    fn drive<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::Consumer<Self::Item>,
+    {
+        self.inner.drive(consumer)
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn with_producer<CB>(self, callback: CB) -> CB::Output
+    where
+        CB: rayon::iter::plumbing::ProducerCallback<Self::Item>,
+    {
+        self.inner.with_producer(callback)
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K, V> IntoParallelIterator for &'a DenseSlotMap<K, V>
+where
+    K: Key + Send + Sync,
+    V: Sync,
+{
+    type Item = (K, &'a V);
+    type Iter = ParIter<'a, K, V>;
+
+    fn into_par_iter(self) -> Self::Iter {
+        self.par_iter()
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<'a, K, V> IntoParallelIterator for &'a mut DenseSlotMap<K, V>
+where
+    K: Key + Send + Sync,
+    V: Send,
+{
+    type Item = (K, &'a mut V);
+    type Iter = ParIterMut<'a, K, V>;
+
+    fn into_par_iter(self) -> Self::Iter {
+        self.par_iter_mut()
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl<K, V> IntoParallelIterator for DenseSlotMap<K, V>
+where
+    K: Key + Send + Sync,
+    V: Send,
+{
+    type Item = (K, V);
+    type Iter = IntoParIter<K, V>;
+
+    fn into_par_iter(self) -> Self::Iter {
+        IntoParIter {
+            inner: self.keys.into_par_iter().zip(self.values.into_par_iter()),
+        }
+    }
+}
 
 // Serialization with serde.
 #[cfg(feature = "serde")]

@@ -1,7 +1,7 @@
 #![doc(html_root_url = "https://docs.rs/slotmap/1.1.1")]
 #![crate_name = "slotmap"]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
-#![cfg_attr(all(nightly, doc), feature(doc_cfg))]
+#![cfg_attr(all(doc, feature = "doc_cfg"), feature(doc_cfg))]
 #![warn(
     missing_debug_implementations,
     trivial_casts,
@@ -85,7 +85,9 @@
 //!
 //! Unfortunately [`SparseSecondaryMap`] is not available in [`no_std`], because
 //! it relies on [`HashMap`]. Finally the `unstable` feature can be defined to
-//! enable the parts of `slotmap` that only work on nightly Rust.
+//! enable the parts of `slotmap` that only work on nightly Rust. Currently there
+//! are no such parts of the crate, but the cargo feature is maintained for
+//! compatability.
 //!
 //! # Why not index a [`Vec`], or use [`slab`], [`stable-vec`], etc?
 //!

@@ -1,7 +1,7 @@
 #![doc(html_root_url = "https://docs.rs/slotmap/1.1.1")]
 #![crate_name = "slotmap"]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
-#![cfg_attr(all(doc, feature = "unstable"), feature(doc_cfg))]
+#![cfg_attr(all(feature = "unstable", doc), feature(doc_cfg))]
 #![warn(
     missing_debug_implementations,
     trivial_casts,
@@ -25,10 +25,11 @@
 //! that need stable, safe references but have no clear ownership otherwise,
 //! such as game entities or graph nodes.
 //!
-//! The difference between a [`BTreeMap`] or [`HashMap`] and a slot map is that
-//! the slot map generates and returns the key when inserting a value. A key is
-//! always unique and will only refer to the value that was inserted. A slot
-//! map's main purpose is to simply own things in a safe and efficient manner.
+//! The difference between a [`BTreeMap`] or [`HashMap`] and a slot map is
+//! that the slot map generates and returns the key when inserting a value. A
+//! key is always unique and will only refer to the value that was inserted.
+//! A slot map's main purpose is to simply own things in a safe and efficient
+//! manner.
 //!
 //! You can also create (multiple) secondary maps that can map the keys returned
 //! by [`SlotMap`] to other values, to associate arbitrary data with objects
@@ -62,13 +63,13 @@
 //!
 //! # Serialization through [`serde`], [`no_std`] support and unstable features
 //!
-//! Both keys and the slot maps have full (de)seralization support through the
-//! [`serde`] library. A key remains valid for a slot map even after one or both
-//! have been serialized and deserialized! This makes storing or transferring
-//! complicated referential structures and graphs a breeze. Care has been taken
-//! such that deserializing keys and slot maps from untrusted sources is safe.
-//! If you wish to use these features you must enable the `serde` feature flag
-//! for `slotmap` in your `Cargo.toml`.
+//! Both keys and the slot maps have full (de)seralization support through
+//! the [`serde`] library. A key remains valid for a slot map even after one or
+//! both have been serialized and deserialized! This makes storing or
+//! transferring complicated referential structures and graphs a breeze. Care has
+//! been taken such that deserializing keys and slot maps from untrusted sources
+//! is safe. If you wish to use these features you must enable the `serde`
+//! feature flag for `slotmap` in your `Cargo.toml`.
 //!
 //! ```text
 //! slotmap = { version = "1.0", features = ["serde"] }
@@ -84,8 +85,7 @@
 //!
 //! Unfortunately [`SparseSecondaryMap`] is not available in [`no_std`], because
 //! it relies on [`HashMap`]. Finally the `unstable` feature can be defined to
-//! enable the parts of `slotmap` that only work on nightly Rust. Currently this
-//! only affects the usage of the `doc_cfg` feature when generating rustdoc.
+//! enable the parts of `slotmap` that only work on nightly Rust.
 //!
 //! # Why not index a [`Vec`], or use [`slab`], [`stable-vec`], etc?
 //!
@@ -102,16 +102,16 @@
 //!
 //! Insertion, access and deletion is all O(1) with low overhead by storing the
 //! elements inside a [`Vec`]. Unlike references or indices into a vector,
-//! unless you remove a key it is never invalidated. Behind the scenes each slot
-//! in the vector is a `(value, version)` tuple. After insertion the returned
-//! key also contains a version. Only when the stored version and version in a
-//! key match is a key valid. This allows us to reuse space in the vector after
-//! deletion without letting removed keys point to spurious new elements.
-//! <sup>*</sup>After 2<sup>31</sup> deletions and insertions to the same
-//! underlying slot the version wraps around and such a spurious reference could
-//! potentially occur. It is incredibly unlikely however, and in all
-//! circumstances is the behavior safe. A slot map can hold up to 2<sup>32</sup>
-//! - 2 elements at a time.
+//! unless you remove a key it is never invalidated. Behind the scenes each
+//! slot in the vector is a `(value, version)` tuple. After insertion the
+//! returned key also contains a version. Only when the stored version and
+//! version in a key match is a key valid. This allows us to reuse space in the
+//! vector after deletion without letting removed keys point to spurious new
+//! elements. <sup>*</sup>After 2<sup>31</sup> deletions and insertions to the
+//! same underlying slot the version wraps around and such a spurious reference
+//! could potentially occur. It is incredibly unlikely however, and in all
+//! circumstances is the behavior safe. A slot map can hold up to
+//! 2<sup>32</sup> - 2 elements at a time.
 //!
 //! The memory usage for each slot in [`SlotMap`] is `4 + max(sizeof(T), 4)`
 //! rounded up to the alignment of `T`. Similarly it is `4 + max(sizeof(T), 12)`
@@ -148,8 +148,8 @@
 //! A [`SecondaryMap`] is simply a [`Vec`] of slots like slot map is, and
 //! essentially provides all the same guarantees as [`SlotMap`] does for its
 //! operations (with the exception that you provide the keys as produced by the
-//! primary slot map). This does mean that even if you associate data to only a
-//! single element from the primary slot map, you could need and have to
+//! primary slot map). This does mean that even if you associate data to only
+//! a single element from the primary slot map, you could need and have to
 //! initialize as much memory as the original.
 //!
 //! A [`SparseSecondaryMap`] is like a [`HashMap`] from keys to objects, however

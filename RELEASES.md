@@ -1,3 +1,8 @@
+
+Version ?????
+=============
+  - Bump MSRV to 1.80 and remove the build script.
+
 Version 1.1.1
 =============
 

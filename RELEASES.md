@@ -1,11 +1,9 @@
 
 Version ?????
 =============
-  - Bump MSRV to 1.80 and remove the build script.
-  - The `doc_cfg` cargo feature is added to the crate. It is used to display
-    configuration information in generated rustdoc. This still only works on
-    nightly until rustdoc stabilizes the feature. This is set automatically when
-    building the docs for <docs.rs>.
+  - Bump MSRV to 1.80 and remove the build script. The `unstable` flag now
+    controls usage of the `doc_cfg` feature, instead of having it activate when
+    nightly is detected.
 
 Version 1.1.1
 =============

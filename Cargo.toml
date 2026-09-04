@@ -15,11 +15,8 @@ rust-version = "1.80.0"
 default = ["std"]
 std = []
 
-# not currently used, kept for compatibility only.
+# Currently only used to activate `doc_cfg` usage.
 unstable = []
-
-# activate `feature(doc_cfg)` within the crate during docs generation (nightly only)
-doc_cfg = []
 
 [dependencies]
 serde = { version = "1.0", optional = true, default-features = false, features = ["derive", "alloc"] }
@@ -32,4 +29,4 @@ serde_json = "1.0"
 quickcheck = "1.0"
 
 [package.metadata.docs.rs]
-features = ["doc_cfg"]
+features = ["unstable"]

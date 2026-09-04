@@ -1,9 +1,7 @@
 
 Version ?????
 =============
-  - Bump MSRV to 1.80 and remove the build script. The `unstable` flag now
-    controls usage of the `doc_cfg` feature, instead of having it activate when
-    nightly is detected.
+  - Bump MSRV to 1.80 and remove the build script.
 
 Version 1.1.1
 =============

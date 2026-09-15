@@ -332,8 +332,7 @@ impl<K: Key, V> DenseSlotMap<K, V> {
     ///
     /// # Panics
     ///
-    /// Panics if the number of elements in the slot map equals
-    /// 2<sup>32</sup> - 2.
+    /// Panics if the slot map is full.
     ///
     /// # Examples
     ///

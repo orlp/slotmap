@@ -64,6 +64,34 @@ impl<T> Slot<T> {
             }
         }
     }
+
+    fn map<K, U, F>(self, key_idx: u32, mut f: F) -> Slot<U>
+    where
+        K: Key,
+        F: FnMut(K, T) -> U,
+    {
+        let mut this = ManuallyDrop::new(self);
+        let version = this.version;
+
+        if this.occupied() {
+            let key = KeyData::new(key_idx, version).into();
+            let value = unsafe { ManuallyDrop::take(&mut this.u.value) };
+
+            Slot {
+                u: SlotUnion {
+                    value: ManuallyDrop::new(f(key, value)),
+                },
+                version,
+            }
+        } else {
+            let next_free = unsafe { this.u.next_free };
+
+            Slot {
+                u: SlotUnion { next_free },
+                version,
+            }
+        }
+    }
 }
 
 impl<T> Drop for Slot<T> {
@@ -1004,6 +1032,38 @@ impl<K: Key, V> SlotMap<K, V> {
     pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         ValuesMut {
             inner: self.iter_mut(),
+        }
+    }
+
+    /// Returns a new slotmap preserving the keys, but mapping the values with `f`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use slotmap::*;
+    /// let mut sm = SlotMap::new();
+    /// let k1 = sm.insert(1);
+    /// let k2 = sm.insert(2);
+    ///
+    /// let sm = sm.map(|_k, v| v.to_string());
+    /// assert_eq!(sm[k1], "1");
+    /// assert_eq!(sm[k2], "2");
+    /// ```
+    pub fn map<U, F>(self, mut f: F) -> SlotMap<K, U>
+    where
+        F: FnMut(K, V) -> U,
+    {
+        let mut new_slots = Vec::with_capacity(self.slots.capacity());
+
+        for (idx, slot) in self.slots.into_iter().enumerate() {
+            new_slots.push(slot.map(idx as u32, &mut f));
+        }
+
+        SlotMap {
+            slots: new_slots,
+            free_head: self.free_head,
+            num_elems: self.num_elems,
+            _k: PhantomData,
         }
     }
 }

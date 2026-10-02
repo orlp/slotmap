@@ -115,13 +115,13 @@ impl<T> List<T> {
 
 fn main() {
     let mut dll = List::new();
+    let k = dll.push_head(3);
     dll.push_head(5);
     dll.push_tail(6);
-    let k = dll.push_head(3);
     dll.push_tail(7);
     dll.push_head(4);
 
-    assert_eq!(dll.len(), 4);
+    assert_eq!(dll.len(), 5);
     assert_eq!(dll.pop_head(), Some(4));
     assert_eq!(dll.pop_head(), Some(5));
     assert_eq!(dll.head(), k);

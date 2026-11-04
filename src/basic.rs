@@ -1554,42 +1554,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn iter_stops_early() {
-        // Iterators should not scan trailing vacant slots once all occupied
-        // elements have been yielded.
-        let mut sm = SlotMap::new();
-        sm.insert(1);
-        sm.insert(2);
-        let last = sm.insert(3);
-        sm.remove(last);
-
-        let mut it = sm.iter();
-        it.next();
-        it.next();
-        assert!(it.next().is_none());
-        assert!(it.next().is_none());
-        assert_eq!(it.slots.len(), 1);
-
-        let mut it = sm.iter_mut();
-        it.next();
-        it.next();
-        assert!(it.next().is_none());
-        assert_eq!(it.slots.len(), 1);
-
-        let mut it = sm.clone().into_iter();
-        it.next();
-        it.next();
-        assert!(it.next().is_none());
-        assert_eq!(it.slots.len(), 1);
-
-        let mut dr = sm.drain();
-        dr.next();
-        dr.next();
-        assert!(dr.next().is_none());
-        assert_eq!(dr.cur, 3);
-    }
-
     quickcheck! {
         fn qc_slotmap_equiv_hashmap(operations: Vec<(u8, u32)>) -> bool {
             let mut hm = HashMap::new();

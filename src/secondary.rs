@@ -1413,6 +1413,10 @@ impl<'a, K: Key, V> Iterator for Drain<'a, K, V> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
+        if self.sm.is_empty() {
+            return None;
+        }
+
         while let Some(slot) = self.sm.slots.get_mut(self.cur) {
             let idx = self.cur;
             self.cur += 1;
@@ -1441,6 +1445,10 @@ impl<K: Key, V> Iterator for IntoIter<K, V> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
+        if self.num_left == 0 {
+            return None;
+        }
+
         while let Some((idx, mut slot)) = self.slots.next() {
             if let Occupied { value, version } = replace(&mut slot, Slot::new_vacant()) {
                 self.num_left -= 1;
@@ -1461,6 +1469,10 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
     type Item = (K, &'a V);
 
     fn next(&mut self) -> Option<(K, &'a V)> {
+        if self.num_left == 0 {
+            return None;
+        }
+
         while let Some((idx, slot)) = self.slots.next() {
             if let Occupied { value, version } = slot {
                 self.num_left -= 1;
@@ -1481,6 +1493,10 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
     type Item = (K, &'a mut V);
 
     fn next(&mut self) -> Option<(K, &'a mut V)> {
+        if self.num_left == 0 {
+            return None;
+        }
+
         while let Some((idx, slot)) = self.slots.next() {
             if let Occupied { value, version } = slot {
                 let key = KeyData::new(idx as u32, version.get()).into();

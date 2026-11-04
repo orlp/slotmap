@@ -2,8 +2,8 @@
 Version ?????
 =============
   - Bump MSRV to 1.80 and remove the build script.
-  - Iterators on `SlotMap` now stop early once all elements have been yielded,
-    instead of scanning trailing vacant slots.
+  - Iterators on `SlotMap` and `SecondaryMap` now stop early once all elements
+    have been yielded, instead of scanning trailing vacant slots.
 
 Version 1.1.1
 =============
